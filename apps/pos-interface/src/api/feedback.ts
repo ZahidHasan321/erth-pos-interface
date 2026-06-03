@@ -11,12 +11,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export const createFeedback = async (
   feedback: Partial<GarmentFeedback>
 ): Promise<ApiResponse<GarmentFeedback>> => {
-  const payload: any = { ...feedback };
+  const payload = { ...feedback } as Partial<GarmentFeedback> & Record<string, unknown>;
   const idempotencyKey: string =
     (payload.idempotency_key as string | undefined) ?? crypto.randomUUID();
   payload.idempotency_key = idempotencyKey;
 
-  let data: any = null;
+  let data: GarmentFeedback | null = null;
   for (let attempt = 1; ; attempt++) {
     const res = await db
       .from(TABLE_NAME)
@@ -25,7 +25,7 @@ export const createFeedback = async (
       .single();
 
     if (!res.error) {
-      data = res.data;
+      data = res.data as GarmentFeedback;
       break;
     }
 
@@ -36,7 +36,7 @@ export const createFeedback = async (
         .eq('idempotency_key', idempotencyKey)
         .single();
       if (!recovered.error && recovered.data) {
-        data = recovered.data;
+        data = recovered.data as GarmentFeedback;
         break;
       }
     }
@@ -50,7 +50,7 @@ export const createFeedback = async (
     return { status: "error", message: res.error.message };
   }
 
-  return { status: "success", data: data as any };
+  return { status: "success", data: data as GarmentFeedback };
 };
 
 export const getFeedbackByGarmentId = async (
@@ -65,7 +65,7 @@ export const getFeedbackByGarmentId = async (
   if (error) {
     return { status: "error", message: error.message, data: [], count: 0 };
   }
-  return { status: "success", data: data as any, count: data?.length || 0 };
+  return { status: "success", data: data as GarmentFeedback[], count: data?.length || 0 };
 };
 
 export const getFeedbackByOrderId = async (
@@ -80,7 +80,7 @@ export const getFeedbackByOrderId = async (
   if (error) {
     return { status: "error", message: error.message, data: [], count: 0 };
   }
-  return { status: "success", data: data as any, count: data?.length || 0 };
+  return { status: "success", data: data as GarmentFeedback[], count: data?.length || 0 };
 };
 
 export const updateFeedback = async (
@@ -101,7 +101,7 @@ export const updateFeedback = async (
     console.error("Error updating feedback:", error);
     return { status: "error", message: error.message };
   }
-  return { status: "success", data: updated as any };
+  return { status: "success", data: updated as GarmentFeedback };
 };
 
 export const getFeedbackByGarmentAndTrip = async (
@@ -120,5 +120,5 @@ export const getFeedbackByGarmentAndTrip = async (
   if (error) {
     return { status: "error", message: error.message };
   }
-  return { status: "success", data: data as any };
+  return { status: "success", data: data as GarmentFeedback | null };
 };

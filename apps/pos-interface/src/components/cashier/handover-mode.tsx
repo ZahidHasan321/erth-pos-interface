@@ -3,16 +3,17 @@ import { Button } from "@repo/ui/button";
 import { useCollectGarmentsMutation } from "@/hooks/useCashier";
 import { useGarmentCollection } from "@/hooks/useGarmentCollection";
 import { GarmentCollection } from "@/components/cashier/garment-collection";
+import type { Order, Garment } from "@repo/database";
 
 type Props = {
-    order: any;
-    garments: any[];
+    order: Order;
+    garments: Garment[];
     isHomeDelivery: boolean;
 };
 
 export function HandoverMode({ order, garments, isHomeDelivery }: Props) {
-    const eligibleGarments = garments.filter((g: any) =>
-        g.location === "shop" && ["ready_for_pickup", "brova_trialed", "awaiting_trial"].includes(g.piece_stage)
+    const eligibleGarments = garments.filter((g) =>
+        g.location === "shop" && ["ready_for_pickup", "brova_trialed", "awaiting_trial"].includes(g.piece_stage ?? "")
     );
     const collection = useGarmentCollection({ orderId: String(order.id), eligibleGarments, isHomeDelivery });
     const collectMutation = useCollectGarmentsMutation();

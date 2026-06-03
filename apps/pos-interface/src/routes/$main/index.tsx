@@ -13,6 +13,7 @@ import {
   Store,
   Eye,
   ArrowRight,
+  type LucideIcon,
 } from "lucide-react";
 import { addDays } from "date-fns";
 import {
@@ -629,7 +630,7 @@ function DefaultDashboard() {
       return getShowroomStatus(o.garments || []).label === "brova_trial";
     }),
     needsAction: orders.filter(o => {
-      return o.garments?.some((g: any) => (g.feedback_status === 'needs_repair' || g.feedback_status === 'needs_redo') && g.location === 'shop');
+      return o.garments?.some((g) => (g.feedback_status === 'needs_repair' || g.feedback_status === 'needs_redo') && g.location === 'shop');
     }),
   };
 
@@ -872,7 +873,16 @@ function DefaultDashboard() {
   );
 }
 
-function DefaultStatCard({ title, value, icon: Icon, color, bg, index, to, search }: any) {
+function DefaultStatCard({ title, value, icon: Icon, color, bg, index, to, search }: {
+  title: string;
+  value: number;
+  icon: LucideIcon;
+  color: string;
+  bg: string;
+  index: number;
+  to?: string;
+  search?: Record<string, unknown>;
+}) {
   const content = (
     <CardContent className="p-4">
       <div className="flex items-start justify-between mb-3">
@@ -896,7 +906,16 @@ function DefaultStatCard({ title, value, icon: Icon, color, bg, index, to, searc
   );
 }
 
-function DefaultWorkflowItem({ label, count, icon: Icon, color, bg, to, search, urgent }: any) {
+function DefaultWorkflowItem({ label, count, icon: Icon, color, bg, to, search, urgent }: {
+  label: string;
+  count: number;
+  icon: LucideIcon;
+  color: string;
+  bg: string;
+  to?: string;
+  search?: Record<string, unknown>;
+  urgent?: boolean;
+}) {
   const content = (
     <div className={cn(
       "flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-muted/30",
@@ -928,7 +947,7 @@ function DefaultWorkflowItem({ label, count, icon: Icon, color, bg, to, search, 
   return content;
 }
 
-function DefaultQuickAction({ label, icon: Icon, to }: { label: string; icon: any; to: string }) {
+function DefaultQuickAction({ label, icon: Icon, to }: { label: string; icon: LucideIcon; to: string }) {
   return (
     <Link to={to} target="_blank" rel="noopener noreferrer">
       <Card className="border shadow-none rounded-xl hover:border-primary/20 hover:bg-muted/20 transition-all group cursor-pointer">

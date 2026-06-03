@@ -5,9 +5,9 @@ import { type GarmentSchema } from "./garment-form.schema";
  * Direct mapping from Garment (DB) to Form Values
  */
 export function mapGarmentToFormValues(g: Garment): GarmentSchema {
-    const parseNumeric = (val: any) => {
+    const parseNumeric = (val: unknown) => {
         if (val === null || val === undefined) return 0;
-        const parsed = typeof val === 'string' ? parseFloat(val) : val;
+        const parsed = typeof val === 'string' ? parseFloat(val) : (typeof val === 'number' ? val : NaN);
         return isNaN(parsed) ? 0 : parsed;
     };
 
@@ -29,7 +29,7 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         fabric_id: g.fabric_id,
         style_id: g.style_id,
         style: (g.style ?? 'kuwaiti') as string,
-        measurement_id: g.measurement_id as any,
+        measurement_id: g.measurement_id as string,
         fabric_source: g.fabric_source ?? 'IN',
         fabric_length: parseNumeric(g.fabric_length),
         quantity: g.quantity || 1,
@@ -53,7 +53,7 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         soaking_hours: (g.soaking_hours === 8 || g.soaking_hours === 24) ? g.soaking_hours : null,
         express: g.express === true,
         garment_type: g.garment_type || 'final',
-        piece_stage: g.piece_stage as any,
+        piece_stage: g.piece_stage as string | null | undefined,
         location: g.location || 'shop',
         acceptance_status: g.acceptance_status,
         fulfillment_type: g.fulfillment_type,
@@ -114,7 +114,7 @@ export function mapFormValuesToGarment(
     };
 
     // Clean up any fields that shouldn't be in the DB record or need conversion
-    delete (garment as any).fabric_amount;
+    delete (garment as Record<string, unknown>).fabric_amount;
 
     return garment;
 }

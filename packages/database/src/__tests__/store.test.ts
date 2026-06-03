@@ -8,7 +8,8 @@ import { describe, it, expect } from "vitest";
 
 // ─── Transfer Constants ──────────────────────────────────────────────────
 
-const TRANSFER_STATUSES = ["requested", "approved", "rejected", "dispatched", "received", "partially_received"];
+// Live, reachable statuses — the flow has no approval gate (CLAUDE.md §4).
+const TRANSFER_STATUSES = ["requested", "dispatched", "received", "partially_received"];
 const TRANSFER_DIRECTIONS = ["shop_to_workshop", "workshop_to_shop"];
 const ITEM_TYPES = ["fabric", "shelf", "accessory"];
 const ACCESSORY_CATEGORIES = ["buttons", "zippers", "thread", "lining", "elastic", "interlining", "other"];
@@ -17,12 +18,10 @@ const UNITS_OF_MEASURE = ["pieces", "meters", "rolls", "kg"];
 describe("Transfer Constants", () => {
   it("has all required transfer statuses", () => {
     expect(TRANSFER_STATUSES).toContain("requested");
-    expect(TRANSFER_STATUSES).toContain("approved");
-    expect(TRANSFER_STATUSES).toContain("rejected");
     expect(TRANSFER_STATUSES).toContain("dispatched");
     expect(TRANSFER_STATUSES).toContain("received");
     expect(TRANSFER_STATUSES).toContain("partially_received");
-    expect(TRANSFER_STATUSES).toHaveLength(6);
+    expect(TRANSFER_STATUSES).toHaveLength(4);
   });
 
   it("has bidirectional transfer directions", () => {
@@ -56,30 +55,26 @@ describe("Transfer Constants", () => {
 // ─── Transfer Status Lifecycle ───────────────────────────────────────────
 
 describe("Transfer Status Lifecycle", () => {
+  // No approval gate: the source side sends a requested transfer directly
+  // (full / partial / none). A still-requested transfer is withdrawn by deleting
+  // it (transfers:cancel) — that's a delete, not a status transition.
   const validTransitions: Record<string, string[]> = {
-    requested: ["approved", "rejected"],
-    approved: ["dispatched"],
+    requested: ["dispatched"],
     dispatched: ["received", "partially_received"],
     received: [],
     partially_received: [],
-    rejected: [],
   };
 
-  it("requested can transition to approved or rejected", () => {
-    expect(validTransitions["requested"]).toEqual(["approved", "rejected"]);
-  });
-
-  it("approved can only transition to dispatched", () => {
-    expect(validTransitions["approved"]).toEqual(["dispatched"]);
+  it("requested is sent directly to dispatched (no approval gate)", () => {
+    expect(validTransitions["requested"]).toEqual(["dispatched"]);
   });
 
   it("dispatched can transition to received or partially_received", () => {
     expect(validTransitions["dispatched"]).toEqual(["received", "partially_received"]);
   });
 
-  it("received and rejected are terminal states", () => {
+  it("received and partially_received are terminal states", () => {
     expect(validTransitions["received"]).toEqual([]);
-    expect(validTransitions["rejected"]).toEqual([]);
     expect(validTransitions["partially_received"]).toEqual([]);
   });
 
@@ -155,23 +150,24 @@ describe("isLowStock", () => {
 // Validates that the shop and workshop pages use correct matching directions
 
 describe("Transfer Direction Symmetry", () => {
+  // The SOURCE side fulfils (sends) a requested transfer directly — no approve step.
   // Shop (POS) pages
-  const shopApproveRequestsFilter = { status: ["requested"], direction: "shop_to_workshop" };
+  const shopSendRequestsFilter = { status: ["requested"], direction: "shop_to_workshop" };
   const shopReceivingFilter = { status: "dispatched", direction: "workshop_to_shop" };
   const shopRequestDeliveryDirection = "workshop_to_shop";
 
   // Workshop pages
-  const workshopApproveRequestsFilter = { status: ["requested"], direction: "workshop_to_shop" };
+  const workshopSendRequestsFilter = { status: ["requested"], direction: "workshop_to_shop" };
   const workshopReceivingFilter = { status: "dispatched", direction: "shop_to_workshop" };
   const workshopRequestDeliveryDirection = "shop_to_workshop";
   const workshopSendToShopDirection = "workshop_to_shop";
 
-  it("shop approves requests FOR shop_to_workshop (workshop requesting from shop)", () => {
-    expect(shopApproveRequestsFilter.direction).toBe("shop_to_workshop");
+  it("shop sends requests FOR shop_to_workshop (workshop requesting from shop)", () => {
+    expect(shopSendRequestsFilter.direction).toBe("shop_to_workshop");
   });
 
-  it("workshop approves requests FOR workshop_to_shop (shop requesting from workshop)", () => {
-    expect(workshopApproveRequestsFilter.direction).toBe("workshop_to_shop");
+  it("workshop sends requests FOR workshop_to_shop (shop requesting from workshop)", () => {
+    expect(workshopSendRequestsFilter.direction).toBe("workshop_to_shop");
   });
 
   it("shop receives deliveries FROM workshop (direction=workshop_to_shop)", () => {
@@ -194,18 +190,18 @@ describe("Transfer Direction Symmetry", () => {
     expect(workshopSendToShopDirection).toBe("workshop_to_shop");
   });
 
-  it("approve and receive directions are opposites for each app", () => {
-    // Shop approves shop_to_workshop, receives workshop_to_shop
-    expect(shopApproveRequestsFilter.direction).not.toBe(shopReceivingFilter.direction);
-    // Workshop approves workshop_to_shop, receives shop_to_workshop
-    expect(workshopApproveRequestsFilter.direction).not.toBe(workshopReceivingFilter.direction);
+  it("send and receive directions are opposites for each app", () => {
+    // Shop sends shop_to_workshop, receives workshop_to_shop
+    expect(shopSendRequestsFilter.direction).not.toBe(shopReceivingFilter.direction);
+    // Workshop sends workshop_to_shop, receives shop_to_workshop
+    expect(workshopSendRequestsFilter.direction).not.toBe(workshopReceivingFilter.direction);
   });
 
-  it("shop approves what workshop requests, and vice versa", () => {
-    // Workshop requests shop_to_workshop → shop approves shop_to_workshop
-    expect(workshopRequestDeliveryDirection).toBe(shopApproveRequestsFilter.direction);
-    // Shop requests workshop_to_shop → workshop approves workshop_to_shop
-    expect(shopRequestDeliveryDirection).toBe(workshopApproveRequestsFilter.direction);
+  it("shop sends what workshop requests, and vice versa", () => {
+    // Workshop requests shop_to_workshop → shop sends shop_to_workshop
+    expect(workshopRequestDeliveryDirection).toBe(shopSendRequestsFilter.direction);
+    // Shop requests workshop_to_shop → workshop sends workshop_to_shop
+    expect(shopRequestDeliveryDirection).toBe(workshopSendRequestsFilter.direction);
   });
 });
 
@@ -235,9 +231,9 @@ describe("Transfer Filter Contracts", () => {
   });
 
   it("status can be an array of strings", () => {
-    const filter: TransferFilters = { status: ["requested", "approved"] };
+    const filter: TransferFilters = { status: ["requested", "dispatched"] };
     expect(Array.isArray(filter.status)).toBe(true);
-    expect(buildFilterDescription(filter)).toBe("status=requested,approved");
+    expect(buildFilterDescription(filter)).toBe("status=requested,dispatched");
   });
 
   it("all filter fields are optional", () => {

@@ -1,14 +1,15 @@
 import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart, ArrowDownToLine, Send, AlertTriangle, Settings2, Package } from "lucide-react";
+import { BarChart, ArrowDownToLine, Send, AlertTriangle, Settings2, Package, type LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@repo/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
 import { cn } from "@/lib/utils";
 import { getMovements, getMovementAggregates, getTopItemsByMovement } from "@/api/stockMovements";
-import { MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_COLORS } from "@/lib/inventory";
+import { MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_COLORS, getWasteReasonLabel } from "@/lib/inventory";
 import type { StockMovementType } from "@repo/database";
+import type { TopItem } from "@/api/stockMovements";
 
 export const Route = createFileRoute("/$main/store/reports")({
   component: ReportsPage,
@@ -55,6 +56,29 @@ function ReportsPage() {
     queryFn: () => getMovements({ movementType: "adjustment", fromDate: from, toDate: to, limit: 20 }),
     staleTime: 60_000,
   });
+  const { data: wasteMovements = [] } = useQuery({
+    queryKey: ["waste_movements", from, to],
+    queryFn: () => getMovements({ movementType: "waste", fromDate: from, toDate: to, limit: 500 }),
+    staleTime: 60_000,
+  });
+
+  // Damage/Waste grouped by fault category (with cost impact) for the period.
+  const wasteByReason = useMemo(() => {
+    const map = new Map<string, { qty: number; cost: number }>();
+    for (const m of wasteMovements) {
+      const key = m.reason ?? "unspecified";
+      const qty = Math.abs(Number(m.qty_delta));
+      const cost = qty * Number(m.unit_cost ?? 0);
+      const cur = map.get(key) ?? { qty: 0, cost: 0 };
+      cur.qty += qty;
+      cur.cost += cost;
+      map.set(key, cur);
+    }
+    return Array.from(map.entries())
+      .map(([reason, v]) => ({ reason, ...v }))
+      .sort((a, b) => b.cost - a.cost || b.qty - a.qty);
+  }, [wasteMovements]);
+  const totalWasteCost = useMemo(() => wasteByReason.reduce((n, w) => n + w.cost, 0), [wasteByReason]);
 
   const totals = agg?.totals ?? {};
   const restocked = totals.restock ?? 0;
@@ -136,6 +160,40 @@ function ReportsPage() {
         </CardContent>
       </Card>
 
+      {/* Waste by reason */}
+      <Card className="mb-6">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-600" /> Waste by reason
+            </h3>
+            <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+              {lost.toFixed(1)} units · {totalWasteCost.toFixed(2)} cost
+            </span>
+          </div>
+          {wasteByReason.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No waste recorded in this period.</p>
+          ) : (
+            <div className="space-y-2">
+              {wasteByReason.map((w) => {
+                const maxCost = Math.max(...wasteByReason.map((x) => x.cost), 1);
+                const pct = Math.round((w.cost / maxCost) * 100);
+                return (
+                  <div key={w.reason} className="flex items-center gap-3 text-sm">
+                    <span className="w-32 shrink-0 truncate" title={getWasteReasonLabel(w.reason)}>{getWasteReasonLabel(w.reason)}</span>
+                    <div className="flex-1 min-w-0 h-2 bg-muted rounded overflow-hidden" aria-hidden="true">
+                      <div className="h-full bg-red-400" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="tabular-nums text-muted-foreground w-20 text-right">{w.qty.toFixed(1)} units</span>
+                    <span className="tabular-nums font-medium w-20 text-right">{w.cost.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Top items */}
       <div className="grid lg:grid-cols-2 gap-4 mb-6">
         <TopItemsCard title="Top consumed" rows={topConsumed} icon={Send} color="text-blue-600" />
@@ -187,7 +245,7 @@ function ReportsPage() {
   );
 }
 
-function TopItemsCard({ title, rows, icon: Icon, color }: { title: string; rows: any[]; icon: any; color: string }) {
+function TopItemsCard({ title, rows, icon: Icon, color }: { title: string; rows: TopItem[]; icon: LucideIcon; color: string }) {
   return (
     <Card>
       <CardContent className="py-4">

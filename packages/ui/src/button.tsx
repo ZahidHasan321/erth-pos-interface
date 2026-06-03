@@ -25,6 +25,11 @@ const buttonVariants = cva(
         sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
         lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
         icon: "size-9",
+        // Touch-primary surfaces (terminals, receiving, dispatch on tablets):
+        // compact on a mouse, but grows to a ≥44px tap target on coarse pointers.
+        "sm-touch":
+          "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5 pointer-coarse:h-11 pointer-coarse:px-4",
+        "icon-touch": "size-8 pointer-coarse:size-11",
       },
     },
     defaultVariants: {

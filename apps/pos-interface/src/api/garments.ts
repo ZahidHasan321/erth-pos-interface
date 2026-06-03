@@ -24,7 +24,7 @@ export const updateGarment = async (
     console.error('updateGarment: failed to update garment:', error);
     throw error;
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Garment };
 };
 
 // Repoint every garment in an order that currently points to `oldMeasurementId`
@@ -50,7 +50,7 @@ export const bulkRepointMeasurement = async (
     console.error('bulkRepointMeasurement: failed to repoint sibling brova garments:', error);
     throw error;
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Garment[] };
 };
 
 // Overwrite style-related fields on every garment in an order that shares the
@@ -76,10 +76,10 @@ export const bulkUpdateStyleFields = async (
     console.error('bulkUpdateStyleFields: failed to update sibling style fields:', error);
     throw error;
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Garment[] };
 };
 
-export const getGarmentsForRedispatch = async (): Promise<ApiResponse<any[]>> => {
+export const getGarmentsForRedispatch = async (): Promise<ApiResponse<Garment[]>> => {
   // Find garments at shop that have a feedback record requesting "workshop" distribution
   // for the garment's current trip number
   const { data, error } = await db
@@ -107,14 +107,15 @@ export const getGarmentsForRedispatch = async (): Promise<ApiResponse<any[]>> =>
   }
 
   // Filter client-side: only keep garments where the feedback trip_number matches the garment's current trip
+  type FeedbackRow = { distribution: string | null; created_at: string | null; trip_number: number | null };
   const filtered = (data || []).filter(g => {
-    const latestWorkshopFeedback = g.garment_feedback
-      ?.filter((f: any) => f.distribution === 'workshop')
-      ?.sort((a: any, b: any) => parseUtcTimestamp(b.created_at || 0).getTime() - parseUtcTimestamp(a.created_at || 0).getTime())[0];
+    const latestWorkshopFeedback = (g.garment_feedback as FeedbackRow[] | undefined)
+      ?.filter((f) => f.distribution === 'workshop')
+      ?.sort((a, b) => parseUtcTimestamp(b.created_at || "").getTime() - parseUtcTimestamp(a.created_at || "").getTime())[0];
     return latestWorkshopFeedback && latestWorkshopFeedback.trip_number === (g.trip_number || 1);
   });
 
-  return { status: 'success', data: filtered as any, count: filtered.length };
+  return { status: 'success', data: filtered as Garment[], count: filtered.length };
 };
 
 export const dispatchGarmentToWorkshop = async (
@@ -144,16 +145,17 @@ export const dispatchGarmentToWorkshop = async (
   // Append dispatch log entry (best-effort; don't block on failure).
   try {
     if (data) {
+      const garmentData = data as Garment;
       await db.from('dispatch_log').insert({
-        garment_id: (data as any).id,
-        order_id: (data as any).order_id,
+        garment_id: garmentData.id,
+        order_id: garmentData.order_id,
         direction: 'to_workshop',
-        trip_number: (data as any).trip_number ?? currentTripNumber + 1,
+        trip_number: garmentData.trip_number ?? currentTripNumber + 1,
       });
     }
   } catch (logErr) {
     console.error('Failed to write dispatch_log (non-blocking):', logErr);
   }
 
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Garment };
 };

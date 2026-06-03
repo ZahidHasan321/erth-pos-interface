@@ -10,17 +10,30 @@ import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/tabs";
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableContainer } from "@repo/ui/table";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableContainer } from "@/components/shared/table";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { matchesGarmentSearch } from "@/lib/garment-search";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { Truck, Package, History, Printer, ChevronDown, Loader2 } from "lucide-react";
 import { formatDate, cn, parseUtcTimestamp, getKuwaitMidnight, getLocalDateStr, TIMEZONE } from "@/lib/utils";
 import { getDispatchHistory, type DispatchHistoryRow } from "@/api/garments";
 import type { WorkshopGarment } from "@repo/database";
 
+// URL is the source of truth for the active tab so a "ready to dispatch"
+// notification can deep-link the right tab. Default (ready) is omitted.
+type DispatchTab = "ready" | "transit" | "history";
+type DispatchSearch = { tab?: DispatchTab };
+
+const isDispatchTab = (v: unknown): v is DispatchTab =>
+  v === "ready" || v === "transit" || v === "history";
+
 export const Route = createFileRoute("/(main)/dispatch")({
   component: DispatchPage,
   head: () => ({ meta: [{ title: "Dispatch" }] }),
+  validateSearch: (raw: Record<string, unknown>): DispatchSearch => ({
+    tab: isDispatchTab(raw.tab) ? raw.tab : undefined,
+  }),
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -535,6 +548,14 @@ function DispatchHistoryTab() {
 function DispatchPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
   const dispatchMut = useDispatchGarments();
+  const [search, setSearch] = useState("");
+
+  // Active tab lives in the URL so notifications can target it; default omitted.
+  const tab = Route.useSearch().tab ?? "ready";
+  const navigate = Route.useNavigate();
+  const setTab = (v: string) =>
+    navigate({ search: { tab: v === "ready" ? undefined : (v as DispatchTab) }, replace: true });
+
   // Ready garments at workshop — post-QC garments pending shipment to shop.
   // (brova_trialed lives at shop under unified flow; receiving resets any stray
   // brova_trialed returning to the workshop back to waiting_cut.)
@@ -545,8 +566,15 @@ function DispatchPage() {
     [allGarments],
   );
 
+  // Client-side search over the visible (non-paginated) Ready/Transit lists.
+  // Filters the garments before grouping so a match surfaces its whole order.
+  const searchedReady = useMemo(
+    () => search.trim() ? readyGarments.filter((g) => matchesGarmentSearch(g, search)) : readyGarments,
+    [readyGarments, search],
+  );
+
   // Group by order for partial-dispatch UI (mirrors POS dispatch page).
-  const readyGroups = useMemo(() => groupReadyByOrder(readyGarments), [readyGarments]);
+  const readyGroups = useMemo(() => groupReadyByOrder(searchedReady), [searchedReady]);
 
   // Per-order breakdown so each card can show where the rest of the order's
   // garments currently sit (workshop / transit / shop / done).
@@ -558,7 +586,11 @@ function DispatchPage() {
     () => allGarments.filter((g) => g.location === "transit_to_shop"),
     [allGarments],
   );
-  const inTransitGroups = useMemo(() => groupInTransitByOrder(inTransitGarments), [inTransitGarments]);
+  const searchedInTransit = useMemo(
+    () => search.trim() ? inTransitGarments.filter((g) => matchesGarmentSearch(g, search)) : inTransitGarments,
+    [inTransitGarments, search],
+  );
+  const inTransitGroups = useMemo(() => groupInTransitByOrder(searchedInTransit), [searchedInTransit]);
 
   // Accept-with-Fix brova must travel back with its order's finals (CLAUDE.md §2.4·6).
   // If a dispatch batch carries an Accept-with-Fix brova (a brova back at the
@@ -619,7 +651,14 @@ function DispatchPage() {
         subtitle={`${readyGarments.length} garment${readyGarments.length !== 1 ? "s" : ""} ready for dispatch`}
       />
 
-      <Tabs defaultValue="ready">
+      <SearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Customer, order #, invoice, phone…"
+        className="max-w-sm mb-3"
+      />
+
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-3 h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
           <TabsTrigger value="ready">
             Ready{" "}
@@ -667,7 +706,7 @@ function DispatchPage() {
 
         {/* ── IN TRANSIT — grouped by order, read-only ── */}
         <TabsContent value="transit">
-          {inTransitGarments.length === 0 ? (
+          {inTransitGroups.length === 0 ? (
             <EmptyState icon={Truck} message="Nothing in transit" />
           ) : (
             <div className="space-y-3">

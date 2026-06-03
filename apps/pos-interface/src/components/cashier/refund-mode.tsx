@@ -12,11 +12,12 @@ import { PAYMENT_TYPE_LABELS, PAYMENT_METHOD_COLORS } from "@/lib/constants";
 import { Numpad } from "@/components/cashier/numpad";
 import { RefundItemSelector } from "@/components/cashier/refund-item-selector";
 import type { RefundItem } from "@/api/cashier";
+import type { Order, Garment, OrderShelfItem } from "@repo/database";
 
 type Props = {
-    order: any;
-    garments: any[];
-    shelfItems: any[];
+    order: Order;
+    garments: Garment[];
+    shelfItems: OrderShelfItem[];
     orderTotal: number;
     totalPaid: number;
     advance: number;
@@ -162,8 +163,8 @@ export function RefundMode({
                             </Tooltip>
                         </div>
                         <RefundItemSelector
-                            garments={garments as any}
-                            shelfItems={shelfItems as any}
+                            garments={garments as Parameters<typeof RefundItemSelector>[0]["garments"]}
+                            shelfItems={shelfItems as Parameters<typeof RefundItemSelector>[0]["shelfItems"]}
                             expressSurcharge={getPrice("EXPRESS_SURCHARGE") || 2}
                             soaking8hPrice={getPrice("SOAKING_8H_CHARGE") || 0}
                             soaking24hPrice={getPrice("SOAKING_24H_CHARGE") || 0}

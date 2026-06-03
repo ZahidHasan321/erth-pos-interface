@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
@@ -61,7 +61,7 @@ export function CashMovementDialog({ open, onOpenChange, sessionId }: CashMoveme
     }, [open]);
 
     const form = useForm<FormValues>({
-        resolver: zodResolver(schema) as any,
+        resolver: zodResolver(schema) as Resolver<FormValues>,
         defaultValues: { amount: undefined as unknown as number, reason: "" },
     });
 

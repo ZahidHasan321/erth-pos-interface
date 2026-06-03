@@ -76,7 +76,7 @@ export function ProductionPipeline({ currentStage, compact = false, hasSoaking, 
               {stage.label}
               {isQcWithFails && (
                 <span className={cn(
-                  "ml-0.5 inline-flex items-center justify-center rounded-full bg-red-500 text-white font-bold",
+                  "ml-0.5 inline-flex items-center justify-center rounded-full bg-red-500 text-white font-medium",
                   compact ? "w-3 h-3 text-[7px]" : "w-3.5 h-3.5 text-[8px]",
                 )}>
                   {qcFailCount}

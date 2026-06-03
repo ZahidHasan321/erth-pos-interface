@@ -155,12 +155,13 @@ function SystemCharges({ prices, brand }: { prices: Price[]; brand: Brand }) {
                 <div className={cn("p-1.5 rounded-lg shrink-0", meta.bg)}>
                   <Icon className={cn("w-4 h-4", meta.color)} />
                 </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground leading-tight">{meta.label}</p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground leading-tight">{meta.label}</p>
               </div>
               {!isEditing && (
                 <button
                   onClick={() => setEditing(price.key)}
-                  className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                  aria-label={`Edit ${meta.label}`}
+                  className="p-1 rounded-md text-muted-foreground/40 hover:text-primary hover:bg-primary/10 group-hover:text-muted-foreground transition-all shrink-0"
                 >
                   <Pencil className="w-3 h-3" />
                 </button>
@@ -178,9 +179,9 @@ function SystemCharges({ prices, brand }: { prices: Price[]; brand: Brand }) {
               />
             ) : (
               <>
-                <p className="text-2xl font-black tracking-tight tabular-nums leading-none">
+                <p className="text-2xl font-semibold tracking-tight tabular-nums leading-none">
                   {Number(price.value).toFixed(3)}
-                  <span className="text-[10px] font-bold text-muted-foreground/40 ml-0.5">KD</span>
+                  <span className="text-[11px] font-medium text-muted-foreground/40 ml-0.5">KD</span>
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1 truncate">{meta.unit}</p>
               </>
@@ -217,11 +218,12 @@ function StyleImageCard({ style }: { style: Style }) {
           />
         ) : null}
 
-        {/* Edit button — center overlay on hover */}
+        {/* Edit button — center overlay, faint until hover/tap */}
         {!editing && (
           <button
             onClick={() => setEditing(true)}
-            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/0 group-hover:bg-black/5"
+            aria-label={`Edit ${style.name} price`}
+            className="absolute inset-0 flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity bg-black/0 group-hover:bg-black/5"
           >
             <div className="bg-white rounded-lg shadow-md p-1.5">
               <Pencil className="w-3 h-3 text-foreground/70" />
@@ -245,9 +247,9 @@ function StyleImageCard({ style }: { style: Style }) {
           />
         ) : (
           <>
-            <p className="text-xs font-semibold text-foreground/75 leading-tight text-center">{style.name}</p>
+            <p className="text-xs font-medium text-foreground/75 leading-tight text-center">{style.name}</p>
             <p className={cn(
-              "text-[11px] font-bold tabular-nums",
+              "text-[11px] font-medium tabular-nums",
               hasCost ? "text-primary" : "text-muted-foreground/40",
             )}>
               {hasCost ? `${rate.toFixed(3)} KD` : "Free"}
@@ -296,7 +298,7 @@ function HashwaCard({ style }: { style: Style }) {
       {/* Visual area — glyph only, no overlapping badge */}
       <div className="relative h-24 flex items-center justify-center overflow-hidden">
         <span className={cn(
-          "text-3xl font-black tabular-nums select-none tracking-tight",
+          "text-3xl font-semibold tabular-nums select-none tracking-tight",
           shortName.startsWith("No") ? "text-rose-300/80" : "text-emerald-300/80",
         )}>
           {glyph}
@@ -306,7 +308,8 @@ function HashwaCard({ style }: { style: Style }) {
         {!editing && (
           <button
             onClick={() => setEditing(true)}
-            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-100/0 group-hover:bg-slate-100/50"
+            aria-label={`Edit ${shortName} hashwa price`}
+            className="absolute inset-0 flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity bg-slate-100/0 group-hover:bg-slate-100/50"
           >
             <div className="bg-white/90 rounded-lg shadow-md p-1.5">
               <Pencil className="w-3 h-3 text-slate-500" />
@@ -330,9 +333,9 @@ function HashwaCard({ style }: { style: Style }) {
           />
         ) : (
           <>
-            <p className="text-xs font-semibold text-slate-600 leading-tight">{shortName}</p>
+            <p className="text-xs font-medium text-slate-600 leading-tight">{shortName}</p>
             <p className={cn(
-              "text-[11px] font-bold tabular-nums",
+              "text-[11px] font-medium tabular-nums",
               hasCost ? "text-slate-700" : "text-slate-400",
             )}>
               {hasCost ? `+${rate.toFixed(3)} KD` : "Free"}
@@ -370,13 +373,14 @@ function StyleGlyphCard({ style }: { style: Style }) {
     )}>
       {/* Visual area */}
       <div className="relative bg-muted/20 h-24 flex items-center justify-center overflow-hidden">
-        <span className="text-3xl font-black select-none tracking-tight text-muted-foreground/25">
+        <span className="text-3xl font-semibold select-none tracking-tight text-muted-foreground/25">
           {glyph}
         </span>
         {!editing && (
           <button
             onClick={() => setEditing(true)}
-            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/0 group-hover:bg-black/5"
+            aria-label={`Edit ${style.name} price`}
+            className="absolute inset-0 flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity bg-black/0 group-hover:bg-black/5"
           >
             <div className="bg-white rounded-lg shadow-md p-1.5">
               <Pencil className="w-3 h-3 text-foreground/70" />
@@ -400,8 +404,8 @@ function StyleGlyphCard({ style }: { style: Style }) {
           />
         ) : (
           <>
-            <p className="text-xs font-semibold text-foreground/75 leading-tight text-center">{style.name}</p>
-            <p className={cn("text-[11px] font-bold tabular-nums", hasCost ? "text-primary" : "text-muted-foreground/40")}>
+            <p className="text-xs font-medium text-foreground/75 leading-tight text-center">{style.name}</p>
+            <p className={cn("text-[11px] font-medium tabular-nums", hasCost ? "text-primary" : "text-muted-foreground/40")}>
               {hasCost ? `${rate.toFixed(3)} KD` : "Free"}
             </p>
           </>
@@ -435,16 +439,16 @@ function GarmentPartGroup({ config, byComponent }: {
         onClick={() => setCollapsed((v) => !v)}
         className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-muted/15 transition-colors"
       >
-        <span className="font-bold text-sm tracking-tight">{config.label}</span>
+        <span className="font-medium text-sm tracking-tight">{config.label}</span>
 
         <div className="flex items-center gap-1.5">
           {hasHashwa && (
-            <span className="text-[10px] font-semibold px-1.5 py-px rounded-md bg-slate-100 text-slate-500 border border-slate-200/70">
+            <span className="text-[11px] font-medium px-1.5 py-px rounded-md bg-slate-100 text-slate-500 border border-slate-200/70">
               hashwa
             </span>
           )}
           {unpricedCount > 0 && (
-            <span className="text-[10px] font-semibold px-1.5 py-px rounded-md bg-amber-50 text-amber-600 border border-amber-200/70">
+            <span className="text-[11px] font-medium px-1.5 py-px rounded-md bg-amber-50 text-amber-600 border border-amber-200/70">
               {unpricedCount} unpriced
             </span>
           )}
@@ -473,7 +477,7 @@ function GarmentPartGroup({ config, byComponent }: {
                 {/* Sub-label only if multiple sub-groups */}
                 {config.subGroups.filter((x) => !x.isAddon).length > 1 && (
                   <div className="px-4 py-1.5 border-b border-border/30 bg-muted/20">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">
+                    <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/40">
                       {sg.label}
                     </span>
                   </div>
@@ -568,7 +572,7 @@ function PricingPage() {
           {/* System charges */}
           {prices?.length ? (
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 mb-2.5">
+              <p className="text-sm font-medium text-muted-foreground mb-2.5">
                 System Charges
               </p>
               <SystemCharges prices={prices} brand={brand} />
@@ -577,7 +581,7 @@ function PricingPage() {
 
           {/* Style options by garment part */}
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 mb-2.5">
+            <p className="text-sm font-medium text-muted-foreground mb-2.5">
               Style Options
             </p>
             <div className="space-y-2">

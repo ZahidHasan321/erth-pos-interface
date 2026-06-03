@@ -11,8 +11,13 @@ import { Numpad } from "@/components/cashier/numpad";
 import { DiscountDialog } from "@/components/cashier/discount-dialog";
 import { DeliveryDialog } from "@/components/cashier/delivery-dialog";
 
+import type { Order, Garment, OrderShelfItem, Shelf } from "@repo/database";
+
+type GarmentWithFabric = Garment & { fabric?: { name: string } | null };
+type ShelfItemWithShelf = OrderShelfItem & { shelf?: Pick<Shelf, "type"> | null };
+
 type Props = {
-    order: any;
+    order: Order;
     orderTotal: number;
     totalPaid: number;
     advance: number;
@@ -105,8 +110,8 @@ export function PaymentMode({
     const hasDiscount = discountValue > 0;
     const isOverpaid = remainingBalance < -0.001;
 
-    const garments = Array.isArray(order?.garments) ? order.garments : [];
-    const shelfItems = Array.isArray(order?.shelf_items) ? order.shelf_items : [];
+    const garments = (Array.isArray(order?.garments) ? order.garments : []) as GarmentWithFabric[];
+    const shelfItems = (Array.isArray(order?.shelf_items) ? order.shelf_items : []) as ShelfItemWithShelf[];
 
     const charges: Array<[string, number]> = [
         ["Stitching", Number(order?.stitching_charge) || 0],
@@ -398,17 +403,17 @@ export function PaymentMode({
 
 // ── Read-only items list (LEFT panel) ──────────────────────────────────────
 const itemDateFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
-function sameDay(a?: string | null, b?: string | null): boolean {
+function sameDay(a?: string | Date | null, b?: string | Date | null): boolean {
     if (!a || !b) return false;
     return new Date(a).toDateString() === new Date(b).toDateString();
 }
 
-function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments: any[]; shelfItems: any[]; orderDeliveryDate?: string | null }) {
+function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments: GarmentWithFabric[]; shelfItems: ShelfItemWithShelf[]; orderDeliveryDate?: string | Date | null }) {
     const hasGarments = garments.length > 0;
     const hasShelf = shelfItems.length > 0;
     if (!hasGarments && !hasShelf) return null;
 
-    const isPartialRefunded = (g: any) =>
+    const isPartialRefunded = (g: GarmentWithFabric) =>
         g.piece_stage !== "discarded" &&
         (g.refunded_fabric || g.refunded_stitching || g.refunded_style || g.refunded_express || g.refunded_soaking);
 
@@ -423,7 +428,7 @@ function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments:
                         </Label>
                     </div>
                     <ul className="space-y-1">
-                        {garments.map((g: any, i: number) => {
+                        {garments.map((g, i) => {
                             const showOwnDate = g.delivery_date && !sameDay(g.delivery_date, orderDeliveryDate);
                             const isDiscarded = g.piece_stage === "discarded";
                             const wasReplaced = isDiscarded && g.replaced_by_garment_id;
@@ -451,7 +456,7 @@ function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments:
                                 )}
                                 {!isDiscarded && showOwnDate && (
                                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0 tabular-nums">
-                                        Due {itemDateFmt.format(new Date(g.delivery_date))}
+                                        Due {itemDateFmt.format(new Date(g.delivery_date!))}
                                     </span>
                                 )}
                                 <span className={`ml-auto text-xs text-muted-foreground tabular-nums shrink-0 ${isDiscarded ? "line-through" : ""}`}>
@@ -470,7 +475,7 @@ function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments:
                         Shelf items ({shelfItems.length})
                     </Label>
                     <ul className="space-y-1">
-                        {shelfItems.map((it: any) => {
+                        {shelfItems.map((it) => {
                             const refundedQty = Number(it.refunded_qty) || 0;
                             const qty = Number(it.quantity) || 0;
                             const fullyRefunded = refundedQty >= qty && qty > 0;
@@ -487,7 +492,7 @@ function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments:
                                         Refunded {refundedQty}/{qty}
                                     </span>
                                 )}
-                                <span className={`ml-auto font-semibold tabular-nums shrink-0 ${fullyRefunded ? "line-through text-muted-foreground" : ""}`}>{fmtK(it.unit_price * qty)}</span>
+                                <span className={`ml-auto font-semibold tabular-nums shrink-0 ${fullyRefunded ? "line-through text-muted-foreground" : ""}`}>{fmtK((it.unit_price ?? 0) * qty)}</span>
                             </li>
                             );
                         })}

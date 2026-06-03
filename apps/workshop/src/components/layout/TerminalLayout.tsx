@@ -24,15 +24,15 @@ export function TerminalLayout({ onLogout }: TerminalLayoutProps) {
     <div className="flex h-screen w-screen flex-col bg-background">
       <header className="flex items-center justify-between px-4 h-12 border-b bg-card shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs shrink-0">
+          <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center text-primary-foreground font-semibold text-xs shrink-0">
             W
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="font-bold text-sm uppercase tracking-wider">
+            <span className="font-medium text-sm">
               {activeJobLabel ?? "Terminal"}
             </span>
             {user?.name && (
-              <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+              <span className="text-[11px] text-muted-foreground truncate max-w-[200px]">
                 {user.name}
               </span>
             )}
@@ -57,7 +57,7 @@ export function TerminalLayout({ onLogout }: TerminalLayoutProps) {
                 key={tab.job}
                 to={tab.path}
                 className={cn(
-                  "px-4 h-10 flex items-center text-xs font-bold uppercase tracking-wider border-b-2 transition-colors whitespace-nowrap",
+                  "px-4 h-10 flex items-center text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
                   isActive
                     ? "border-primary text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground",

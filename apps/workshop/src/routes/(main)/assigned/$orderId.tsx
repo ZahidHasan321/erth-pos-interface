@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useOrderGarments } from "@/hooks/useWorkshopGarments";
 import { useUpdateGarmentDetails } from "@/hooks/useGarmentMutations";
 import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
+import { RedoDialog } from "@/components/shared/RedoDialog";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import {
   StageBadge,
@@ -310,6 +311,25 @@ function OrderHeader({
   const maxAltNumber = getAlterationNumber(maxTrip);
   const urgency = getDeliveryUrgency(first.delivery_date_order);
 
+  // §2.8 "Finals waiting on replacement brova": finals correctly stay parked
+  // while a discarded brova's in-flight replacement brova exists (distinct from
+  // §2.6's last-brova-gone auto-release). Computed from the order's own garments
+  // (getOrderGarments returns all rows incl. discarded + replacements). The
+  // replacement is in flight when it is neither completed nor discarded.
+  const garmentById = new Map(garments.map((g) => [g.id, g]));
+  const finalsWaitingOnReplacementBrova =
+    waitingAcceptance.some((g) => g.garment_type === "final") &&
+    brovas.some((b) => {
+      if (b.piece_stage !== "discarded" || !b.replaced_by_garment_id) return false;
+      const replacement = garmentById.get(b.replaced_by_garment_id);
+      // Replacement may live outside the fetched set; absence ⇒ assume in flight.
+      return (
+        !replacement ||
+        (replacement.piece_stage !== "completed" &&
+          replacement.piece_stage !== "discarded")
+      );
+    });
+
   // Map every order-level state to ok/warn/info/neutral via tokens. Color =
   // urgency, not state-variety. The label text differentiates between similar
   // hues.
@@ -347,6 +367,9 @@ function OrderHeader({
         return { text: "Awaiting finals release", cls: warnCls };
       return { text: "Awaiting brova trial", cls: warnCls };
     }
+    // §2.8 priority: between "Awaiting brova trial" and "Finals in production".
+    if (finalsWaitingOnReplacementBrova)
+      return { text: "Finals waiting on replacement brova", cls: warnCls };
     if (brovas.length > 0 && finals.length === 0)
       return {
         text: maxAltNumber !== null
@@ -635,6 +658,7 @@ function GarmentPlanCard({
   const canEdit = editability.canEditPlan;
 
   const [planOpen, setPlanOpen] = useState(false);
+  const [redoOpen, setRedoOpen] = useState(false);
 
   const visibleSteps = PLAN_STEPS;
 
@@ -801,15 +825,14 @@ function GarmentPlanCard({
                 Replacement created
               </span>
             ) : (
-              <Link
-                to="/assigned/$orderId/add-garment"
-                params={{ orderId: String(garment.order_id) }}
-                search={{ replaces: garment.id }}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--status-bad)] text-white text-sm font-medium whitespace-nowrap"
+              <button
+                type="button"
+                onClick={() => setRedoOpen(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--status-bad)] text-white text-sm font-medium whitespace-nowrap cursor-pointer"
               >
                 Create replacement
                 <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+              </button>
             )
           ) : canEdit ? (
             <button
@@ -1077,6 +1100,9 @@ function GarmentPlanCard({
           }
           lockedSteps={editability.lockedPlanSteps}
         />
+      )}
+      {isDiscarded && !replacedByGarmentId && (
+        <RedoDialog open={redoOpen} onClose={() => setRedoOpen(false)} garmentId={garment.id} />
       )}
     </div>
   );

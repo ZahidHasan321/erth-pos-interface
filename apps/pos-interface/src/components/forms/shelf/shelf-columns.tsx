@@ -1,11 +1,18 @@
 'use client'
 
 import * as React from 'react'
-import { type ColumnDef } from '@tanstack/react-table'
+import { type ColumnDef, type Row, type Table } from '@tanstack/react-table'
 import { type ShelfProduct } from './shelf-form.schema'
 import { Button } from '@repo/ui/button'
 import { Input } from '@repo/ui/input'
 import { Trash2 } from 'lucide-react'
+
+interface ShelfTableMeta {
+  removeRow: (rowIndex: number) => void;
+  updateData: (rowIndex: number, columnId: string, value: unknown) => void;
+  isOrderDisabled: boolean;
+  errors?: { quantity?: { message?: string } }[];
+}
 
 export const columns: ColumnDef<ShelfProduct>[] = [
   {
@@ -74,7 +81,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
     id: 'actions',
     size: 7,
     cell: ({ row, table }) => {
-      const { removeRow, isOrderDisabled } = table.options.meta as any
+      const { removeRow, isOrderDisabled } = table.options.meta as ShelfTableMeta
       if (isOrderDisabled) return null
       return (
         <Button
@@ -92,8 +99,8 @@ export const columns: ColumnDef<ShelfProduct>[] = [
   },
 ]
 
-function QuantityCell({ row, table }: { row: any; table: any }) {
-  const { updateData, isOrderDisabled, errors } = table.options.meta as any
+function QuantityCell({ row, table }: { row: Row<ShelfProduct>; table: Table<ShelfProduct> }) {
+  const { updateData, isOrderDisabled, errors } = table.options.meta as ShelfTableMeta
   const quantity = row.original.quantity
   const maxStock = row.original.stock || 0
   const [inputValue, setInputValue] = React.useState(String(quantity))

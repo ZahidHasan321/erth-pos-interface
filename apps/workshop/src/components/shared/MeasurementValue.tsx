@@ -20,7 +20,7 @@ export function MeasurementValue({ raw, degree = 0, className, correction }: Mea
 
   return (
     <span
-      className={`inline-flex items-baseline gap-[2px] tabular-nums ${correction ? "text-red-600 font-black" : ""} ${className ?? ""}`}
+      className={`inline-flex items-baseline gap-[2px] tabular-nums ${correction ? "text-red-600 font-medium" : ""} ${className ?? ""}`}
       style={{ writingMode: "horizontal-tb", fontFeatureSettings: '"tnum","lnum"' }}
       title={tooltip}
     >

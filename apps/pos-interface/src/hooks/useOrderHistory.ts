@@ -111,7 +111,7 @@ export function useOrderHistory({
             p_query: term,
             p_limit: 50,
           });
-          const customerIds = (fuzzyCustomers || []).map((c: any) => c.id);
+          const customerIds = (fuzzyCustomers || []).map((c: { id: number }) => c.id);
 
           if (!isNaN(parseInt(term)) && customerIds.length > 0) {
             query = query.or(`id.eq.${term},workOrder.invoice_number.eq.${term},customer_id.in.(${customerIds.join(',')})`);
@@ -134,11 +134,37 @@ export function useOrderHistory({
         throw new Error(`Failed to fetch order history: ${error.message}`);
       }
 
-      const items = (data || []).map((order: any): OrderHistoryItem => {
+      type RawOrderRow = Record<string, unknown> & {
+        id: number;
+        order_date: string;
+        delivery_date?: string | null;
+        order_type: "WORK" | "SALES" | "ALTERATION";
+        checkout_status: "draft" | "confirmed" | "cancelled";
+        home_delivery?: boolean | null;
+        order_phase?: string;
+        paid?: string | number | null;
+        order_total?: string | number | null;
+        invoice_number?: number | null;
+        fabric_charge?: string | number | null;
+        stitching_charge?: string | number | null;
+        style_charge?: string | number | null;
+        delivery_charge?: string | number | null;
+        express_charge?: string | number | null;
+        soaking_charge?: string | number | null;
+        shelf_charge?: string | number | null;
+        discount_value?: string | number | null;
+        customer?: { name?: string; nick_name?: string; phone?: string } | null;
+        garments?: Array<{ garment_type?: string }> | null;
+        shelf_items?: unknown[] | null;
+        workOrder?: RawOrderRow | RawOrderRow[] | null;
+        alterationOrder?: RawOrderRow | RawOrderRow[] | null;
+      };
+
+      const items = (data || []).map((order: RawOrderRow): OrderHistoryItem => {
         const workData = Array.isArray(order.workOrder) ? order.workOrder[0] : order.workOrder;
         const altData = Array.isArray(order.alterationOrder) ? order.alterationOrder[0] : order.alterationOrder;
         // For ALTERATION orders, alteration_orders supplies invoice_number and totals
-        const mergedOrder = { ...order, ...workData, ...(altData ?? {}) };
+        const mergedOrder = { ...order, ...workData, ...(altData ?? {}) } as RawOrderRow;
 
         const fabricCharge = parseFloat(mergedOrder.fabric_charge?.toString() || "0");
         const stitchingCharge = parseFloat(mergedOrder.stitching_charge?.toString() || "0");
@@ -157,9 +183,9 @@ export function useOrderHistory({
 
         return {
           id: mergedOrder.id,
-          invoice_number: mergedOrder.invoice_number,
+          invoice_number: mergedOrder.invoice_number ?? null,
           order_date: mergedOrder.order_date,
-          delivery_date: mergedOrder.delivery_date,
+          delivery_date: mergedOrder.delivery_date ?? null,
           order_type: mergedOrder.order_type,
           checkout_status: mergedOrder.checkout_status,
           home_delivery: !!mergedOrder.home_delivery,
@@ -169,8 +195,8 @@ export function useOrderHistory({
           paid_amount: paid,
           balance: total - paid,
           fabric_count: mergedOrder.garments?.length || 0,
-          brova_count: (mergedOrder.garments || []).filter((g: any) => g.garment_type === "brova").length,
-          final_count: (mergedOrder.garments || []).filter((g: any) => g.garment_type === "final").length,
+          brova_count: (mergedOrder.garments || []).filter((g) => g.garment_type === "brova").length,
+          final_count: (mergedOrder.garments || []).filter((g) => g.garment_type === "final").length,
           shelf_item_count: mergedOrder.shelf_items?.length || 0,
           order_phase: mergedOrder.order_phase,
           charges: {

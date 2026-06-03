@@ -14,5 +14,5 @@ export const getPrices = async (): Promise<ApiResponse<Price[]>> => {
   if (error) {
     return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Price[] };
 };

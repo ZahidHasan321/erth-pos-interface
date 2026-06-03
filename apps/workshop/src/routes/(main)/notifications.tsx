@@ -2,8 +2,9 @@ import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck, ChevronLeft, ChevronRight, ExternalLink, AlertTriangle } from "lucide-react";
 import { Button } from "@repo/ui/button";
-import { Badge } from "@repo/ui/badge";
-import { useNotificationsPaginated, useMarkRead, useMarkAllRead, useUnreadCount } from "@/hooks/useNotifications";
+import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
+import { cn } from "@/lib/utils";
+import { useNotificationsPaginated, useNotificationsCount, useMarkRead, useMarkAllRead, useUnreadCount, NOTIFICATIONS_PAGE_SIZE } from "@/hooks/useNotifications";
 import type { NotificationItem } from "@/api/notifications";
 import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
@@ -14,79 +15,70 @@ export const Route = createFileRoute("/(main)/notifications")({
   }),
 });
 
+// Color = meaning, not decoration. Each type maps to one semantic bucket
+// (StatusPill collapses these to ok / warn / bad / info / neutral tokens).
+// `accent` is the matching --status-* var for the unread left-border + icon tint.
 const TYPE_CONFIG: Record<string, {
   icon: typeof Bell;
   label: string;
-  badgeClass: string;
-  iconBgUnread: string;
-  iconColorUnread: string;
-  accentBorder: string;
+  color: PillColor;
+  accent: string;
 }> = {
   garment_dispatched_to_shop: {
     icon: Truck,
     label: "Dispatched to Shop",
-    badgeClass: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
-    iconBgUnread: "bg-blue-100 dark:bg-blue-950",
-    iconColorUnread: "text-blue-600 dark:text-blue-400",
-    accentBorder: "border-l-blue-500",
+    color: "blue",
+    accent: "var(--status-info)",
   },
   garment_dispatched_to_workshop: {
     icon: Truck,
     label: "Dispatched to Workshop",
-    badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800",
-    iconBgUnread: "bg-indigo-100 dark:bg-indigo-950",
-    iconColorUnread: "text-indigo-600 dark:text-indigo-400",
-    accentBorder: "border-l-indigo-500",
+    color: "blue",
+    accent: "var(--status-info)",
   },
   garment_ready_for_pickup: {
     icon: PackageCheck,
     label: "Ready for Pickup",
-    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800",
-    iconBgUnread: "bg-emerald-100 dark:bg-emerald-950",
-    iconColorUnread: "text-emerald-600 dark:text-emerald-400",
-    accentBorder: "border-l-emerald-500",
+    color: "green",
+    accent: "var(--status-ok)",
   },
   garment_awaiting_trial: {
     icon: Eye,
     label: "Awaiting Trial",
-    badgeClass: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
-    iconBgUnread: "bg-amber-100 dark:bg-amber-950",
-    iconColorUnread: "text-amber-600 dark:text-amber-400",
-    accentBorder: "border-l-amber-500",
+    color: "amber",
+    accent: "var(--status-warn)",
   },
   transfer_requested: {
     icon: ArrowRightLeft,
     label: "Transfer Requested",
-    badgeClass: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800",
-    iconBgUnread: "bg-violet-100 dark:bg-violet-950",
-    iconColorUnread: "text-violet-600 dark:text-violet-400",
-    accentBorder: "border-l-violet-500",
+    color: "blue",
+    accent: "var(--status-info)",
   },
   transfer_status_changed: {
     icon: ArrowRightLeft,
     label: "Transfer Updated",
-    badgeClass: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800",
-    iconBgUnread: "bg-violet-100 dark:bg-violet-950",
-    iconColorUnread: "text-violet-600 dark:text-violet-400",
-    accentBorder: "border-l-violet-500",
+    color: "blue",
+    accent: "var(--status-info)",
   },
   garment_redo_requested: {
     icon: AlertTriangle,
-    label: "URGENT: Redo",
-    badgeClass: "bg-red-600 text-white border-red-700 dark:bg-red-700 dark:border-red-800",
-    iconBgUnread: "bg-red-600",
-    iconColorUnread: "text-white",
-    accentBorder: "border-l-red-600",
+    label: "Urgent: Redo",
+    color: "red",
+    accent: "var(--status-bad)",
+  },
+  low_stock: {
+    icon: AlertTriangle,
+    label: "Low Stock",
+    color: "red",
+    accent: "var(--status-bad)",
   },
 };
 
 const DEFAULT_CONFIG = {
   icon: Bell,
   label: "Notification",
-  badgeClass: "",
-  iconBgUnread: "bg-primary/10",
-  iconColorUnread: "text-primary",
-  accentBorder: "border-l-primary",
+  color: "zinc" as PillColor,
+  accent: "var(--primary)",
 };
 
 type NotificationLink = { to: string; search?: Record<string, string> };
@@ -94,11 +86,15 @@ type NotificationLink = { to: string; search?: Record<string, string> };
 function getNotificationLink(notification: NotificationItem): NotificationLink | null {
   switch (notification.type) {
     case "garment_dispatched_to_workshop":
-      return { to: "/receiving", search: { tab: "incoming" } };
+      // Receiving is a single sectioned page (no tabs) — navigate cleanly.
+      return { to: "/receiving" };
     case "transfer_requested":
-      return { to: "/store/approve-requests", search: { tab: "pending" } };
     case "transfer_status_changed":
-      return { to: "/store/approve-requests", search: { tab: "approved" } };
+      // Both land on the default "Needs you" tab — the action surface for the
+      // recipient (send a requested transfer / receive a dispatched one).
+      return { to: "/store/transfers" };
+    case "low_stock":
+      return { to: "/store/inventory" };
     case "garment_redo_requested": {
       const orderId = notification.metadata?.order_id;
       if (typeof orderId === "number" || typeof orderId === "string") {
@@ -148,13 +144,19 @@ const FILTER_OPTIONS: { value: FilterValue; label: string }[] = [
   { value: "garment_awaiting_trial", label: "Awaiting Trial" },
   { value: "transfer_requested", label: "Transfer Requested" },
   { value: "transfer_status_changed", label: "Transfer Updated" },
-  { value: "garment_redo_requested", label: "URGENT: Redo" },
+  { value: "low_stock", label: "Low Stock" },
+  { value: "garment_redo_requested", label: "Urgent: Redo" },
 ];
 
 function NotificationsPage() {
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<FilterValue>("all");
-  const { data: notifications = [], isPlaceholderData } = useNotificationsPaginated(page);
+  // The filter selector drives the SERVER query: "all" → no narrowing,
+  // "unread" → unread only, a specific type → that type. No client-side filter.
+  const queryType = filter === "all" || filter === "unread" ? undefined : filter;
+  const unreadOnly = filter === "unread";
+  const { data: notifications = [], isPlaceholderData } = useNotificationsPaginated(page, queryType, unreadOnly);
+  const { data: count = 0 } = useNotificationsCount(queryType, unreadOnly);
   const unreadCount = useUnreadCount();
   const markRead = useMarkRead();
   const markAllRead = useMarkAllRead();
@@ -163,23 +165,17 @@ function NotificationsPage() {
   const handleClick = (notification: NotificationItem) => {
     if (!notification.is_read) markRead.mutate(notification.id);
     const link = getNotificationLink(notification);
-    if (link) navigate({ to: link.to, search: link.search as any });
+    if (link) navigate({ to: link.to, search: link.search });
   };
 
-  const filtered = notifications.filter((n) => {
-    if (filter === "all") return true;
-    if (filter === "unread") return !n.is_read;
-    return n.type === filter;
-  });
-
-  const hasMore = notifications.length === 20;
+  const hasMore = (page + 1) * NOTIFICATIONS_PAGE_SIZE < count;
 
   return (
     <div className="p-6 sm:p-8 lg:p-10">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}` : "You're all caught up"}
           </p>
@@ -209,7 +205,7 @@ function NotificationsPage() {
           >
             {opt.label}
             {opt.value === "unread" && unreadCount > 0 && (
-              <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+              <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-medium text-destructive-foreground">
                 {unreadCount}
               </span>
             )}
@@ -219,8 +215,8 @@ function NotificationsPage() {
 
       {/* Notification list */}
       <div className="mt-4">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border bg-card py-16 text-muted-foreground">
+        {notifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-md border bg-card py-16 text-muted-foreground">
             <Bell className="h-10 w-10 mb-3 opacity-30" />
             <p className="text-sm font-medium">
               {filter === "all" ? "No notifications" : "No matching notifications"}
@@ -231,7 +227,7 @@ function NotificationsPage() {
           </div>
         ) : (
           <div className={`space-y-3 ${isPlaceholderData ? "opacity-50 pointer-events-none" : ""}`}>
-            {filtered.map((n) => {
+            {notifications.map((n) => {
               const config = TYPE_CONFIG[n.type] ?? DEFAULT_CONFIG;
               const Icon = config.icon;
               const link = getNotificationLink(n);
@@ -242,16 +238,20 @@ function NotificationsPage() {
                   key={n.id}
                   type="button"
                   onClick={() => handleClick(n)}
-                  className={`group w-full rounded-xl border bg-card text-left transition-all hover:shadow-md hover:bg-muted/30 ${
-                    link ? "cursor-pointer" : "cursor-default"
-                  } ${isUnread ? `border-l-4 ${config.accentBorder}` : ""}`}
+                  style={isUnread ? { borderLeftColor: config.accent } : undefined}
+                  className={cn(
+                    "group w-full rounded-md border bg-card text-left transition-colors hover:bg-muted/30",
+                    link ? "cursor-pointer" : "cursor-default",
+                    isUnread && "border-l-2",
+                  )}
                 >
                   <div className="flex items-start gap-4 px-5 py-4">
                     {/* Icon */}
-                    <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                      isUnread ? config.iconBgUnread : "bg-muted"
-                    }`}>
-                      <Icon className={`h-5 w-5 ${isUnread ? config.iconColorUnread : "text-muted-foreground"}`} />
+                    <div
+                      className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted"
+                      style={isUnread ? { color: config.accent } : undefined}
+                    >
+                      <Icon className={cn("h-5 w-5", !isUnread && "text-muted-foreground")} />
                     </div>
 
                     {/* Content */}
@@ -261,7 +261,7 @@ function NotificationsPage() {
                           {isUnread && (
                             <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
                           )}
-                          <p className={`text-sm truncate ${isUnread ? "font-semibold" : "text-muted-foreground"}`}>
+                          <p className={cn("text-sm truncate", isUnread ? "font-medium" : "text-muted-foreground")}>
                             {n.title}
                           </p>
                         </div>
@@ -273,11 +273,9 @@ function NotificationsPage() {
                         <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{n.body}</p>
                       )}
                       <div className="flex items-center gap-2 mt-2.5">
-                        <Badge variant="outline" className={`text-[11px] px-2 py-0 h-5 font-medium ${config.badgeClass}`}>
-                          {config.label}
-                        </Badge>
+                        <StatusPill color={config.color}>{config.label}</StatusPill>
                         {link && (
-                          <span className="text-xs text-muted-foreground/50 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-xs text-muted-foreground/50 flex items-center gap-1">
                             <ExternalLink className="h-3 w-3" />
                             View
                           </span>

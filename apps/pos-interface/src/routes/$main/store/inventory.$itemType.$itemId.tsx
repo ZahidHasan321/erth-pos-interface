@@ -8,7 +8,6 @@ import {
   Loader2,
   Package,
   Store,
-  Hammer,
   Send,
   Settings2,
   ImageIcon,
@@ -42,6 +41,7 @@ import { getPermission } from "@/lib/rbac";
 import {
   formatQty,
   getLowStockThreshold,
+  getWasteReasonLabel,
   isLowStock,
   MOVEMENT_TYPE_COLORS,
   MOVEMENT_TYPE_LABELS,
@@ -63,13 +63,13 @@ import {
 } from "@/lib/storage";
 import { RestockDialog } from "@/components/inventory/RestockDialog";
 import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
+import { DamageWasteDialog } from "@/components/inventory/DamageWasteDialog";
 import { UNIT_OF_MEASURE_LABELS } from "@/components/store/transfer-constants";
 import type {
   Fabric,
   Shelf,
   Accessory,
   StockItemType,
-  StockLocation,
   UnitOfMeasure,
 } from "@repo/database";
 
@@ -216,6 +216,7 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
   const { user } = useAuth();
   const canRestock = getPermission(user, "inventory:restock") === "full";
   const canAdjust = getPermission(user, "inventory:adjust") === "full";
+  const canWaste = getPermission(user, "inventory:waste") === "full";
   const canEdit =
     item.kind === "fabric"
       ? getPermission(user, "inventory:fabrics") === "full"
@@ -226,17 +227,19 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
   const itemType = item.kind;
   const itemId = item.row.id;
   const unit = unitOf(item);
+  // Shop app shows only the shop-side stock — workshop stock is never surfaced here.
   const shopStock = Number(item.row.shop_stock ?? 0);
-  const workshopStock = Number(item.row.workshop_stock ?? 0);
-  const total = shopStock + workshopStock;
   const threshold = getLowStockThreshold(itemType, item.row.low_stock_threshold);
   const lowShop = isLowStock(itemType, shopStock, item.row.low_stock_threshold);
-  const lowWorkshop = isLowStock(itemType, workshopStock, item.row.low_stock_threshold);
 
   const [restockOpen, setRestockOpen] = useState(false);
-  const [restockLocation, setRestockLocation] = useState<StockLocation>("shop");
   const [adjustOpen, setAdjustOpen] = useState(false);
-  const [adjustLocation, setAdjustLocation] = useState<StockLocation>("shop");
+  const [wasteOpen, setWasteOpen] = useState(false);
+  // Cost basis for the waste action: item price (per-meter for fabric).
+  const unitCost =
+    item.kind === "fabric"
+      ? item.row.price_per_meter != null ? Number(item.row.price_per_meter) : null
+      : item.row.price != null ? Number(item.row.price) : null;
 
   const movementsQ = useQuery({
     queryKey: ["stock_movements", itemType, itemId, "all"],
@@ -295,7 +298,7 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
             {item.row.is_archived && (
               <Badge variant="outline" className="border-zinc-300 bg-zinc-100 text-zinc-700">Archived</Badge>
             )}
-            {(lowShop || lowWorkshop) && (
+            {lowShop && (
               <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
                 <AlertTriangle className="h-3 w-3 mr-1" /> Low stock
               </Badge>
@@ -321,10 +324,7 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
             itemType={itemType}
             unit={unit}
             shopStock={shopStock}
-            workshopStock={workshopStock}
-            total={total}
-            lowShop={lowShop}
-            lowWorkshop={lowWorkshop}
+            low={lowShop}
             threshold={threshold}
             isThresholdOverridden={item.row.low_stock_threshold != null}
           />
@@ -332,18 +332,23 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
           {/* Quick actions */}
           <div className="flex flex-wrap gap-2">
             {canRestock && !item.row.is_archived && (
-              <>
-                <Button size="sm" onClick={() => { setRestockLocation("shop"); setRestockOpen(true); }}>
-                  <Store className="h-3.5 w-3.5 mr-1.5" /> Restock shop
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => { setRestockLocation("workshop"); setRestockOpen(true); }}>
-                  <Hammer className="h-3.5 w-3.5 mr-1.5" /> Restock workshop
-                </Button>
-              </>
+              <Button size="sm" onClick={() => setRestockOpen(true)}>
+                <Store className="h-3.5 w-3.5 mr-1.5" /> Restock
+              </Button>
             )}
             {canAdjust && !item.row.is_archived && (
-              <Button size="sm" variant="outline" onClick={() => { setAdjustLocation(shopStock >= workshopStock ? "shop" : "workshop"); setAdjustOpen(true); }}>
+              <Button size="sm" variant="outline" onClick={() => setAdjustOpen(true)}>
                 <Settings2 className="h-3.5 w-3.5 mr-1.5" /> Adjust
+              </Button>
+            )}
+            {canWaste && !item.row.is_archived && shopStock > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setWasteOpen(true)}
+                className="text-red-700 border-red-200 hover:bg-red-50"
+              >
+                <AlertTriangle className="h-3.5 w-3.5 mr-1.5" /> Damage / waste
               </Button>
             )}
             <Button size="sm" variant="outline" asChild>
@@ -407,8 +412,8 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
         itemType={itemType}
         itemId={itemId}
         itemName={nameOf(item)}
-        defaultLocation={restockLocation}
-        currentStock={restockLocation === "shop" ? shopStock : workshopStock}
+        defaultLocation="shop"
+        currentStock={shopStock}
         unit={unit}
       />
       <AdjustStockDialog
@@ -417,9 +422,20 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
         itemType={itemType}
         itemId={itemId}
         itemName={nameOf(item)}
-        defaultLocation={adjustLocation}
-        currentStock={adjustLocation === "shop" ? shopStock : workshopStock}
+        defaultLocation="shop"
+        currentStock={shopStock}
         unit={unit}
+      />
+      <DamageWasteDialog
+        open={wasteOpen}
+        onClose={() => setWasteOpen(false)}
+        itemType={itemType}
+        itemId={itemId}
+        itemName={nameOf(item)}
+        location="shop"
+        currentStock={shopStock}
+        unit={unit}
+        unitCost={unitCost}
       />
     </div>
   );
@@ -538,15 +554,12 @@ function ImageCard({
 // ─── Stock breakdown ──────────────────────────────────────────────────────
 
 function StockBreakdown({
-  itemType, unit, shopStock, workshopStock, total, lowShop, lowWorkshop, threshold, isThresholdOverridden,
+  itemType, unit, shopStock, low, threshold, isThresholdOverridden,
 }: {
   itemType: StockItemType;
   unit: UnitOfMeasure | null;
   shopStock: number;
-  workshopStock: number;
-  total: number;
-  lowShop: boolean;
-  lowWorkshop: boolean;
+  low: boolean;
   threshold: number;
   isThresholdOverridden: boolean;
 }) {
@@ -560,31 +573,26 @@ function StockBreakdown({
             {isThresholdOverridden && <span className="ml-1 text-[10px] uppercase text-muted-foreground">(custom)</span>}
           </span>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <StockCard label="Shop" qty={shopStock} itemType={itemType} unit={unit} low={lowShop} icon={Store} />
-          <StockCard label="Workshop" qty={workshopStock} itemType={itemType} unit={unit} low={lowWorkshop} icon={Hammer} />
-          <StockCard label="Total" qty={total} itemType={itemType} unit={unit} highlight />
-        </div>
+        <StockCard label="At shop" qty={shopStock} itemType={itemType} unit={unit} low={low} icon={Store} />
       </CardContent>
     </Card>
   );
 }
 
 function StockCard({
-  label, qty, itemType, unit, low, highlight, icon: Icon,
+  label, qty, itemType, unit, low, icon: Icon,
 }: {
   label: string;
   qty: number;
   itemType: StockItemType;
   unit?: UnitOfMeasure | null;
   low?: boolean;
-  highlight?: boolean;
   icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
     <div className={cn(
       "rounded-lg border px-3 py-3",
-      highlight ? "bg-primary/5 border-primary/20" : low ? "bg-red-50 border-red-200" : "bg-card",
+      low ? "bg-red-50 border-red-200" : "bg-card",
     )}>
       <p className="text-xs text-muted-foreground flex items-center gap-1.5">
         {Icon && <Icon className="h-3 w-3" />}
@@ -603,6 +611,7 @@ type MetadataDraft = {
   name: string;
   color?: string;
   color_hex?: string;
+  season?: "summer" | "winter" | "none";
   price?: string;
   brand?: string;
   category?: string;
@@ -625,6 +634,7 @@ function MetadataCard({
         name: item.row.name,
         color: item.row.color ?? "",
         color_hex: item.row.color_hex ?? "",
+        season: item.row.season ?? "none",
         price: item.row.price_per_meter == null ? "" : String(item.row.price_per_meter),
         description: item.row.description ?? "",
         low_stock_threshold: item.row.low_stock_threshold == null ? "" : String(item.row.low_stock_threshold),
@@ -694,6 +704,7 @@ function MetadataCard({
           name: draft.name.trim(),
           color: draft.color?.trim() || null,
           color_hex: draft.color_hex?.trim() || null,
+          season: draft.season === "none" ? null : draft.season,
           price_per_meter: price,
           description: desc,
           low_stock_threshold: lstNumeric,
@@ -781,6 +792,18 @@ function MetadataCard({
                   onChange={(e) => setDraft((d) => ({ ...d, price: e.target.value }))}
                   placeholder="0.000"
                 />
+              </Field>
+              <Field label="Season" hint="Optional">
+                <select
+                  disabled={!canEdit}
+                  value={draft.season ?? "none"}
+                  onChange={(e) => setDraft((d) => ({ ...d, season: e.target.value as "summer" | "winter" | "none" }))}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
+                >
+                  <option value="none">No season</option>
+                  <option value="summer">Summer</option>
+                  <option value="winter">Winter</option>
+                </select>
               </Field>
             </>
           )}
@@ -1041,7 +1064,22 @@ function MovementsTab({
                     </TableCell>
                     <TableCell className="capitalize text-sm">{m.location}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {[m.supplier?.name, m.reason, m.notes].filter(Boolean).join(" · ") || "—"}
+                      {[
+                        m.supplier?.name,
+                        m.movement_type === "waste" ? getWasteReasonLabel(m.reason ?? "") : m.reason,
+                        m.notes,
+                      ].filter(Boolean).join(" · ") || "—"}
+                      {m.image_url && (
+                        <a
+                          href={m.image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label="Open waste photo in a new tab"
+                          className="ml-2 inline-flex items-center gap-0.5 text-[11px] text-primary underline align-middle"
+                        >
+                          <ImageIcon className="h-3 w-3" /> photo
+                        </a>
+                      )}
                       {m.user?.name && <span className="ml-2 text-[11px] opacity-70">by {m.user.name}</span>}
                     </TableCell>
                     <TableCell className="text-right text-xs text-muted-foreground">

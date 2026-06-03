@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, type NavigateOptions } from "@tanstack/react-router";
 import {
     ShoppingBag,
     Package,
@@ -406,7 +406,7 @@ function OrderTable({ orders, linkBuilder }: { orders: OrderHistoryItem[]; linkB
                         <OrderTableRow
                             key={order.id}
                             order={order}
-                            onNavigate={(target) => navigate(target as any)}
+                            onNavigate={(target) => navigate(target as NavigateOptions)}
                             linkBuilder={linkBuilder}
                         />
                     ))}
@@ -514,9 +514,9 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
 
     return (
         <Link
-            to={target.to as any}
-            params={target.params as any}
-            search={target.search as any}
+            to={target.to}
+            params={target.params as Record<string, string>}
+            search={target.search as Record<string, unknown>}
             className="group block"
         >
             <Card className="overflow-hidden border bg-card group-hover:border-primary/40 group-hover:bg-muted/30 transition-colors py-0 gap-0 rounded-lg">

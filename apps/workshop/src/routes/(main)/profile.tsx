@@ -38,7 +38,7 @@ function ProfilePage() {
 
   return (
     <div className="p-6 sm:p-8 lg:p-10">
-      <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Your account information
       </p>
@@ -48,11 +48,11 @@ function ProfilePage() {
         <div className="rounded-xl border bg-card p-6">
           <div className="flex flex-col items-center text-center">
             <Avatar className="h-20 w-20 rounded-xl">
-              <AvatarFallback className="rounded-xl bg-primary/10 text-xl font-bold text-primary">
+              <AvatarFallback className="rounded-xl bg-primary/10 text-xl font-medium text-primary">
                 {initials}
               </AvatarFallback>
             </Avatar>
-            <h2 className="mt-4 text-lg font-bold">{user.name}</h2>
+            <h2 className="mt-4 text-lg font-medium">{user.name}</h2>
             <p className="text-sm text-muted-foreground">@{user.username}</p>
             <div className="mt-3 flex flex-wrap justify-center gap-1.5">
               <Badge

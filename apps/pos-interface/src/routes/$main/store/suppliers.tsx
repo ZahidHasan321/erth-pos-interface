@@ -63,7 +63,7 @@ function SuppliersPage() {
       setDialogOpen(false);
       toast.success("Supplier added");
     },
-    onError: (err: any) => toast.error(`Could not add supplier: ${err?.message ?? String(err)}`),
+    onError: (err: unknown) => toast.error(`Could not add supplier: ${err instanceof Error ? err.message : String(err)}`),
   });
 
   const updateMut = useMutation({
@@ -74,18 +74,18 @@ function SuppliersPage() {
       setEditing(null);
       toast.success("Supplier updated");
     },
-    onError: (err: any) => toast.error(`Could not update supplier: ${err?.message ?? String(err)}`),
+    onError: (err: unknown) => toast.error(`Could not update supplier: ${err instanceof Error ? err.message : String(err)}`),
   });
 
   const archiveMut = useMutation({
     mutationFn: ({ id, restore }: { id: number; restore: boolean }) =>
-      restore ? updateSupplier(id, { is_archived: false }) : archiveSupplier(id).then(() => undefined as any),
+      restore ? updateSupplier(id, { is_archived: false }) : archiveSupplier(id).then(() => undefined as undefined),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["suppliers"] });
       setArchiveTarget(null);
       toast.success(vars.restore ? "Supplier restored" : "Supplier archived");
     },
-    onError: (err: any) => toast.error(`Could not update supplier: ${err?.message ?? String(err)}`),
+    onError: (err: unknown) => toast.error(`Could not update supplier: ${err instanceof Error ? err.message : String(err)}`),
   });
 
   function openCreate() {

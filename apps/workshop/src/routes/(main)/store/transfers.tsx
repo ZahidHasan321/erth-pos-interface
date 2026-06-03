@@ -1,12 +1,12 @@
 import { useState, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRightLeft, Plus, Search, Loader2, AlertCircle, Inbox } from "lucide-react";
+import { ArrowRightLeft, Plus, Loader2, AlertCircle, Inbox } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
-import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
+import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shared/table";
 import { useAuth } from "@/context/auth";
 import { useTransferRequests } from "@/hooks/useTransfers";
 import { primaryActionFor, personalAwaitingLabel, itemNamesPreview, isStale, staleDays, lastEventAt, sourceSideOf, destinationSideOf } from "@/lib/transfers";
@@ -16,12 +16,35 @@ import { PageHeader, StatusBanner, EmptyState as SharedEmptyState } from "@/comp
 import type { TransferRequestWithItems } from "@/api/transfers";
 import type { AuthUser } from "@/lib/rbac";
 
+type TabKey = "inbox" | "open" | "done";
+
+// URL is the source of truth for tab + filters so a view is shareable and a
+// notification can target a tab. Defaults (inbox, no filters) are omitted.
+type TransfersSearch = {
+  tab?: TabKey;
+  q?: string;
+  direction?: "shop_to_workshop" | "workshop_to_shop";
+  itemType?: "fabric" | "shelf" | "accessory";
+};
+
+const isTab = (v: unknown): v is TabKey => v === "inbox" || v === "open" || v === "done";
+
 export const Route = createFileRoute("/(main)/store/transfers")({
   component: TransfersPage,
   head: () => ({ meta: [{ title: "Transfers" }] }),
+  validateSearch: (raw: Record<string, unknown>): TransfersSearch => ({
+    tab: isTab(raw.tab) ? raw.tab : undefined,
+    q: typeof raw.q === "string" && raw.q ? raw.q : undefined,
+    direction:
+      raw.direction === "shop_to_workshop" || raw.direction === "workshop_to_shop"
+        ? raw.direction
+        : undefined,
+    itemType:
+      raw.itemType === "fabric" || raw.itemType === "shelf" || raw.itemType === "accessory"
+        ? raw.itemType
+        : undefined,
+  }),
 });
-
-type TabKey = "inbox" | "open" | "done";
 
 function isOpen(t: TransferRequestWithItems) {
   return t.status !== "received" && t.status !== "rejected";
@@ -30,10 +53,21 @@ function isOpen(t: TransferRequestWithItems) {
 function TransfersPage() {
   const { user } = useAuth();
 
-  const [tab, setTab] = useState<TabKey>("inbox");
-  const [search, setSearch] = useState("");
-  const [direction, setDirection] = useState<string>("all");
-  const [itemType, setItemType] = useState<string>("all");
+  // URL is the source of truth for tab + filters; defaults applied on read.
+  const sp = Route.useSearch();
+  const tab = sp.tab ?? "inbox";
+  const search = sp.q ?? "";
+  const direction = sp.direction ?? "all";
+  const itemType = sp.itemType ?? "all";
+  const navigate = Route.useNavigate();
+  const setTab = (v: TabKey) =>
+    navigate({ search: (prev) => ({ ...prev, tab: v === "inbox" ? undefined : v }), replace: true });
+  const setSearch = (v: string) =>
+    navigate({ search: (prev) => ({ ...prev, q: v || undefined }), replace: true });
+  const setDirection = (v: string) =>
+    navigate({ search: (prev) => ({ ...prev, direction: v === "all" ? undefined : (v as TransfersSearch["direction"]) }), replace: true });
+  const setItemType = (v: string) =>
+    navigate({ search: (prev) => ({ ...prev, itemType: v === "all" ? undefined : (v as TransfersSearch["itemType"]) }), replace: true });
   const [drawer, setDrawer] = useState<TransferRequestWithItems | null>(null);
 
   const { data: transfers = [], isLoading } = useTransferRequests();
@@ -70,7 +104,7 @@ function TransfersPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10">
-      <PageHeader icon={ArrowRightLeft} title="Transfers" subtitle="Move stock between shop and workshop.">
+      <PageHeader icon={ArrowRightLeft} title="Transfers">
         <Button asChild>
           <Link to="/store/transfers/new">
             <Plus className="h-4 w-4 mr-1" /> New transfer
@@ -102,27 +136,33 @@ function TransfersPage() {
         </TabsList>
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          <div className="relative flex-1 min-w-[240px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search ID, item, requester…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-          </div>
-          <Select value={direction} onValueChange={setDirection}>
-            <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All directions</SelectItem>
-              <SelectItem value="shop_to_workshop">Shop → Workshop</SelectItem>
-              <SelectItem value="workshop_to_shop">Workshop → Shop</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={itemType} onValueChange={setItemType}>
-            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="fabric">Fabric</SelectItem>
-              <SelectItem value="shelf">Shelf</SelectItem>
-              <SelectItem value="accessory">Accessory</SelectItem>
-            </SelectContent>
-          </Select>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search ID, item, requester…"
+            className="flex-1 min-w-[240px] max-w-md"
+          />
+          <SlidingPillSwitcher
+            value={direction}
+            onChange={setDirection}
+            size="sm"
+            options={[
+              { value: "all", label: "All directions" },
+              { value: "shop_to_workshop", label: "Shop → Workshop" },
+              { value: "workshop_to_shop", label: "Workshop → Shop" },
+            ]}
+          />
+          <SlidingPillSwitcher
+            value={itemType}
+            onChange={setItemType}
+            size="sm"
+            options={[
+              { value: "all", label: "All types" },
+              { value: "fabric", label: "Fabric" },
+              { value: "shelf", label: "Shelf" },
+              { value: "accessory", label: "Accessory" },
+            ]}
+          />
         </div>
 
         <TabsContent value="inbox">
@@ -146,7 +186,7 @@ function CountBadge({ value, tone }: { value: number; tone: "warn" | "muted" }) 
   const cls = tone === "warn"
     ? "bg-[var(--status-warn-bg)] text-[var(--status-warn)]"
     : "bg-muted text-muted-foreground";
-  return <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-md text-[10px] font-medium ${cls}`}>{value}</span>;
+  return <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-md text-[11px] font-medium ${cls}`}>{value}</span>;
 }
 
 function TransfersList({
@@ -205,8 +245,7 @@ function TransfersList({
 
 function ActionLabel({ action }: { action: ReturnType<typeof primaryActionFor> }) {
   switch (action) {
-    case "approve": return <>Review</>;
-    case "dispatch": return <>Dispatch</>;
+    case "dispatch": return <>Send</>;
     case "receive": return <>Receive</>;
     default: return null;
   }
@@ -259,11 +298,11 @@ function TransferRowDesktop({
       <TableCell><TransferStatusBadge status={t.status} /></TableCell>
       <TableCell className="text-xs">
         <span className={action ? "text-[var(--status-warn)] font-medium" : "text-muted-foreground"}>{personalAwaitingLabel(user, t)}</span>
-        {at && <span className="block text-[10px] text-muted-foreground/70 mt-0.5">{new Date(at).toLocaleDateString()}</span>}
+        {at && <span className="block text-[11px] text-muted-foreground/70 mt-0.5">{new Date(at).toLocaleDateString()}</span>}
       </TableCell>
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
         {action ? (
-          <Button size="sm" variant={action === "approve" ? "default" : "outline"} onClick={() => onSelect(t)}>
+          <Button size="sm" variant={action === "dispatch" ? "default" : "outline"} onClick={() => onSelect(t)}>
             <ActionLabel action={action} />
           </Button>
         ) : (
@@ -300,7 +339,7 @@ function TransferCardMobile({
         <div className="flex items-center justify-between gap-2">
           <p className={`text-xs ${action ? "text-[var(--status-warn)] font-medium" : "text-muted-foreground"}`}>{personalAwaitingLabel(user, t)}</p>
           {action ? (
-            <Button size="sm" variant={action === "approve" ? "default" : "outline"} onClick={(e) => { e.stopPropagation(); onSelect(t); }}>
+            <Button size="sm" variant={action === "dispatch" ? "default" : "outline"} onClick={(e) => { e.stopPropagation(); onSelect(t); }}>
               <ActionLabel action={action} />
             </Button>
           ) : null}
@@ -312,9 +351,9 @@ function TransferCardMobile({
 
 function EmptyTransferState({ kind }: { kind: "inbox" | "open" | "done" }) {
   const messages = {
-    inbox: { title: "You're all caught up", body: "Anything that needs your approval, dispatch, or receipt will land here." },
+    inbox: { title: "You're all caught up", body: "Anything that needs you to send or receive will land here." },
     open: { title: "Nothing in motion", body: "Active transfers — waiting on someone — will show up here." },
-    done: { title: "No history yet", body: "Completed and rejected transfers will be archived here." },
+    done: { title: "No history yet", body: "Completed transfers will be archived here." },
   };
   const m = messages[kind];
   return (

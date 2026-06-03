@@ -173,9 +173,9 @@ const CITATIONS: Citation[] = [
   // ── recordPayment ──────────────────────────────────────────────────────────
   {
     driverFn: "recordPayment",
-    rawCitation: "triggers.sql:800",
+    rawCitation: "triggers.sql:885",
     citedPath: "triggers.sql",
-    citedLine: 800,
+    citedLine: 885,
     anchorTokens: [
       "record_payment_transaction",
       "p_order_id",
@@ -186,27 +186,27 @@ const CITATIONS: Citation[] = [
   // ── toggleHomeDelivery ─────────────────────────────────────────────────────
   {
     driverFn: "toggleHomeDelivery",
-    rawCitation: "triggers.sql:1068",
+    rawCitation: "triggers.sql:1189",
     citedPath: "triggers.sql",
-    citedLine: 1068,
+    citedLine: 1189,
     anchorTokens: ["toggle_home_delivery", "p_home_delivery", "p_order_id"],
   },
 
   // ── collectGarments ────────────────────────────────────────────────────────
   {
     driverFn: "collectGarments",
-    rawCitation: "triggers.sql:1130",
+    rawCitation: "triggers.sql:1251",
     citedPath: "triggers.sql",
-    citedLine: 1130,
+    citedLine: 1251,
     anchorTokens: ["collect_garments", "p_garment_ids", "p_order_id"],
   },
 
   // ── dispatchOrder ──────────────────────────────────────────────────────────
   {
     driverFn: "dispatchOrder",
-    rawCitation: "triggers.sql:1186",
+    rawCitation: "triggers.sql:1307",
     citedPath: "triggers.sql",
-    citedLine: 1186,
+    citedLine: 1307,
     anchorTokens: [
       "dispatch_order",
       "transit_to_workshop",
@@ -217,9 +217,9 @@ const CITATIONS: Citation[] = [
   // ── workshopReceive → receive_garments RPC (REAL, not a mirror) ────────────
   {
     driverFn: "workshopReceive",
-    rawCitation: "triggers.sql:1249",
+    rawCitation: "triggers.sql:1370",
     citedPath: "triggers.sql",
-    citedLine: 1249,
+    citedLine: 1370,
     anchorTokens: [
       "receive_garments",
       "ready_for_dispatch",
@@ -295,9 +295,9 @@ const CITATIONS: Citation[] = [
   // ── workshopDispatch → dispatch_garments_to_shop RPC (REAL) ───────────────
   {
     driverFn: "workshopDispatch",
-    rawCitation: "triggers.sql:1329",
+    rawCitation: "triggers.sql:1450",
     citedPath: "triggers.sql",
-    citedLine: 1329,
+    citedLine: 1450,
     anchorTokens: [
       "dispatch_garments_to_shop",
       "transit_to_shop",
@@ -343,9 +343,9 @@ const CITATIONS: Citation[] = [
   // ── releaseFinals ──────────────────────────────────────────────────────────
   {
     driverFn: "releaseFinals",
-    rawCitation: "triggers.sql:1308",
+    rawCitation: "triggers.sql:1429",
     citedPath: "triggers.sql",
-    citedLine: 1308,
+    citedLine: 1429,
     anchorTokens: [
       "release_finals",
       "waiting_for_acceptance",
@@ -390,9 +390,9 @@ const CITATIONS: Citation[] = [
   // ── createReplacement → create_replacement_garment RPC (REAL) ─────────────
   {
     driverFn: "createReplacement",
-    rawCitation: "triggers.sql:1359",
+    rawCitation: "triggers.sql:1527",
     citedPath: "triggers.sql",
-    citedLine: 1359,
+    citedLine: 1527,
     anchorTokens: [
       "create_replacement_garment",
       "replaced_by_garment_id",
@@ -403,9 +403,9 @@ const CITATIONS: Citation[] = [
   // ── createSalesOrder ───────────────────────────────────────────────────────
   {
     driverFn: "createSalesOrder",
-    rawCitation: "triggers.sql:384",
+    rawCitation: "triggers.sql:453",
     citedPath: "triggers.sql",
-    citedLine: 384,
+    citedLine: 453,
     anchorTokens: [
       "create_complete_sales_order",
       "p_customer_id",

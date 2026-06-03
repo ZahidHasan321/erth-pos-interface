@@ -82,23 +82,24 @@ export const getTransferRequests = async (
 export interface TransferBadgeCounts {
   activeRequests: number;
   receivingDeliveries: number;
-  approveRequests: number;
+  sendRequests: number;
 }
 
 /**
  * Fetch sidebar badge counts in a single lightweight query (no joins).
- * Returns counts for: active outgoing requests, dispatched incoming, and pending approval.
+ * Returns counts for: active outgoing requests, dispatched incoming, and
+ * incoming requests the shop still needs to send (no approval step — §4).
  */
 export const getTransferBadgeCounts = async (
   brand: string,
 ): Promise<TransferBadgeCounts> => {
-  const [active, receiving, approve] = await Promise.all([
+  const [active, receiving, toSend] = await Promise.all([
     db
       .from('transfer_requests')
       .select('id', { count: 'exact', head: true })
       .eq('brand', brand)
       .eq('direction', 'workshop_to_shop')
-      .in('status', ['requested', 'approved', 'dispatched']),
+      .in('status', ['requested', 'dispatched']),
     db
       .from('transfer_requests')
       .select('id', { count: 'exact', head: true })
@@ -116,7 +117,7 @@ export const getTransferBadgeCounts = async (
   return {
     activeRequests: active.count ?? 0,
     receivingDeliveries: receiving.count ?? 0,
-    approveRequests: approve.count ?? 0,
+    sendRequests: toSend.count ?? 0,
   };
 };
 
@@ -130,12 +131,12 @@ export const createTransferRequest = async (request: {
 }): Promise<TransferRequest> => {
   const { items, ...requestData } = request;
 
-  const payload: any = { ...requestData };
+  const payload: Record<string, unknown> = { ...requestData };
   const idempotencyKey: string =
     (payload.idempotency_key as string | undefined) ?? crypto.randomUUID();
   payload.idempotency_key = idempotencyKey;
 
-  let transferData: any = null;
+  let transferData: TransferRequest | null = null;
   for (let attempt = 1; ; attempt++) {
     const res = await db
       .from('transfer_requests')
@@ -144,7 +145,7 @@ export const createTransferRequest = async (request: {
       .single();
 
     if (!res.error) {
-      transferData = res.data;
+      transferData = res.data as TransferRequest;
       break;
     }
 
@@ -172,7 +173,7 @@ export const createTransferRequest = async (request: {
 
   const itemsToInsert = items.map(item => ({
     ...item,
-    transfer_request_id: transferData.id,
+    transfer_request_id: (transferData as TransferRequest).id,
   }));
 
   const { error: itemsError } = await db
@@ -184,45 +185,9 @@ export const createTransferRequest = async (request: {
   return transferData as TransferRequest;
 };
 
-// Approve/reject go through status-guarded, idempotent RPCs (not raw PostgREST
-// updates). The guard rejects re-approving an already-dispatched transfer
-// (which would re-enable a second stock decrement); the idem key makes a
-// lost-response retry a safe no-op.
-export const approveTransferRequest = async (
-  id: number,
-  items: { id: number; approved_qty: number }[],
-): Promise<{ success: boolean; transfer_id: number }> => {
-  const p_idempotency_key = crypto.randomUUID();
-  const { data, error } = await withWriteRetry(
-    () => db.rpc('approve_transfer', {
-      p_transfer_id: id,
-      p_items: items,
-      p_idempotency_key,
-    }),
-    (r) => isTransientNetworkError(r.error),
-  );
-
-  if (error) throw error;
-  return data as { success: boolean; transfer_id: number };
-};
-
-export const rejectTransferRequest = async (
-  id: number,
-  rejection_reason: string,
-): Promise<{ success: boolean; transfer_id: number }> => {
-  const p_idempotency_key = crypto.randomUUID();
-  const { data, error } = await withWriteRetry(
-    () => db.rpc('reject_transfer', {
-      p_transfer_id: id,
-      p_rejection_reason: rejection_reason,
-      p_idempotency_key,
-    }),
-    (r) => isTransientNetworkError(r.error),
-  );
-
-  if (error) throw error;
-  return data as { success: boolean; transfer_id: number };
-};
+// No approve/reject in the transfer flow (CLAUDE.md §4): a requested transfer is
+// sent directly via dispatchTransfer (full/partial/none), and a still-requested
+// transfer is withdrawn with deleteTransferRequest (transfers:cancel).
 
 export const reviseTransferRequest = async (
   originalId: number,
@@ -238,12 +203,12 @@ export const reviseTransferRequest = async (
 ): Promise<TransferRequest> => {
   const { items, ...requestData } = request;
 
-  const payload: any = { ...requestData, parent_request_id: originalId, status: 'requested' };
+  const payload: Record<string, unknown> = { ...requestData, parent_request_id: originalId, status: 'requested' };
   const idempotencyKey: string =
     (payload.idempotency_key as string | undefined) ?? crypto.randomUUID();
   payload.idempotency_key = idempotencyKey;
 
-  let transferData: any = null;
+  let transferData: TransferRequest | null = null;
   for (let attempt = 1; ; attempt++) {
     const res = await db
       .from('transfer_requests')
@@ -252,7 +217,7 @@ export const reviseTransferRequest = async (
       .single();
 
     if (!res.error) {
-      transferData = res.data;
+      transferData = res.data as TransferRequest;
       break;
     }
 
@@ -280,7 +245,7 @@ export const reviseTransferRequest = async (
 
   const itemsToInsert = items.map(item => ({
     ...item,
-    transfer_request_id: transferData.id,
+    transfer_request_id: (transferData as TransferRequest).id,
   }));
 
   const { error: itemsError } = await db
@@ -314,8 +279,8 @@ export const dispatchTransfer = async (
 
 export const deleteTransferRequest = async (id: number): Promise<void> => {
   // Hard-delete is only allowed while the request is still in 'requested' status.
-  // Guarding by status here prevents wiping an already-approved row if an approver
-  // races us. transfer_request_items has ON DELETE CASCADE so items clean up automatically.
+  // Guarding by status here prevents wiping an already-sent (dispatched) row if the
+  // source races us. transfer_request_items has ON DELETE CASCADE so items clean up automatically.
   const { error } = await withWriteRetry(
     () => db
       .from('transfer_requests')

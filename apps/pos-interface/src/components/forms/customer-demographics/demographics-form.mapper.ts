@@ -1,4 +1,4 @@
-import type { Customer } from "@repo/database";
+import type { Customer, AccountType } from "@repo/database";
 import { type CustomerDemographicsSchema } from "./demographics-form.schema";
 
 /**
@@ -26,7 +26,7 @@ export function mapCustomerToFormValues(customer: Customer): Partial<CustomerDem
         house_no: customer.house_no || "",
         address_note: customer.address_note || "",
         dob: customer.dob ? new Date(customer.dob).toISOString() : undefined,
-        account_type: (customer.account_type as any) || "Primary",
+        account_type: (customer.account_type as AccountType) || "Primary",
         customer_segment: customer.customer_segment || "",
         notes: customer.notes || "",
         whatsapp_alt: customer.whatsapp_alt || false,
@@ -38,7 +38,7 @@ export function mapCustomerToFormValues(customer: Customer): Partial<CustomerDem
  * Direct mapping from Form Values to Customer (DB)
  */
 export function mapFormValuesToCustomer(formValues: CustomerDemographicsSchema): Partial<Customer> {
-    const cleanValue = (val: any) => (val === "" || val === undefined ? null : val);
+    const cleanValue = (val: string | undefined | null): string | null => (val === "" || val === undefined ? null : val);
 
     return {
         name: formValues.name,
@@ -60,7 +60,7 @@ export function mapFormValuesToCustomer(formValues: CustomerDemographicsSchema):
         house_no: cleanValue(formValues.house_no),
         address_note: cleanValue(formValues.address_note),
         dob: formValues.dob && formValues.dob !== "" ? new Date(formValues.dob) : null,
-        account_type: formValues.account_type as any,
+        account_type: formValues.account_type as AccountType,
         customer_segment: cleanValue(formValues.customer_segment),
         notes: cleanValue(formValues.notes),
         whatsapp_alt: formValues.whatsapp_alt,

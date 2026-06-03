@@ -109,7 +109,7 @@ export const createAlterationOrder = async (
 
     const idempotencyKey: string = crypto.randomUUID();
 
-    let orderRow: any = null;
+    let orderRow: { id: number } | null = null;
     for (let attempt = 1; ; attempt++) {
         const res = await db
             .from("orders")
@@ -155,6 +155,10 @@ export const createAlterationOrder = async (
             status: "error",
             message: `Could not create alteration order row: ${res.error?.message ?? "unknown error"}`,
         };
+    }
+
+    if (!orderRow) {
+        return { status: "error", message: "Could not create alteration order row: no data returned" };
     }
 
     const { error: altErr } = await db.from("alteration_orders").insert({

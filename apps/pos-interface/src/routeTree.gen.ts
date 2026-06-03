@@ -30,6 +30,7 @@ import { Route as authSakkbaLoginRouteImport } from './routes/(auth)/sakkba/logi
 import { Route as authErthLoginRouteImport } from './routes/(auth)/erth/login'
 import { Route as MainStoreTransfersRouteImport } from './routes/$main/store/transfers'
 import { Route as MainStoreSuppliersRouteImport } from './routes/$main/store/suppliers'
+import { Route as MainStoreStocktakeRouteImport } from './routes/$main/store/stocktake'
 import { Route as MainStoreReportsRouteImport } from './routes/$main/store/reports'
 import { Route as MainStoreInventoryRouteImport } from './routes/$main/store/inventory'
 import { Route as MainStoreEndOfDayReportRouteImport } from './routes/$main/store/end-of-day-report'
@@ -43,6 +44,7 @@ import { Route as MainCustomersCustomerIdRouteImport } from './routes/$main/cust
 import { Route as MainCashierOrderIdRouteImport } from './routes/$main/cashier/$orderId'
 import { Route as MainStoreInventoryIndexRouteImport } from './routes/$main/store/inventory.index'
 import { Route as MainStoreTransfersNewRouteImport } from './routes/$main/store/transfers_.new'
+import { Route as MainStoreStocktakeHistoryRouteImport } from './routes/$main/store/stocktake_.history'
 import { Route as MainOrdersOrderManagementUnlinkRouteImport } from './routes/$main/orders/order-management/unlink'
 import { Route as MainOrdersOrderManagementReceivingBrovaFinalRouteImport } from './routes/$main/orders/order-management/receiving-brova-final'
 import { Route as MainOrdersOrderManagementLinkRouteImport } from './routes/$main/orders/order-management/link'
@@ -51,6 +53,7 @@ import { Route as MainOrdersOrderManagementDispatchRouteImport } from './routes/
 import { Route as MainOrdersOrderManagementChangeOptionsRouteImport } from './routes/$main/orders/order-management/change-options'
 import { Route as MainOrdersOrderManagementCancelOrderRouteImport } from './routes/$main/orders/order-management/cancel-order'
 import { Route as MainOrdersOrderManagementBrovaFeedbackRouteImport } from './routes/$main/orders/order-management/brova-feedback'
+import { Route as MainStoreStocktakeHistorySessionIdRouteImport } from './routes/$main/store/stocktake_.history_.$sessionId'
 import { Route as MainStoreInventoryItemTypeItemIdRouteImport } from './routes/$main/store/inventory.$itemType.$itemId'
 import { Route as MainOrdersOrderManagementFeedbackOrderIdRouteImport } from './routes/$main/orders/order-management/feedback.$orderId'
 
@@ -159,6 +162,11 @@ const MainStoreSuppliersRoute = MainStoreSuppliersRouteImport.update({
   path: '/suppliers',
   getParentRoute: () => MainStoreRouteRoute,
 } as any)
+const MainStoreStocktakeRoute = MainStoreStocktakeRouteImport.update({
+  id: '/stocktake',
+  path: '/stocktake',
+  getParentRoute: () => MainStoreRouteRoute,
+} as any)
 const MainStoreReportsRoute = MainStoreReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -227,6 +235,12 @@ const MainStoreTransfersNewRoute = MainStoreTransfersNewRouteImport.update({
   path: '/transfers/new',
   getParentRoute: () => MainStoreRouteRoute,
 } as any)
+const MainStoreStocktakeHistoryRoute =
+  MainStoreStocktakeHistoryRouteImport.update({
+    id: '/stocktake_/history',
+    path: '/stocktake/history',
+    getParentRoute: () => MainStoreRouteRoute,
+  } as any)
 const MainOrdersOrderManagementUnlinkRoute =
   MainOrdersOrderManagementUnlinkRouteImport.update({
     id: '/orders/order-management/unlink',
@@ -275,6 +289,12 @@ const MainOrdersOrderManagementBrovaFeedbackRoute =
     path: '/orders/order-management/brova-feedback',
     getParentRoute: () => MainRouteRoute,
   } as any)
+const MainStoreStocktakeHistorySessionIdRoute =
+  MainStoreStocktakeHistorySessionIdRouteImport.update({
+    id: '/stocktake_/history_/$sessionId',
+    path: '/stocktake/history/$sessionId',
+    getParentRoute: () => MainStoreRouteRoute,
+  } as any)
 const MainStoreInventoryItemTypeItemIdRoute =
   MainStoreInventoryItemTypeItemIdRouteImport.update({
     id: '/$itemType/$itemId',
@@ -314,6 +334,7 @@ export interface FileRoutesByFullPath {
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/inventory': typeof MainStoreInventoryRouteWithChildren
   '/$main/store/reports': typeof MainStoreReportsRoute
+  '/$main/store/stocktake': typeof MainStoreStocktakeRoute
   '/$main/store/suppliers': typeof MainStoreSuppliersRoute
   '/$main/store/transfers': typeof MainStoreTransfersRoute
   '/erth/login': typeof authErthLoginRoute
@@ -329,10 +350,12 @@ export interface FileRoutesByFullPath {
   '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
   '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
   '/$main/orders/order-management/unlink': typeof MainOrdersOrderManagementUnlinkRoute
+  '/$main/store/stocktake/history': typeof MainStoreStocktakeHistoryRoute
   '/$main/store/transfers/new': typeof MainStoreTransfersNewRoute
   '/$main/store/inventory/': typeof MainStoreInventoryIndexRoute
   '/$main/orders/order-management/feedback/$orderId': typeof MainOrdersOrderManagementFeedbackOrderIdRoute
   '/$main/store/inventory/$itemType/$itemId': typeof MainStoreInventoryItemTypeItemIdRoute
+  '/$main/store/stocktake/history/$sessionId': typeof MainStoreStocktakeHistorySessionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -357,6 +380,7 @@ export interface FileRoutesByTo {
   '/$main/orders/orders-at-showroom': typeof MainOrdersOrdersAtShowroomRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/reports': typeof MainStoreReportsRoute
+  '/$main/store/stocktake': typeof MainStoreStocktakeRoute
   '/$main/store/suppliers': typeof MainStoreSuppliersRoute
   '/$main/store/transfers': typeof MainStoreTransfersRoute
   '/erth/login': typeof authErthLoginRoute
@@ -372,10 +396,12 @@ export interface FileRoutesByTo {
   '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
   '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
   '/$main/orders/order-management/unlink': typeof MainOrdersOrderManagementUnlinkRoute
+  '/$main/store/stocktake/history': typeof MainStoreStocktakeHistoryRoute
   '/$main/store/transfers/new': typeof MainStoreTransfersNewRoute
   '/$main/store/inventory': typeof MainStoreInventoryIndexRoute
   '/$main/orders/order-management/feedback/$orderId': typeof MainOrdersOrderManagementFeedbackOrderIdRoute
   '/$main/store/inventory/$itemType/$itemId': typeof MainStoreInventoryItemTypeItemIdRoute
+  '/$main/store/stocktake/history/$sessionId': typeof MainStoreStocktakeHistorySessionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -404,6 +430,7 @@ export interface FileRoutesById {
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/inventory': typeof MainStoreInventoryRouteWithChildren
   '/$main/store/reports': typeof MainStoreReportsRoute
+  '/$main/store/stocktake': typeof MainStoreStocktakeRoute
   '/$main/store/suppliers': typeof MainStoreSuppliersRoute
   '/$main/store/transfers': typeof MainStoreTransfersRoute
   '/(auth)/erth/login': typeof authErthLoginRoute
@@ -419,10 +446,12 @@ export interface FileRoutesById {
   '/$main/orders/order-management/link': typeof MainOrdersOrderManagementLinkRoute
   '/$main/orders/order-management/receiving-brova-final': typeof MainOrdersOrderManagementReceivingBrovaFinalRoute
   '/$main/orders/order-management/unlink': typeof MainOrdersOrderManagementUnlinkRoute
+  '/$main/store/stocktake_/history': typeof MainStoreStocktakeHistoryRoute
   '/$main/store/transfers_/new': typeof MainStoreTransfersNewRoute
   '/$main/store/inventory/': typeof MainStoreInventoryIndexRoute
   '/$main/orders/order-management/feedback/$orderId': typeof MainOrdersOrderManagementFeedbackOrderIdRoute
   '/$main/store/inventory/$itemType/$itemId': typeof MainStoreInventoryItemTypeItemIdRoute
+  '/$main/store/stocktake_/history_/$sessionId': typeof MainStoreStocktakeHistorySessionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -452,6 +481,7 @@ export interface FileRouteTypes {
     | '/$main/store/end-of-day-report'
     | '/$main/store/inventory'
     | '/$main/store/reports'
+    | '/$main/store/stocktake'
     | '/$main/store/suppliers'
     | '/$main/store/transfers'
     | '/erth/login'
@@ -467,10 +497,12 @@ export interface FileRouteTypes {
     | '/$main/orders/order-management/link'
     | '/$main/orders/order-management/receiving-brova-final'
     | '/$main/orders/order-management/unlink'
+    | '/$main/store/stocktake/history'
     | '/$main/store/transfers/new'
     | '/$main/store/inventory/'
     | '/$main/orders/order-management/feedback/$orderId'
     | '/$main/store/inventory/$itemType/$itemId'
+    | '/$main/store/stocktake/history/$sessionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -495,6 +527,7 @@ export interface FileRouteTypes {
     | '/$main/orders/orders-at-showroom'
     | '/$main/store/end-of-day-report'
     | '/$main/store/reports'
+    | '/$main/store/stocktake'
     | '/$main/store/suppliers'
     | '/$main/store/transfers'
     | '/erth/login'
@@ -510,10 +543,12 @@ export interface FileRouteTypes {
     | '/$main/orders/order-management/link'
     | '/$main/orders/order-management/receiving-brova-final'
     | '/$main/orders/order-management/unlink'
+    | '/$main/store/stocktake/history'
     | '/$main/store/transfers/new'
     | '/$main/store/inventory'
     | '/$main/orders/order-management/feedback/$orderId'
     | '/$main/store/inventory/$itemType/$itemId'
+    | '/$main/store/stocktake/history/$sessionId'
   id:
     | '__root__'
     | '/'
@@ -541,6 +576,7 @@ export interface FileRouteTypes {
     | '/$main/store/end-of-day-report'
     | '/$main/store/inventory'
     | '/$main/store/reports'
+    | '/$main/store/stocktake'
     | '/$main/store/suppliers'
     | '/$main/store/transfers'
     | '/(auth)/erth/login'
@@ -556,10 +592,12 @@ export interface FileRouteTypes {
     | '/$main/orders/order-management/link'
     | '/$main/orders/order-management/receiving-brova-final'
     | '/$main/orders/order-management/unlink'
+    | '/$main/store/stocktake_/history'
     | '/$main/store/transfers_/new'
     | '/$main/store/inventory/'
     | '/$main/orders/order-management/feedback/$orderId'
     | '/$main/store/inventory/$itemType/$itemId'
+    | '/$main/store/stocktake_/history_/$sessionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -722,6 +760,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainStoreSuppliersRouteImport
       parentRoute: typeof MainStoreRouteRoute
     }
+    '/$main/store/stocktake': {
+      id: '/$main/store/stocktake'
+      path: '/stocktake'
+      fullPath: '/$main/store/stocktake'
+      preLoaderRoute: typeof MainStoreStocktakeRouteImport
+      parentRoute: typeof MainStoreRouteRoute
+    }
     '/$main/store/reports': {
       id: '/$main/store/reports'
       path: '/reports'
@@ -813,6 +858,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainStoreTransfersNewRouteImport
       parentRoute: typeof MainStoreRouteRoute
     }
+    '/$main/store/stocktake_/history': {
+      id: '/$main/store/stocktake_/history'
+      path: '/stocktake/history'
+      fullPath: '/$main/store/stocktake/history'
+      preLoaderRoute: typeof MainStoreStocktakeHistoryRouteImport
+      parentRoute: typeof MainStoreRouteRoute
+    }
     '/$main/orders/order-management/unlink': {
       id: '/$main/orders/order-management/unlink'
       path: '/orders/order-management/unlink'
@@ -869,6 +921,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainOrdersOrderManagementBrovaFeedbackRouteImport
       parentRoute: typeof MainRouteRoute
     }
+    '/$main/store/stocktake_/history_/$sessionId': {
+      id: '/$main/store/stocktake_/history_/$sessionId'
+      path: '/stocktake/history/$sessionId'
+      fullPath: '/$main/store/stocktake/history/$sessionId'
+      preLoaderRoute: typeof MainStoreStocktakeHistorySessionIdRouteImport
+      parentRoute: typeof MainStoreRouteRoute
+    }
     '/$main/store/inventory/$itemType/$itemId': {
       id: '/$main/store/inventory/$itemType/$itemId'
       path: '/$itemType/$itemId'
@@ -903,18 +962,25 @@ interface MainStoreRouteRouteChildren {
   MainStoreEndOfDayReportRoute: typeof MainStoreEndOfDayReportRoute
   MainStoreInventoryRoute: typeof MainStoreInventoryRouteWithChildren
   MainStoreReportsRoute: typeof MainStoreReportsRoute
+  MainStoreStocktakeRoute: typeof MainStoreStocktakeRoute
   MainStoreSuppliersRoute: typeof MainStoreSuppliersRoute
   MainStoreTransfersRoute: typeof MainStoreTransfersRoute
+  MainStoreStocktakeHistoryRoute: typeof MainStoreStocktakeHistoryRoute
   MainStoreTransfersNewRoute: typeof MainStoreTransfersNewRoute
+  MainStoreStocktakeHistorySessionIdRoute: typeof MainStoreStocktakeHistorySessionIdRoute
 }
 
 const MainStoreRouteRouteChildren: MainStoreRouteRouteChildren = {
   MainStoreEndOfDayReportRoute: MainStoreEndOfDayReportRoute,
   MainStoreInventoryRoute: MainStoreInventoryRouteWithChildren,
   MainStoreReportsRoute: MainStoreReportsRoute,
+  MainStoreStocktakeRoute: MainStoreStocktakeRoute,
   MainStoreSuppliersRoute: MainStoreSuppliersRoute,
   MainStoreTransfersRoute: MainStoreTransfersRoute,
+  MainStoreStocktakeHistoryRoute: MainStoreStocktakeHistoryRoute,
   MainStoreTransfersNewRoute: MainStoreTransfersNewRoute,
+  MainStoreStocktakeHistorySessionIdRoute:
+    MainStoreStocktakeHistorySessionIdRoute,
 }
 
 const MainStoreRouteRouteWithChildren = MainStoreRouteRoute._addFileChildren(

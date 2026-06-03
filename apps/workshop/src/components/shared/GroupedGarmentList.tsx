@@ -38,7 +38,7 @@ export function GroupedGarmentList({
       {groups.map(([orderId, orderGarments]) => (
         <div key={orderId}>
           <div className="flex items-center gap-2 px-1 mb-2">
-            <span className="text-sm font-bold text-foreground/70">
+            <span className="text-sm font-medium text-foreground/70">
               #{orderGarments[0].invoice_number ?? orderId}
             </span>
             {orderGarments[0].customer_name && (

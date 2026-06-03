@@ -1,7 +1,6 @@
+// No approve/reject in the flow (CLAUDE.md §4) — only these statuses are produced.
 export const TRANSFER_STATUS_LABELS: Record<string, string> = {
   requested: "Requested",
-  approved: "Approved",
-  rejected: "Rejected",
   dispatched: "Dispatched",
   received: "Received",
   partially_received: "Partially Received",
@@ -9,8 +8,6 @@ export const TRANSFER_STATUS_LABELS: Record<string, string> = {
 
 export const TRANSFER_STATUS_COLORS: Record<string, string> = {
   requested:          "bg-[var(--status-info-bg)] text-[var(--status-info)]",
-  approved:           "bg-[var(--status-ok-bg)]   text-[var(--status-ok)]",
-  rejected:           "bg-[var(--status-bad-bg)]  text-[var(--status-bad)]",
   dispatched:         "bg-[var(--status-info-bg)] text-[var(--status-info)]",
   received:           "bg-[var(--status-ok-bg)]   text-[var(--status-ok)]",
   partially_received: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]",

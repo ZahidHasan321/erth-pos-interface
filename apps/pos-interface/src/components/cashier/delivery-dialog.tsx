@@ -15,11 +15,12 @@ import {
 import { usePricing } from "@/hooks/usePricing";
 import HomeDeliveryIcon from "@/assets/home_delivery.png";
 import PickUpIcon from "@/assets/pickup.png";
+import type { Order } from "@repo/database";
 
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    order: any;
+    order: Order;
     isOrderCompleted: boolean;
 };
 
@@ -102,7 +103,7 @@ export function DeliveryDialog({ open, onOpenChange, order, isOrderCompleted }: 
                     updateCustomer(customer.id, {
                         city: city || null, area: area || null, block: block || null,
                         street: street || null, house_no: houseNo || null, address_note: note || null,
-                    } as any)
+                    })
                 );
             }
             const results = await Promise.all(ops);
@@ -113,8 +114,8 @@ export function DeliveryDialog({ open, onOpenChange, order, isOrderCompleted }: 
             }
             await queryClient.invalidateQueries({ queryKey: ["cashier-order"] });
             onOpenChange(false);
-        } catch (err: any) {
-            toast.error(`Could not save changes: ${err?.message || "unknown error"}`);
+        } catch (err: unknown) {
+            toast.error(`Could not save changes: ${err instanceof Error ? err.message : "unknown error"}`);
         } finally {
             setSaving(false);
         }

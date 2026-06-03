@@ -41,6 +41,34 @@ export async function inRolledBackTx(
 }
 
 /**
+ * Run `fn` inside a SAVEPOINT and report whether it raised, WITHOUT poisoning
+ * the outer transaction. postgres.js aborts the entire `sql.begin` transaction
+ * the moment any statement raises, so a bare `await expect(rpc).rejects` must be
+ * the LAST op on the tx (cf. workflow-eod.test.ts). A savepoint scopes the
+ * failure: on error it issues `ROLLBACK TO SAVEPOINT`, clearing the abort, so
+ * the caller can keep querying `tx` afterward (e.g. to assert a rejected
+ * mutation moved/committed NOTHING). This mirrors production, where a RAISE
+ * rolls back the RPC's own transaction (PostgREST wraps every RPC in one).
+ * Returns the caught error, or `null` if `fn` succeeded — the caller asserts it
+ * threw (so a guard that silently succeeds is still caught as a bug).
+ */
+export async function tryInSavepoint(
+  tx: Tx,
+  fn: (sp: Tx) => Promise<unknown>,
+): Promise<unknown | null> {
+  try {
+    await (
+      tx as unknown as {
+        savepoint: <T>(f: (sp: Tx) => Promise<T>) => Promise<T>;
+      }
+    ).savepoint((sp) => fn(sp as unknown as Tx));
+    return null; // succeeded — no rollback needed
+  } catch (e) {
+    return e; // rolled back to the savepoint; outer tx still usable
+  }
+}
+
+/**
  * Set auth.uid() for the current transaction. The shim's auth.uid() reads
  * `app.auth_id`; seeded users have auth_id == id, so passing a user's id here
  * makes assert_active_user() / get_my_user_id() / role helpers resolve to it.

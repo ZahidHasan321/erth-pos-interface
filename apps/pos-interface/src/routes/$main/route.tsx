@@ -74,19 +74,19 @@ export const Route = createFileRoute("/$main")<{
   beforeLoad: ({ context, location, params }) => {
     if (!context.auth.isAuthenticated) {
       throw redirect({
-        to: `/${params.main}/login` as any,
-        search: { redirect: location.href } as any,
+        to: `/${params.main}/login` as "/erth/login" | "/sakkba/login",
+        search: { redirect: location.href },
       });
     }
     // Workshop terminal users (sewer, cutter, etc.) must not enter POS.
     // They're locked to the workshop app. Force logout — returning them to
     // their own terminal means keeping them on the wrong domain; safer to
     // scrub the session and let them sign back in via the workshop login.
-    const user = (context.auth as any).user;
+    const user = context.auth.user;
     if (user && user.role === "staff" && Array.isArray(user.job_functions) && user.job_functions.length > 0) {
       throw redirect({
-        to: `/${params.main}/login` as any,
-        search: { redirect: undefined, error: "terminal_user_on_pos" } as any,
+        to: `/${params.main}/login` as "/erth/login" | "/sakkba/login",
+        search: { redirect: undefined, error: "terminal_user_on_pos" },
       });
     }
     // Cashier role lives in the standalone /cashier shell. They have no
@@ -142,7 +142,7 @@ function RouteComponent() {
   const confirmLogout = useCallback(() => {
     auth.logout().then(() => {
       router.invalidate().finally(() => {
-        navigate({ to: `/${main}/login` as any });
+        navigate({ to: `/${main}/login` as "/erth/login" | "/sakkba/login" });
       });
     });
     setShowLogoutDialog(false);

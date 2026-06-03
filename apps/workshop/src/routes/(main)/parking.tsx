@@ -13,7 +13,9 @@ import { PageHeader, GarmentTypeBadge, LoadingSkeleton } from "@/components/shar
 import { Button } from "@repo/ui/button";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Badge } from "@repo/ui/badge";
-import { Input } from "@repo/ui/input";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { FilterChip, FilterChipGroup } from "@/components/shared/FilterChip";
+import { matchesGarmentSearch } from "@/lib/garment-search";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import {
   Table,
@@ -23,7 +25,7 @@ import {
   TableHead,
   TableRow,
   TableCell,
-} from "@repo/ui/table";
+} from "@/components/shared/table";
 import { cn, formatDate, getDeliveryUrgency } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -36,9 +38,7 @@ import {
   Home,
   Droplets,
   Zap,
-  Search,
   Loader2,
-  X,
 } from "lucide-react";
 import type { WorkshopGarment } from "@repo/database";
 
@@ -64,9 +64,17 @@ function AltOutBadge({ trip }: { trip: number }) {
   );
 }
 
+// URL is the source of truth for the search box and the Returns sub-filter.
+// Defaults (empty search, "all" returns) are omitted to keep a bare URL.
+type ParkingSearch = { q?: string; returns?: "express" };
+
 export const Route = createFileRoute("/(main)/parking")({
   component: ParkingPage,
   head: () => ({ meta: [{ title: "Parking" }] }),
+  validateSearch: (raw: Record<string, unknown>): ParkingSearch => ({
+    q: typeof raw.q === "string" && raw.q ? raw.q : undefined,
+    returns: raw.returns === "express" ? "express" : undefined,
+  }),
 });
 
 // ── Garment row ───────────────────────────────────────────────────────────────
@@ -340,45 +348,6 @@ function Section({
   );
 }
 
-function FilterChips({
-  chips,
-  active,
-  onFilter,
-}: {
-  chips: { label: string; value: number; key: string }[];
-  active: string;
-  onFilter: (key: string) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-      {chips.map((c) => (
-        <button
-          key={c.key}
-          onClick={() => onFilter(c.key)}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
-            active === c.key
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:bg-muted/80",
-          )}
-        >
-          {c.label}
-          <span
-            className={cn(
-              "tabular-nums font-medium px-1.5 py-0.5 rounded-sm text-[10px] leading-none",
-              active === c.key
-                ? "bg-primary-foreground/20 text-primary-foreground"
-                : "bg-background text-foreground/60",
-            )}
-          >
-            {c.value}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 function ParkingPage() {
@@ -552,25 +521,23 @@ function ParkingPage() {
     ...customerApprovedSchedulableGarments,
   ]);
 
-  // ── Search ────────────────────────────────────────────────────────────────
-  const [search, setSearch] = useState("");
+  // ── Search & Returns filter (URL is the source of truth) ───────────────────
+  const sp = Route.useSearch();
+  const search = sp.q ?? "";
+  const returnFilter = sp.returns ?? "all";
+  const navigate = Route.useNavigate();
+  const setSearch = (value: string) =>
+    navigate({ search: (prev) => ({ ...prev, q: value || undefined }), replace: true });
+  const setReturnFilter = (value: string) =>
+    navigate({ search: (prev) => ({ ...prev, returns: value === "express" ? "express" : undefined }), replace: true });
   const searchFilter = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     if (!q) return null;
-    return (g: WorkshopGarment) =>
-      (g.customer_name ?? "").toLowerCase().includes(q) ||
-      String(g.order_id).includes(q) ||
-      (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
-      (g.customer_mobile ?? "")
-        .replace(/\s+/g, "")
-        .includes(q.replace(/\s+/g, "")) ||
-      (g.garment_id ?? "").toLowerCase().includes(q);
+    return (g: WorkshopGarment) => matchesGarmentSearch(g, q);
   }, [search]);
   const applySearch = <T extends WorkshopGarment>(arr: T[]) =>
     searchFilter ? arr.filter(searchFilter) : arr;
 
-  // ── Returns filter ────────────────────────────────────────────────────────
-  const [returnFilter, setReturnFilter] = useState("all");
   const returnChips = [
     { label: "All", value: returnsGarments.length, key: "all" },
     {
@@ -641,28 +608,15 @@ function ParkingPage() {
       <PageHeader
         icon={ParkingSquare}
         title="Order Parking"
-        subtitle="Received orders awaiting scheduling"
       />
 
       <div className="flex items-center gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Customer, order #, invoice, phone…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 pr-8"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Customer, order #, invoice, phone…"
+          className="max-w-sm flex-1"
+        />
         {allSelectable.length > 0 && (
           <Button
             variant={allSelected ? "secondary" : "outline"}
@@ -745,11 +699,18 @@ function ParkingPage() {
             count={returnsGarments.length}
             emptyLabel="No returns in parking"
           >
-            <FilterChips
-              chips={returnChips}
-              active={returnFilter}
-              onFilter={setReturnFilter}
-            />
+            <FilterChipGroup className="mb-3">
+              {returnChips.map((c) => (
+                <FilterChip
+                  key={c.key}
+                  active={returnFilter === c.key}
+                  onClick={() => setReturnFilter(c.key)}
+                  count={c.value}
+                >
+                  {c.label}
+                </FilterChip>
+              ))}
+            </FilterChipGroup>
             {filteredReturns.length === 0 ? (
               <p className="text-sm text-muted-foreground px-3 py-2">
                 No returns match this filter

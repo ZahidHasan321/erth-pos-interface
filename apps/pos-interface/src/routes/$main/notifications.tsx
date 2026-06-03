@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
-import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck, ChevronLeft, ChevronRight, ExternalLink, AlertTriangle } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
 import { useNotificationsPaginated, useMarkRead, useMarkAllRead, useUnreadCount } from "@/hooks/useNotifications";
@@ -77,6 +77,15 @@ const TYPE_CONFIG: Record<string, {
     iconColorUnread: "text-violet-600 dark:text-violet-400",
     accentBorder: "border-l-violet-500",
   },
+  low_stock: {
+    icon: AlertTriangle,
+    label: "Low Stock",
+    color: "text-red-700 dark:text-red-400",
+    badgeClass: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800",
+    iconBgUnread: "bg-red-100 dark:bg-red-950",
+    iconColorUnread: "text-red-600 dark:text-red-400",
+    accentBorder: "border-l-red-500",
+  },
 };
 
 const DEFAULT_CONFIG = {
@@ -105,9 +114,16 @@ function getNotificationLink(notification: NotificationItem, mainSegment: string
         ? { to: `/${mainSegment}/orders/order-management/feedback/${orderId}` }
         : { to: `/${mainSegment}/orders/orders-at-showroom`, search: { stage: "brova_trial" } };
     case "transfer_requested":
-      return { to: `/${mainSegment}/store/approve-requests`, search: { tab: "pending" } };
+      return { to: `/${mainSegment}/store/transfers` };
     case "transfer_status_changed":
-      return { to: `/${mainSegment}/store/approve-requests`, search: { tab: "approved" } };
+      return { to: `/${mainSegment}/store/transfers` };
+    case "low_stock": {
+      const itemType = meta?.item_type;
+      const id = meta?.item_id;
+      return typeof itemType === "string" && (typeof id === "number" || typeof id === "string")
+        ? { to: `/${mainSegment}/store/inventory/${itemType}/${id}` }
+        : { to: `/${mainSegment}/store/inventory` };
+    }
     default:
       return null;
   }
@@ -150,6 +166,7 @@ const FILTER_OPTIONS: { value: FilterValue; label: string }[] = [
   { value: "garment_awaiting_trial", label: "Awaiting Trial" },
   { value: "transfer_requested", label: "Transfer Requested" },
   { value: "transfer_status_changed", label: "Transfer Updated" },
+  { value: "low_stock", label: "Low Stock" },
 ];
 
 function NotificationsPage() {
@@ -166,7 +183,7 @@ function NotificationsPage() {
   const handleClick = (notification: NotificationItem) => {
     if (!notification.is_read) markRead.mutate(notification.id);
     const link = getNotificationLink(notification, mainSegment);
-    if (link) navigate({ to: link.to, search: link.search as any });
+    if (link) navigate({ to: link.to, search: link.search as Record<string, string> | undefined });
   };
 
   const filtered = notifications.filter((n) => {

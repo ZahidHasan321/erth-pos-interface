@@ -15,6 +15,7 @@ const TYPE_ICONS: Record<string, typeof Bell> = {
   transfer_requested: ArrowRightLeft,
   transfer_status_changed: ArrowRightLeft,
   garment_redo_requested: AlertTriangle,
+  low_stock: AlertTriangle,
 };
 
 const URGENT_TYPES = new Set(["garment_redo_requested"]);
@@ -24,11 +25,14 @@ type NotificationLink = { to: string; search?: Record<string, string> };
 function getNotificationLink(notification: NotificationItem): NotificationLink | null {
   switch (notification.type) {
     case "garment_dispatched_to_workshop":
-      return { to: "/receiving", search: { tab: "incoming" } };
+      // Receiving is a single sectioned page (no tabs) — navigate cleanly.
+      return { to: "/receiving" };
     case "transfer_requested":
-      return { to: "/store/approve-requests", search: { tab: "pending" } };
     case "transfer_status_changed":
-      return { to: "/store/approve-requests", search: { tab: "approved" } };
+      // Both land on the default "Needs you" tab — the recipient's action surface.
+      return { to: "/store/transfers" };
+    case "low_stock":
+      return { to: "/store/inventory" };
     case "garment_redo_requested": {
       const orderId = notification.metadata?.order_id;
       if (typeof orderId === "number" || typeof orderId === "string") {
@@ -95,7 +99,7 @@ function NotificationRow({
           {!notification.is_read && (
             <span className={`h-2 w-2 rounded-full shrink-0 ${urgent ? "bg-red-600" : "bg-primary"}`} />
           )}
-          <p className={`text-sm truncate ${urgent ? "font-black uppercase tracking-wide text-red-700 dark:text-red-300" : "font-medium"}`}>{notification.title}</p>
+          <p className={`text-sm truncate ${urgent ? "font-medium uppercase tracking-wide text-red-700 dark:text-red-300" : "font-medium"}`}>{notification.title}</p>
         </div>
         {notification.body && (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
@@ -120,7 +124,7 @@ export function NotificationBell() {
 
   const handleNavigate = (link: NotificationLink) => {
     setOpen(false);
-    navigate({ to: link.to, search: link.search as any });
+    navigate({ to: link.to, search: link.search });
   };
 
   return (
@@ -129,7 +133,7 @@ export function NotificationBell() {
         <Button variant="ghost" size="icon" className="relative h-8 w-8">
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-medium text-destructive-foreground">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}

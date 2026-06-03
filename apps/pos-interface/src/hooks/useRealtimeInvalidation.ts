@@ -7,7 +7,7 @@ import { showNotificationToast } from '@/components/notification-toast';
 import { useAuth } from '@/context/auth';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): { (...args: Parameters<T>): void; cancel: () => void } {
+function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): { (...args: Parameters<T>): void; cancel: () => void } {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const debounced = ((...args: Parameters<T>) => {
     if (timer) clearTimeout(timer);
@@ -23,9 +23,10 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): { (...
 // (workshop production stages) should not trigger a refetch of that query.
 const SHOWROOM_LOCATIONS = new Set(['shop', 'transit_to_shop']);
 
-function rowTouchesShowroom(row: any): boolean {
-  if (!row) return false;
-  return typeof row.location === 'string' && SHOWROOM_LOCATIONS.has(row.location);
+function rowTouchesShowroom(row: unknown): boolean {
+  if (!row || typeof row !== 'object') return false;
+  const r = row as Record<string, unknown>;
+  return typeof r.location === 'string' && SHOWROOM_LOCATIONS.has(r.location);
 }
 
 /**

@@ -39,7 +39,7 @@ function makeChain(overrides?: { data?: unknown; error?: unknown }) {
   chain["maybeSingle"] = vi.fn(() => Promise.resolve(result));
 
   // Make the chain itself thenable (await chain resolves to result)
-  (chain as any)["then"] = (resolve: (v: typeof result) => void) =>
+  (chain as Record<string, unknown>)["then"] = (resolve: (v: typeof result) => void) =>
     Promise.resolve(result).then(resolve);
 
   return chain;

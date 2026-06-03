@@ -22,8 +22,8 @@ function getPostLoginPath(user: AuthUser | null): string {
 export const Route = createFileRoute("/(auth)/login")({
   beforeLoad: ({ context }) => {
     if (context.auth.isAuthenticated) {
-      const dest = getPostLoginPath((context.auth as any).user ?? null);
-      throw redirect({ to: dest as any });
+      const dest = getPostLoginPath((context.auth as { user?: AuthUser | null }).user ?? null);
+      throw redirect({ to: dest as string });
     }
   },
   component: LoginPage,
@@ -87,7 +87,7 @@ function LoginPage() {
     if (auth.isAuthenticated) {
       const dest = getPostLoginPath(auth.user);
       router.invalidate().then(() => {
-        router.navigate({ to: dest as any });
+        router.navigate({ to: dest as string });
       });
     }
   }, [auth.isAuthenticated, auth.user]);

@@ -97,6 +97,41 @@ export async function adjustStock(args: AdjustArgs): Promise<{ success: boolean;
   return data as { success: boolean; old_stock: number; new_stock: number };
 }
 
+export type WasteArgs = {
+  itemType: StockItemType;
+  itemId: number;
+  location: StockLocation;
+  qty: number;
+  reason: string;          // fault category value (WASTE_REASONS)
+  note?: string;
+  imageUrl?: string | null;
+  unitCost?: number | null;
+  userId?: string | null;
+};
+
+export async function recordWaste(args: WasteArgs): Promise<{ success: boolean; new_stock: number; cost: number }> {
+  // Stable key reused across retries so a committed-but-lost first attempt is
+  // deduped server-side (idem_claim) — never double-decrement stock.
+  const p_idempotency_key = crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc("record_waste", {
+      p_item_type: args.itemType,
+      p_item_id: args.itemId,
+      p_location: args.location,
+      p_qty: args.qty,
+      p_reason: args.reason,
+      p_note: args.note ?? null,
+      p_image_url: args.imageUrl ?? null,
+      p_unit_cost: args.unitCost ?? null,
+      p_user_id: args.userId ?? null,
+      p_idempotency_key,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
+  if (error) throw new Error(`Damage/Waste failed: ${error.message}`);
+  return data as { success: boolean; new_stock: number; cost: number };
+}
+
 export type AggregatesResult = {
   totals: Partial<Record<StockMovementType, number>>;
   count: number;

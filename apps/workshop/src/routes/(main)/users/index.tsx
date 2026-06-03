@@ -4,7 +4,8 @@ import { useUsers, useDeactivateUser, useActivateUser } from "@/hooks/useUsers";
 import { useResourcesWithUsers } from "@/hooks/useResources";
 import { ROLE_LABELS, DEPARTMENT_LABELS, JOB_FUNCTION_LABELS } from "@/lib/rbac";
 import { Button } from "@repo/ui/button";
-import { Input } from "@repo/ui/input";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { Switch } from "@repo/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@repo/ui/dialog";
@@ -13,7 +14,7 @@ import { PageHeader } from "@/components/shared/PageShell";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  UserCog, Plus, Search, Shield, Power,
+  UserCog, Plus, Shield, Power,
   Factory, ShoppingBag, UserX, AlertTriangle, Link2,
   ChevronDown, ChevronUp, Minus,
 } from "lucide-react";
@@ -22,9 +23,36 @@ import type { User, Role, Department, JobFunction } from "@repo/database";
 
 const BRAND_LABELS: Record<string, string> = { erth: "Erth", sakkba: "Sakkba", qass: "Qass" };
 
+type SortKey = "name" | "role" | "department" | "status";
+
+// URL is the source of truth for the user list filters + sort. Defaults
+// (empty search, all depts/roles, active only, name asc) are omitted.
+type UsersSearch = {
+  q?: string;
+  dept?: Department;
+  role?: Role;
+  inactive?: true;
+  sort?: SortKey;
+  dir?: "asc" | "desc";
+};
+
+const isDept = (v: unknown): v is Department => v === "workshop" || v === "shop";
+const isRole = (v: unknown): v is Role =>
+  v === "super_admin" || v === "admin" || v === "manager" || v === "staff" || v === "cashier";
+const isSortKey = (v: unknown): v is SortKey =>
+  v === "name" || v === "role" || v === "department" || v === "status";
+
 export const Route = createFileRoute("/(main)/users/")({
   component: UsersPage,
   head: () => ({ meta: [{ title: "User Management" }] }),
+  validateSearch: (raw: Record<string, unknown>): UsersSearch => ({
+    q: typeof raw.q === "string" && raw.q ? raw.q : undefined,
+    dept: isDept(raw.dept) ? raw.dept : undefined,
+    role: isRole(raw.role) ? raw.role : undefined,
+    inactive: raw.inactive === true || raw.inactive === "1" || raw.inactive === "true" ? true : undefined,
+    sort: isSortKey(raw.sort) ? raw.sort : undefined,
+    dir: raw.dir === "asc" || raw.dir === "desc" ? raw.dir : undefined,
+  }),
 });
 
 const ROLE_STYLE: Record<Role, string> = {
@@ -224,11 +252,12 @@ function UserRow({
       <button
         onClick={(e) => { e.stopPropagation(); onToggleActive(); }}
         className={cn(
-          "p-1.5 rounded-md text-muted-foreground transition-colors opacity-0 group-hover:opacity-100",
+          "p-1.5 rounded-md transition-colors text-muted-foreground/40 group-hover:text-muted-foreground",
           isInactive ? "hover:text-[var(--status-ok)]" : "hover:text-destructive",
           "hover:bg-muted",
         )}
         title={isInactive ? "Reactivate" : "Deactivate"}
+        aria-label={isInactive ? "Reactivate user" : "Deactivate user"}
       >
         <Power className="w-3.5 h-3.5" />
       </button>
@@ -246,20 +275,30 @@ function UsersPage() {
   const deactivateMut = useDeactivateUser();
   const activateMut = useActivateUser();
 
-  const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState<"all" | Department>("all");
-  const [roleFilter, setRoleFilter] = useState<"all" | Role>("all");
-  const [showInactive, setShowInactive] = useState(false);
-  type SortKey = "name" | "role" | "department" | "status";
-  const [sortBy, setSortBy] = useState<SortKey>("name");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // URL is the source of truth for filters + sort; defaults applied on read.
+  const sp = Route.useSearch();
+  const search = sp.q ?? "";
+  const deptFilter: "all" | Department = sp.dept ?? "all";
+  const roleFilter: "all" | Role = sp.role ?? "all";
+  const showInactive = sp.inactive ?? false;
+  const sortBy: SortKey = sp.sort ?? "name";
+  // Default direction per column matches the prior toggle behaviour (name asc,
+  // every other column desc) when the URL doesn't pin a direction.
+  const sortDir: "asc" | "desc" = sp.dir ?? (sortBy === "name" ? "asc" : "desc");
+  const navSearch = Route.useNavigate();
+  const patch = (p: Partial<UsersSearch>) =>
+    navSearch({ search: (prev) => ({ ...prev, ...p }), replace: true });
+  const setSearch = (v: string) => patch({ q: v || undefined });
+  const setDeptFilter = (v: "all" | Department) => patch({ dept: v === "all" ? undefined : v });
+  const setRoleFilter = (v: "all" | Role) => patch({ role: v === "all" ? undefined : v });
+  const setShowInactive = (v: boolean) => patch({ inactive: v ? true : undefined });
 
   const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null);
 
   const toggleSort = (key: SortKey) => {
-    if (sortBy === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortBy(key); setSortDir(key === "name" ? "asc" : "desc"); }
+    if (sortBy === key) patch({ dir: sortDir === "asc" ? "desc" : "asc" });
+    else patch({ sort: key === "name" ? undefined : key, dir: key === "name" ? undefined : "desc" });
   };
 
   const getLinkedResourceName = (userId: string) => {
@@ -337,7 +376,6 @@ function UsersPage() {
       <PageHeader
         icon={UserCog}
         title="Users"
-        subtitle="Staff accounts, roles, and department access"
       >
         <Button asChild size="default" className="gap-2 shrink-0">
           <Link to="/users/new">
@@ -358,36 +396,26 @@ function UsersPage() {
 
       {/* Toolbar — flat row, no card */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input
-            className="pl-9 h-9"
-            placeholder="Search name, email, or phone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search name, email, or phone..."
+          className="flex-1 min-w-[200px] sm:max-w-xs"
+        />
 
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="inline-flex border border-border rounded-md bg-card p-0.5">
-            {(["all", "workshop", "shop"] as const).map((d) => (
-              <button
-                key={d}
-                onClick={() => setDeptFilter(d)}
-                className={cn(
-                  "px-3 py-1 text-sm font-medium rounded-sm transition-colors",
-                  deptFilter === d
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {d === "all" ? "All" : DEPARTMENT_LABELS[d]}
-              </button>
-            ))}
-          </div>
+          <SlidingPillSwitcher
+            value={deptFilter}
+            onChange={setDeptFilter}
+            options={[
+              { value: "all", label: "All" },
+              { value: "workshop", label: DEPARTMENT_LABELS.workshop },
+              { value: "shop", label: DEPARTMENT_LABELS.shop },
+            ]}
+          />
 
           <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as "all" | Role)}>
-            <SelectTrigger className="w-[140px] h-9">
+            <SelectTrigger className="w-[140px] h-9 pointer-coarse:h-11">
               <SelectValue placeholder="All roles" />
             </SelectTrigger>
             <SelectContent>

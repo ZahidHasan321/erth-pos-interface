@@ -314,7 +314,7 @@ export async function createAlterationOrder(
 
 // ─── Cashier ────────────────────────────────────────────────────────────────
 
-/** record_payment_transaction RPC (triggers.sql:800). Acts as the cashier. */
+/** record_payment_transaction RPC (triggers.sql:885). Acts as the cashier. */
 export async function recordPayment(
   tx: Tx,
   orderId: number,
@@ -349,7 +349,7 @@ export async function recordPayment(
   return res.r;
 }
 
-/** toggle_home_delivery RPC (triggers.sql:1068). */
+/** toggle_home_delivery RPC (triggers.sql:1189). */
 export async function toggleHomeDelivery(tx: Tx, orderId: number, on: boolean) {
   const res = only(
     await tx`SELECT toggle_home_delivery(${orderId}, ${on}) AS r`,
@@ -358,7 +358,7 @@ export async function toggleHomeDelivery(tx: Tx, orderId: number, on: boolean) {
   return res.r;
 }
 
-/** collect_garments RPC (triggers.sql:1130) — collect without a payment. */
+/** collect_garments RPC (triggers.sql:1251) — collect without a payment. */
 export async function collectGarments(
   tx: Tx,
   orderId: number,
@@ -381,7 +381,7 @@ export async function collectGarments(
 // ─── Dispatch / receive (app-layer mirrors) ─────────────────────────────────
 
 /**
- * dispatch_order RPC (triggers.sql:1186) — now the REAL deployed code, not
+ * dispatch_order RPC (triggers.sql:1307) — now the REAL deployed code, not
  * a mirror. apps/pos-interface/src/api/orders.ts dispatchOrder calls the
  * same function, so app and test exercise identical logic (no drift).
  */
@@ -395,7 +395,7 @@ export async function dispatchOrder(tx: Tx, orderId: number, garmentIds?: string
 }
 
 /**
- * receive_garments RPC (triggers.sql:1249) — now the REAL deployed code, not
+ * receive_garments RPC (triggers.sql:1370) — now the REAL deployed code, not
  * a mirror. apps/workshop/src/api/garments.ts receiveGarments (p_start=false)
  * and receiveAndStartGarments (p_start=true) call the same function, so app
  * and test exercise identical logic (no drift).
@@ -600,7 +600,7 @@ export async function submitQcReal(
 }
 
 /**
- * dispatch_garments_to_shop RPC (triggers.sql:1329) — REAL deployed code.
+ * dispatch_garments_to_shop RPC (triggers.sql:1450) — REAL deployed code.
  * apps/workshop dispatchGarments calls the same function (atomic move +
  * dispatch_log append; the app's best-effort log try/catch was removed).
  */
@@ -656,7 +656,7 @@ export async function brovaFeedback(
 }
 
 /**
- * release_finals RPC (triggers.sql:1308) — REAL deployed code. The app's
+ * release_finals RPC (triggers.sql:1429) — REAL deployed code. The app's
  * releaseFinals(ids) calls the same function; here we resolve the order's
  * finals and pass their ids (the RPC filters waiting_for_acceptance, so
  * non-parked finals are left untouched — same net effect as the old mirror's
@@ -745,22 +745,78 @@ export async function sendBackToWorkshop(tx: Tx, garmentId: string) {
 }
 
 /**
- * create_replacement_garment RPC (triggers.sql:1359) — REAL deployed code.
+ * create_replacement_garment RPC (triggers.sql:1527) — REAL deployed code.
  * apps/workshop createReplacementGarment calls the same function: clones the
- * original's specs server-side, starts fresh at trip 1 / waiting_cut /
- * workshop, and links replaced_by_garment_id (double-replacement guard).
+ * original's specs server-side, starts fresh at trip 1 / waiting_cut / workshop,
+ * links replaced_by_garment_id (double-replacement guard), and (Group A)
+ * attributes the scrap via root_cause, auto-consumes fresh fabric for the
+ * replacement cut, and records the scrapped fabric as a net-zero material-waste
+ * annotation (parking the replacement if material is short / customer-brought).
+ *
+ * Returns the full RPC result jsonb so callers can read parked/parked_reason.
  */
-export async function createReplacement(
+export async function createReplacementResult(
   tx: Tx,
   originalGarmentId: string,
-): Promise<string> {
+  opts: {
+    rootCause?: string;
+    priority?: string;
+    userId?: string;
+    idempotencyKey?: string;
+  } = {},
+): Promise<{ id: string; garment_id: string; parked: boolean; parked_reason: string | null }> {
   const res = only(
     await tx`
-      SELECT create_replacement_garment(${originalGarmentId}::uuid) AS r
+      SELECT create_replacement_garment(
+        ${originalGarmentId}::uuid,
+        ${opts.rootCause ?? "production_error"}::root_cause,
+        ${opts.priority ?? "next_slot"}::redo_priority,
+        ${opts.userId ?? null}::uuid,
+        ${opts.idempotencyKey ?? randomUUID()}::uuid
+      ) AS r
     `,
     "create_replacement_garment",
   );
-  return (res.r as { id: string }).id;
+  return res.r as { id: string; garment_id: string; parked: boolean; parked_reason: string | null };
+}
+
+/** Convenience wrapper returning just the new replacement id (back-compat). */
+export async function createReplacement(
+  tx: Tx,
+  originalGarmentId: string,
+  opts: {
+    rootCause?: string;
+    priority?: string;
+    userId?: string;
+    idempotencyKey?: string;
+  } = {},
+): Promise<string> {
+  return (await createReplacementResult(tx, originalGarmentId, opts)).id;
+}
+
+/**
+ * resume_parked_redo RPC (Group A) — a manager un-parks a redo replacement once
+ * material is available (or the OUT-fabric customer decision is made). For
+ * company fabric this is where the real -L consumption finally lands; no second
+ * scrap annotation is written (that was eager at creation).
+ */
+export async function resumeParkedRedo(
+  tx: Tx,
+  garmentId: string,
+  opts: { priority?: string; userId?: string; idempotencyKey?: string } = {},
+): Promise<{ resumed: boolean; consumed: number; already_active?: boolean }> {
+  const res = only(
+    await tx`
+      SELECT resume_parked_redo(
+        ${garmentId}::uuid,
+        ${opts.priority ?? "next_slot"}::redo_priority,
+        ${opts.userId ?? null}::uuid,
+        ${opts.idempotencyKey ?? randomUUID()}::uuid
+      ) AS r
+    `,
+    "resume_parked_redo",
+  );
+  return res.r as { resumed: boolean; consumed: number; already_active?: boolean };
 }
 
 /**
@@ -775,7 +831,7 @@ export async function cancelOrder(tx: Tx, orderId: number) {
   await tx`UPDATE orders SET checkout_status = 'cancelled' WHERE id = ${orderId}`;
 }
 
-/** create_complete_sales_order RPC (triggers.sql:384). */
+/** create_complete_sales_order RPC (triggers.sql:453). */
 export async function createSalesOrder(
   tx: Tx,
   items: { id: number; quantity: number; unitPrice: number }[],

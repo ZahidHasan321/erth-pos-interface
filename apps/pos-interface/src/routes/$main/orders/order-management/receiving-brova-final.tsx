@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 
 import { updateGarment } from "@/api/garments";
 import { useDispatchedOrders } from "@/hooks/useDispatchedOrders";
-import type { Order, Garment } from "@repo/database";
+import type { Order, Garment, PieceStage } from "@repo/database";
 
 import {
     GarmentTypeBadge,
@@ -52,7 +52,7 @@ function ReceivingInterface() {
                 updateGarment(garment.id, {
                     piece_stage: (garment.garment_type === "brova"
                         ? "awaiting_trial"
-                        : "ready_for_pickup") as any,
+                        : "ready_for_pickup") as PieceStage,
                     location: "shop",
                 })
             );
@@ -84,7 +84,7 @@ function ReceivingInterface() {
             queryClient.invalidateQueries({ queryKey: ["dispatched-orders"] });
             queryClient.invalidateQueries({ queryKey: ["orders"] });
         },
-        onError: (err: any, _vars, context) => {
+        onError: (err: Error, _vars, context) => {
             if (context?.prev) {
                 queryClient.setQueryData(["dispatched-orders"], context.prev);
             }
@@ -295,10 +295,7 @@ function OrderRow({
                             const isLost = g.location === "lost_in_transit";
                             const isReceivable = g.location === "transit_to_shop";
                             const isSelected = selectedIds.has(g.id);
-                            const fabric = (g as any).fabric as
-                                | { name?: string | null; color?: string | null }
-                                | null
-                                | undefined;
+                            const fabric = (g as Garment & { fabric?: { name?: string | null; color?: string | null } | null }).fabric;
 
                             return (
                                 <div

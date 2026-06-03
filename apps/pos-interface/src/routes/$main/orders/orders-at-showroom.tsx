@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ComponentType } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { RowSelectionState } from "@tanstack/react-table";
 import {
@@ -68,7 +68,7 @@ const CompactStat = ({
 }: {
   label: string;
   value: number;
-  icon: any;
+  icon: ComponentType<{ className?: string }>;
   color: string;
   className?: string;
 }) => (
@@ -363,7 +363,7 @@ function OrderManagementConsole({
         selected.showroomStatus.label === "ready_for_pickup" ||
         selected.showroomStatus.label === "alteration_out";
 
-    const handleUpdate = async (fields: any) => {
+    const handleUpdate = async (fields: Record<string, string | null>) => {
         try {
             await updateOrder.mutateAsync({
                 orderId: order.id,

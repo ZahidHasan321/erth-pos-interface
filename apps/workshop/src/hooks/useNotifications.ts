@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tansta
 import {
   getNotifications,
   getNotificationsPaginated,
+  getNotificationsCount,
   markNotificationRead,
   markAllNotificationsRead,
 } from "@/api/notifications";
@@ -32,12 +33,23 @@ export function useMarkRead() {
   });
 }
 
-const PAGE_SIZE = 20;
+export const NOTIFICATIONS_PAGE_SIZE = 20;
+const PAGE_SIZE = NOTIFICATIONS_PAGE_SIZE;
 
-export function useNotificationsPaginated(page: number) {
+export function useNotificationsPaginated(page: number, type?: string, unreadOnly?: boolean) {
   return useQuery({
-    queryKey: [...NOTIFICATIONS_KEY, "page", page],
-    queryFn: () => getNotificationsPaginated(PAGE_SIZE, page * PAGE_SIZE),
+    queryKey: [...NOTIFICATIONS_KEY, "page", page, type ?? null, unreadOnly ?? false],
+    queryFn: () => getNotificationsPaginated(PAGE_SIZE, page * PAGE_SIZE, type, unreadOnly),
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Total count for the current type/unread filter — drives hasMore pagination. */
+export function useNotificationsCount(type?: string, unreadOnly?: boolean) {
+  return useQuery({
+    queryKey: [...NOTIFICATIONS_KEY, "count", type ?? null, unreadOnly ?? false],
+    queryFn: () => getNotificationsCount(type, unreadOnly),
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   });

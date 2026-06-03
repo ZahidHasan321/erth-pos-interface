@@ -25,12 +25,12 @@ declare module "@tanstack/react-table" {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-  serverProducts?: any[];
+  serverProducts?: Shelf[];
   selectedProducts?: string[];
   removeRow: (rowIndex: number) => void;
   updateData: (rowIndex: number, columnId: string, value: unknown) => void;
   isOrderDisabled: boolean;
-  errors?: any[];
+  errors?: { quantity?: { message?: string } }[];
 }
 
 export function DataTable<TData, TValue>({
@@ -57,7 +57,7 @@ export function DataTable<TData, TValue>({
       removeRow: (rowIndex: number) => void;
       updateData: (rowIndex: number, columnId: string, value: unknown) => void;
       isOrderDisabled: boolean;
-      errors?: any[];
+      errors?: { quantity?: { message?: string } }[];
     },
   });
 

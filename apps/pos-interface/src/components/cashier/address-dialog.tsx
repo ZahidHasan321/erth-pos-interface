@@ -11,6 +11,7 @@ import {
     DialogFooter,
 } from "@repo/ui/dialog";
 import { updateCustomer } from "@/api/customers";
+import type { Customer } from "@repo/database";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -57,7 +58,7 @@ export function AddressDialog({ open, onOpenChange, customerId, currentAddress }
             street: street || null,
             house_no: houseNo || null,
             address_note: note || null,
-        } as any),
+        } as Partial<Customer>),
         onSuccess: (res) => {
             if (res.status === "error") {
                 toast.error(`Failed: ${res.message}`);

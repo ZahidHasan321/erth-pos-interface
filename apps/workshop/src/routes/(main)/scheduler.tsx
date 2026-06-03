@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useSchedulerGarments, useBrovaPlans, useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
-import { useScheduleGarments } from "@/hooks/useGarmentMutations";
+import { useSchedulerGarments, useBrovaPlans, useWorkshopWorkload, useParkedRedos } from "@/hooks/useWorkshopGarments";
+import { useScheduleGarments, useResumeParkedRedo } from "@/hooks/useGarmentMutations";
 import { useResources } from "@/hooks/useResources";
 import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
@@ -13,18 +13,23 @@ import {
 import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
-import { Input } from "@repo/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { matchesGarmentSearch } from "@/lib/garment-search";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@/components/shared/table";
 import { PRODUCTION_STAGES } from "@/lib/constants";
 import { cn, formatDate, getLocalDateStr, toLocalDateStr, getDeliveryUrgency, TIMEZONE } from "@/lib/utils";
 import {
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight,
   Clock, Package, Home, User, RotateCcw,
-  Calendar, BarChart3, Droplets, Zap, Search, Loader2, X,
+  Calendar, BarChart3, Droplets, Zap, Loader2,
   Scissors, Ruler, Shirt, Sparkles, Flame, ShieldCheck,
+  AlertOctagon, ParkingSquare, Play,
 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/context/auth";
+import { getRedoPriorityLabel, getRedoParkedReasonLabel } from "@/lib/root-causes";
 import { getAlterationNumber } from "@repo/database";
-import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
+import type { WorkshopGarment, TripHistoryEntry, RedoPriority } from "@repo/database";
 import type { LucideIcon } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/scheduler")({
@@ -177,8 +182,13 @@ function SchedulerSectionTable({
                     <span className="font-mono text-base">{g.garment_id ?? g.id.slice(0, 8)}</span>
                     <div className="flex items-center gap-1 flex-wrap">
                       {!hideExpress && g.express && <ExpressBadge />}
+                      {g.redo_priority && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-bad)] bg-[var(--status-bad-bg)] px-2 py-0.5 rounded-md">
+                          <RotateCcw className="w-3 h-3" /> Redo · {getRedoPriorityLabel(g.redo_priority)}
+                        </span>
+                      )}
                       {g.soaking && (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-muted px-2 py-0.5 rounded-md">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-info)] bg-[var(--status-info-bg)] px-2 py-0.5 rounded-md">
                           <Droplets className="w-3 h-3" /> Soak
                         </span>
                       )}
@@ -239,11 +249,80 @@ function SchedulerSectionTable({
                       <span className="text-sm text-muted-foreground">—</span>
                     )}
                     {g.home_delivery && (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-muted px-2 py-0.5 rounded-md">
-                        <Home className="w-3 h-3" /> Home
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
+                        <Home className="w-3 h-3 text-indigo-700" /> Home
                       </span>
                     )}
                   </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+}
+
+// ── Parked redos table ────────────────────────────────────────────────────────
+// Parked redos can't be scheduled until resumed, so this is a read + Resume
+// table (no selection checkboxes). The Resume action re-runs the RPC's fabric
+// consume; a still-short fabric makes the RPC raise and the row stays parked.
+
+function ParkedRedosTable({
+  garments,
+  resumingId,
+  onResume,
+}: {
+  garments: WorkshopGarment[];
+  resumingId: string | null;
+  onResume: (garmentId: string, priority: RedoPriority) => void;
+}) {
+  return (
+    <TableContainer>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
+            <TableHead className="w-[120px]">Garment</TableHead>
+            <TableHead className="w-[80px]">Type</TableHead>
+            <TableHead className="w-[170px]">Customer</TableHead>
+            <TableHead className="w-[100px]">Order / Invoice</TableHead>
+            <TableHead>Parked reason</TableHead>
+            <TableHead className="w-[120px] text-right pr-3">Action</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {garments.map((g) => {
+            const busy = resumingId === g.id;
+            return (
+              <TableRow key={g.id} className="opacity-90">
+                <TableCell className="px-3 py-3">
+                  <span className="font-mono text-base">{g.garment_id ?? g.id.slice(0, 8)}</span>
+                </TableCell>
+                <TableCell className="px-3 py-3">
+                  <GarmentTypeBadge type={g.garment_type ?? "final"} />
+                </TableCell>
+                <TableCell className="px-3 py-3">
+                  <span className="text-sm truncate">{g.customer_name ?? "—"}</span>
+                </TableCell>
+                <TableCell className="px-3 py-3 text-sm tabular-nums text-muted-foreground">
+                  #{g.order_id}{g.invoice_number ? ` / ${g.invoice_number}` : ""}
+                </TableCell>
+                <TableCell className="px-3 py-3">
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-warn)] bg-[var(--status-warn-bg)] px-2 py-0.5 rounded-md">
+                    <ParkingSquare className="w-3 h-3" /> {getRedoParkedReasonLabel(g.redo_parked_reason)}
+                  </span>
+                </TableCell>
+                <TableCell className="px-3 py-3 text-right">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => onResume(g.id, "next_slot")}
+                  >
+                    {busy ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1" />}
+                    Resume
+                  </Button>
                 </TableCell>
               </TableRow>
             );
@@ -301,7 +380,15 @@ function HeatCalendar({
     return 1;
   };
 
-  const HEAT_BG = ["", "bg-emerald-100/70", "bg-amber-100/80", "bg-orange-100/80", "bg-red-100/80"];
+  // Load gradient mapped to semantic status backgrounds (light → full):
+  // ok → warn → warn (deeper) → bad. Same escalation as the count-text color below.
+  const HEAT_BG = [
+    "",
+    "bg-[var(--status-ok-bg)]",
+    "bg-[var(--status-warn-bg)]",
+    "bg-[var(--status-warn)]/15",
+    "bg-[var(--status-bad-bg)]",
+  ];
 
   return (
     <div className="select-none">
@@ -458,25 +545,40 @@ function WorkloadSummary({
 
 function SchedulerPage() {
   const { data: schedulable = [], isLoading } = useSchedulerGarments();
+  // Parked redos sit at in_production=false, so they fall outside the scheduler
+  // fetch — pulled separately for their dedicated section (CLAUDE.md §6).
+  const { data: parkedRedos = [] } = useParkedRedos();
   // Workload payload: only rows with assigned_date / production_plan / today's
   // completion. Replaces the old useWorkshopGarments() pull which dragged
   // the entire workshop list (joins, measurements, etc.) just to count plans.
   const { data: allGarments = [] } = useWorkshopWorkload();
   const scheduleMut = useScheduleGarments();
+  const resumeMut = useResumeParkedRedo();
+  const { user } = useAuth();
 
   // ── Data slices ───────────────────────────────────────────────────────────
   // Server guarantees every row is piece_stage=waiting_cut, location=workshop,
   // in_production=true, production_plan=null. So here we only split by trip /
   // garment_type / express / whether the order had a brova.
+  // High-priority redos (redo_priority='immediate') are pinned to a section at
+  // the top; pull them out of the normal slices so they don't double-render.
+  const immediateRedoGarments = useMemo(
+    () => schedulable.filter((g) => g.redo_priority === "immediate"),
+    [schedulable],
+  );
+  const normalSchedulable = useMemo(
+    () => schedulable.filter((g) => g.redo_priority !== "immediate"),
+    [schedulable],
+  );
   // Alteration-order garments (garment_type='alteration') get their own tab
   // regardless of trip — they don't share the brova/final/returns flow.
   const alterationOutGarments = useMemo(
-    () => schedulable.filter((g) => g.garment_type === "alteration"),
-    [schedulable],
+    () => normalSchedulable.filter((g) => g.garment_type === "alteration"),
+    [normalSchedulable],
   );
   const workOrderSchedulable = useMemo(
-    () => schedulable.filter((g) => g.garment_type !== "alteration"),
-    [schedulable],
+    () => normalSchedulable.filter((g) => g.garment_type !== "alteration"),
+    [normalSchedulable],
   );
   const trip1 = useMemo(
     () => workOrderSchedulable.filter((g) => (g.trip_number ?? 1) === 1),
@@ -557,23 +659,20 @@ function SchedulerPage() {
   // ── Search ────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const searchFilter = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     if (!q) return null;
-    return (g: WorkshopGarment) =>
-      (g.customer_name ?? "").toLowerCase().includes(q) ||
-      String(g.order_id).includes(q) ||
-      (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
-      (g.customer_mobile ?? "").replace(/\s+/g, "").includes(q.replace(/\s+/g, "")) ||
-      (g.garment_id ?? "").toLowerCase().includes(q);
+    return (g: WorkshopGarment) => matchesGarmentSearch(g, q);
   }, [search]);
   const applySearch = <T extends WorkshopGarment>(arr: T[]) => searchFilter ? arr.filter(searchFilter) : arr;
 
+  const sortedImmediate = applySearch(groupByOrderSorted(immediateRedoGarments));
   const sortedExpress = applySearch(groupByOrderSorted(expressGarments));
   const sortedBrova = applySearch(groupByOrderSorted(brovaGarments));
   const sortedFinals = applySearch(groupByOrderSorted(finalsGarments));
   const sortedDirectFinals = applySearch(groupByOrderSorted(directFinalsGarments));
   const sortedReturns = applySearch(groupByOrderSorted(returnsGarments));
   const sortedAlterationOut = applySearch(groupByOrderSorted(alterationOutGarments));
+  const sortedParkedRedos = applySearch(parkedRedos);
 
   // ── Selection state ───────────────────────────────────────────────────────
   // New garments (Express + Brova + Direct Finals): no prior plan, cross-order, one shared pool
@@ -735,6 +834,30 @@ function SchedulerPage() {
     clearAll();
   };
 
+  // Resume a parked redo (CLAUDE.md §6) — un-parks once material/customer issue
+  // clears. The RPC re-runs the consume; a still-short fabric makes it raise.
+  // A fresh idempotency key per click keeps a lost-response retry single-effect.
+  const [resumingId, setResumingId] = useState<string | null>(null);
+  const handleResume = (garmentId: string, priority: RedoPriority) => {
+    setResumingId(garmentId);
+    resumeMut.mutate(
+      { garmentId, priority, userId: user?.id ?? null, idempotencyKey: crypto.randomUUID() },
+      {
+        onSuccess: (res) => {
+          if (res.already_active) {
+            toast.info("Redo already active");
+          } else if (res.consumed > 0) {
+            toast.success(`Redo resumed — ${res.consumed} m fabric consumed`);
+          } else {
+            toast.success("Redo resumed");
+          }
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to resume redo"),
+        onSettled: () => setResumingId(null),
+      },
+    );
+  };
+
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-24 lg:pb-10">
       <PageHeader
@@ -774,29 +897,30 @@ function SchedulerPage() {
         <div className="space-y-2 min-w-0">
 
           {/* Search */}
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="Customer, order #, invoice, phone…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-8"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Customer, order #, invoice, phone…"
+            className="max-w-sm"
+          />
 
           {isLoading ? (
             <LoadingSkeleton />
           ) : (
             <>
+              {/* ── REDO — IMMEDIATE (pinned top, manager-flagged jump-queue) ── */}
+              {sortedImmediate.length > 0 && (
+                <Section title="Redo — immediate" icon={AlertOctagon} count={sortedImmediate.length}>
+                  <SchedulerSectionTable
+                    garments={sortedImmediate}
+                    selectedIds={selNew}
+                    onToggle={toggleGarment(setSelNew)}
+                    showType
+                    disabled={newDisabled}
+                  />
+                </Section>
+              )}
+
               {/* ── EXPRESS ── */}
               <Section title="Express" icon={Zap} count={sortedExpress.length} emptyLabel="No express to schedule">
                 <SchedulerSectionTable
@@ -864,6 +988,17 @@ function SchedulerPage() {
                   lockToOrder
                 />
               </Section>
+
+              {/* ── PARKED REDOS — needs manager decision (CLAUDE.md §6) ── */}
+              {sortedParkedRedos.length > 0 && (
+                <Section title="Parked redos — needs manager decision" icon={ParkingSquare} count={sortedParkedRedos.length}>
+                  <ParkedRedosTable
+                    garments={sortedParkedRedos}
+                    resumingId={resumingId}
+                    onResume={handleResume}
+                  />
+                </Section>
+              )}
             </>
           )}
         </div>

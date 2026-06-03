@@ -2,8 +2,10 @@ import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
 import type { Garment } from "@repo/database";
 
+type GarmentWithFabric = Garment & { fabric?: { id: number; name: string } | null };
+
 interface GarmentCollectionProps {
-    garments: Garment[];
+    garments: GarmentWithFabric[];
     selectedIds: Set<string>;
     onToggle: (id: string) => void;
     onToggleAll: () => void;
@@ -12,7 +14,7 @@ interface GarmentCollectionProps {
     isHomeDelivery?: boolean;
 }
 
-function isEligibleForCollection(g: Garment): boolean {
+function isEligibleForCollection(g: GarmentWithFabric): boolean {
     return (
         g.location === "shop" &&
         (g.piece_stage === "ready_for_pickup" || g.piece_stage === "brova_trialed" || g.piece_stage === "awaiting_trial")
@@ -20,7 +22,7 @@ function isEligibleForCollection(g: Garment): boolean {
 }
 
 // Cashier-friendly status: Ready / Pending / In Production / Completed / In Transit
-function getCashierStatus(g: Garment): { label: string; color: string } {
+function getCashierStatus(g: GarmentWithFabric): { label: string; color: string } {
     if (g.piece_stage === "completed") return { label: "Completed", color: "bg-slate-100 text-slate-600" };
     if (g.location === "shop" && (g.piece_stage === "ready_for_pickup" || g.piece_stage === "brova_trialed" || g.piece_stage === "awaiting_trial"))
         return { label: "Ready", color: "bg-emerald-100 text-emerald-700" };
@@ -35,12 +37,12 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
     const eligibleGarments = garments.filter(isEligibleForCollection);
     const hasEligible = eligibleGarments.length > 0;
 
-    const renderGarmentCard = (g: Garment) => {
+    const renderGarmentCard = (g: GarmentWithFabric) => {
         const eligible = isEligibleForCollection(g);
         const isCompleted = g.piece_stage === "completed";
         const isBrova = g.garment_type === "brova";
         const status = getCashierStatus(g);
-        const fabricData = (g as any).fabric;
+        const fabricData = g.fabric;
         const isSelected = selectedIds.has(g.id);
         const fulfillmentMode = fulfillmentModes.get(g.id);
 
@@ -92,7 +94,7 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                         )}
                         {g.soaking && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold bg-cyan-50 text-cyan-700 border-cyan-300">
-                                Soaking{(g as any).soaking_hours ? ` ${(g as any).soaking_hours}h` : ""}
+                                Soaking{g.soaking_hours ? ` ${g.soaking_hours}h` : ""}
                             </Badge>
                         )}
                         {fabricData?.name ? (

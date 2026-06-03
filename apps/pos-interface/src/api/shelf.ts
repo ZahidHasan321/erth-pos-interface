@@ -17,9 +17,12 @@ export const createShelfItem = async (
   return data as Shelf;
 };
 
+// Stock columns are intentionally not accepted here. All stock changes go
+// through the stamping RPCs so the stock_movements ledger stays complete
+// (CLAUDE.md §4); a metadata UPDATE must never carry an absolute stock figure.
 export const updateShelf = async (
   id: string,
-  shelf: Partial<Shelf>,
+  shelf: Partial<Omit<Shelf, "shop_stock" | "workshop_stock" | "stock">>,
 ): Promise<Shelf> => {
   const { data, error } = await withWriteRetry(
     () => db

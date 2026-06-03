@@ -1,4 +1,3 @@
-import { useState, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useAssignedOrdersPage } from "@/hooks/useWorkshopGarments";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -6,10 +5,12 @@ import { BrandBadge } from "@/components/shared/StageBadge";
 import { type PillColor } from "@/components/shared/StatusPill";
 import { PageHeader } from "@/components/shared/PageShell";
 import { Skeleton } from "@repo/ui/skeleton";
-import { Input } from "@repo/ui/input";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { FilterChip } from "@/components/shared/FilterChip";
 import { OrderTypeBadge } from "@repo/ui/order-type-badge";
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
-import { cn, formatDate, getLocalDateStr, parseUtcTimestamp, toLocalDateStr } from "@/lib/utils";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/shared/table";
+import { cn, formatDate, parseUtcTimestamp, toLocalDateStr } from "@/lib/utils";
+import type { AssignedChip } from "@/api/garments";
 import { getGarmentStatusLabel } from "@/lib/garment-status";
 import type { AssignedOrderRow } from "@/api/garments";
 import {
@@ -21,7 +22,6 @@ import {
   Droplets,
   ArrowRight,
   Layers,
-  Search,
   X,
   ArrowUp,
   ArrowDown,
@@ -33,15 +33,38 @@ type Brand = (typeof BRANDS)[number];
 
 type DeliverySort = "none" | "asc" | "desc";
 
-type AssignedSearch = { express?: boolean; overdue?: boolean };
+// URL is the source of truth for filters. Default-valued keys (no filter, no
+// sort, empty search) are omitted so a bare URL behaves exactly as before; the
+// component fills in the defaults on read. Optional shape lets the navigate
+// updater drop a key by setting it undefined.
+type AssignedSearch = {
+  q?: string;
+  express?: boolean;
+  overdue?: boolean;
+  brova?: boolean;
+  brands?: Brand[];
+  sort?: DeliverySort;
+};
+
+const isBrand = (v: unknown): v is Brand => BRANDS.includes(v as Brand);
+// true only when truthy; undefined otherwise so a false filter drops from the URL.
+const asBool = (v: unknown): true | undefined =>
+  v === true || v === "1" || v === "true" ? true : undefined;
 
 export const Route = createFileRoute("/(main)/assigned/")({
   component: AssignedPage,
   head: () => ({ meta: [{ title: "Production Tracker" }] }),
-  validateSearch: (raw: Record<string, unknown>): AssignedSearch => ({
-    express: raw.express === true || raw.express === "1" || raw.express === "true",
-    overdue: raw.overdue === true || raw.overdue === "1" || raw.overdue === "true",
-  }),
+  validateSearch: (raw: Record<string, unknown>): AssignedSearch => {
+    const brands = Array.isArray(raw.brands) ? raw.brands.filter(isBrand) : [];
+    return {
+      q: typeof raw.q === "string" && raw.q ? raw.q : undefined,
+      express: asBool(raw.express),
+      overdue: asBool(raw.overdue),
+      brova: asBool(raw.brova),
+      brands: brands.length > 0 ? brands : undefined,
+      sort: raw.sort === "asc" || raw.sort === "desc" ? raw.sort : undefined,
+    };
+  },
 });
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -197,7 +220,7 @@ function GarmentBreakdown({ row }: { row: AssignedOrderRow }) {
           className="flex items-center gap-2 text-base leading-tight min-w-0"
         >
           {/* Type + count + optional garment ID */}
-          <span className="shrink-0 font-semibold text-sm text-muted-foreground tabular-nums">
+          <span className="shrink-0 font-medium text-sm text-muted-foreground tabular-nums">
             {(() => {
               const letter = grp.type === "brova" ? "B" : grp.type === "alteration" ? "A" : "F";
               return grp.count > 1 ? `${grp.count}${letter}` : letter;
@@ -383,48 +406,6 @@ function OrdersTable({ orders, navigate }: { orders: AssignedOrderRow[]; navigat
   );
 }
 
-// ── Filter Chip ───────────────────────────────────────────────
-
-function FilterChip({
-  active,
-  onClick,
-  icon: Icon,
-  iconColor,
-  children,
-  count,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon?: React.ComponentType<{ className?: string }>;
-  iconColor?: string;
-  children: React.ReactNode;
-  count?: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-sm font-medium transition-colors",
-        active
-          ? "bg-foreground text-background border-foreground"
-          : "bg-card text-foreground border-border hover:bg-muted/50",
-      )}
-    >
-      {Icon && <Icon className={cn("w-3.5 h-3.5", !active && iconColor)} />}
-      <span>{children}</span>
-      {count !== undefined && (
-        <span className={cn(
-          "tabular-nums text-xs",
-          active ? "text-background/70" : "text-muted-foreground",
-        )}>
-          {count}
-        </span>
-      )}
-    </button>
-  );
-}
-
 // ── Page ─────────────────────────────────────────────────────
 
 const PAGE_SIZE = 500;
@@ -435,101 +416,76 @@ function AssignedPage() {
   const goToOrder = (orderId: number) =>
     navigate({ to: "/assigned/$orderId", params: { orderId: String(orderId) } });
 
+  // ── Filters (URL is the source of truth; defaults applied on read) ──────
+  const sp = Route.useSearch();
+  const search = sp.q ?? "";
+  const expressOnly = sp.express ?? false;
+  const overdueOnly = sp.overdue ?? false;
+  const brovaOnly = sp.brova ?? false;
+  const selectedBrands = sp.brands ?? [];
+  const deliverySort = sp.sort ?? "none";
+
+  // Server-side filter/sort/count: build the chip array from the boolean
+  // filters and let the RPC do the narrowing + counting.
+  const chips = ([
+    expressOnly && "express",
+    overdueOnly && "overdue",
+    brovaOnly && "brova",
+  ].filter(Boolean)) as AssignedChip[];
+
   const pageQuery = useAssignedOrdersPage({
     tab: "all",
-    chips: [],
+    chips,
     page: 1,
     pageSize: PAGE_SIZE,
+    search: search || undefined,
+    sort: deliverySort === "none" ? undefined : deliverySort,
+    brands: selectedBrands.length > 0 ? selectedBrands : undefined,
   });
 
   const rows = pageQuery.data?.rows ?? [];
+  const totalCount = pageQuery.data?.totalCount ?? 0;
+  const totalUnfiltered = pageQuery.data?.totalUnfiltered ?? 0;
+  const chipCounts = pageQuery.data?.chipCounts;
   const isLoading = pageQuery.isLoading;
 
-  // ── Filters ─────────────────────────────────────────────────────────────
-  const initialExpress = Route.useSearch({ select: (s) => s.express ?? false });
-  const initialOverdue = Route.useSearch({ select: (s) => s.overdue ?? false });
-  const [search, setSearch] = useState("");
-  const [expressOnly, setExpressOnly] = useState(initialExpress);
-  const [overdueOnly, setOverdueOnly] = useState(initialOverdue);
-  const [brovaOnly, setBrovaOnly] = useState(false);
-  const [selectedBrands, setSelectedBrands] = useState<Brand[]>([]);
-  const [deliverySort, setDeliverySort] = useState<DeliverySort>("none");
+  const navFilters = Route.useNavigate();
+  // Filter tweaks shouldn't pile up in history (esp. per-keystroke search).
+  // Each setter passes through validateSearch, which drops default-valued keys,
+  // so a cleared filter leaves the URL bare.
+  const patchSearch = (patch: AssignedSearch) =>
+    navFilters({ search: (prev) => ({ ...prev, ...patch }), replace: true });
+
+  const setSearch = (q: string) => patchSearch({ q: q || undefined });
 
   const cycleDeliverySort = () =>
-    setDeliverySort((s) => (s === "none" ? "asc" : s === "asc" ? "desc" : "none"));
+    patchSearch({ sort: deliverySort === "none" ? "asc" : deliverySort === "asc" ? "desc" : undefined });
 
-  const toggleBrand = (b: Brand) =>
-    setSelectedBrands((prev) =>
-      prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b],
-    );
-
-  const clearFilters = () => {
-    setSearch("");
-    setExpressOnly(false);
-    setOverdueOnly(false);
-    setBrovaOnly(false);
-    setSelectedBrands([]);
-    setDeliverySort("none");
+  const toggleBrand = (b: Brand) => {
+    const next = selectedBrands.includes(b)
+      ? selectedBrands.filter((x) => x !== b)
+      : [...selectedBrands, b];
+    patchSearch({ brands: next.length > 0 ? next : undefined });
   };
+
+  const clearFilters = () =>
+    patchSearch({ q: undefined, express: undefined, overdue: undefined, brova: undefined, brands: undefined, sort: undefined });
 
   const hasFilters =
     !!search || expressOnly || overdueOnly || brovaOnly || selectedBrands.length > 0 || deliverySort !== "none";
 
-  // Brand-only counts for chip badges. Search/express/brova not factored in
-  // so users can see how many of each brand exist before narrowing.
-  const brandCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const r of rows) for (const b of r.brands) counts[b] = (counts[b] ?? 0) + 1;
-    return counts;
-  }, [rows]);
-
-  const expressCount = useMemo(() => rows.filter((r) => r.express).length, [rows]);
-  const brovaCount = useMemo(() => rows.filter((r) => r.has_brova).length, [rows]);
-  const overdueCount = useMemo(() => {
-    const today = getLocalDateStr();
-    return rows.filter((r) =>
-      r.delivery_date && getLocalDateStr(parseUtcTimestamp(r.delivery_date)) < today,
-    ).length;
-  }, [rows]);
-
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const today = getLocalDateStr();
-    const filtered = rows.filter((r) => {
-      if (expressOnly && !r.express) return false;
-      if (overdueOnly) {
-        if (!r.delivery_date) return false;
-        if (getLocalDateStr(parseUtcTimestamp(r.delivery_date)) >= today) return false;
-      }
-      if (brovaOnly && !r.has_brova) return false;
-      if (selectedBrands.length > 0 && !r.brands.some((b) => selectedBrands.includes(b as Brand))) return false;
-      if (q) {
-        const matches =
-          (r.customer_name ?? "").toLowerCase().includes(q) ||
-          String(r.order_id).includes(q) ||
-          (r.invoice_number != null && String(r.invoice_number).includes(q)) ||
-          (r.customer_mobile ?? "").replace(/\s+/g, "").includes(q.replace(/\s+/g, ""));
-        if (!matches) return false;
-      }
-      return true;
-    });
-
-    if (deliverySort === "none") return filtered;
-    // Rows without a delivery_date sink to the bottom either way.
-    const dir = deliverySort === "asc" ? 1 : -1;
-    return [...filtered].sort((a, b) => {
-      if (!a.delivery_date && !b.delivery_date) return 0;
-      if (!a.delivery_date) return 1;
-      if (!b.delivery_date) return -1;
-      return a.delivery_date < b.delivery_date ? -dir : a.delivery_date > b.delivery_date ? dir : 0;
-    });
-  }, [rows, search, expressOnly, overdueOnly, brovaOnly, selectedBrands, deliverySort]);
+  // Chip badge counts come from the server, computed over the full pre-narrowing
+  // set — so a badge shows how many exist before any filter is applied.
+  const expressCount = chipCounts?.express ?? 0;
+  const brovaCount = chipCounts?.brova ?? 0;
+  const overdueCount = chipCounts?.overdue ?? 0;
+  const brandCounts = chipCounts?.brands ?? {};
 
   const subtitle = isLoading
     ? "Loading…"
     : hasFilters
-      ? `${filteredRows.length} of ${rows.length} order${rows.length !== 1 ? "s" : ""}`
-      : `${rows.length} order${rows.length !== 1 ? "s" : ""} in production`;
+      ? `${totalCount} of ${totalUnfiltered} order${totalUnfiltered !== 1 ? "s" : ""}`
+      : `${totalUnfiltered} order${totalUnfiltered !== 1 ? "s" : ""} in production`;
 
   return (
     <div className="p-4 sm:p-6 pb-10">
@@ -540,29 +496,17 @@ function AssignedPage() {
       />
 
       <div className="flex flex-col md:flex-row md:items-center md:flex-wrap gap-2 md:gap-3 mb-4">
-        <div className="relative w-full md:w-80 md:shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Customer, order #, invoice, phone…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 pr-8"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Customer, order #, invoice, phone…"
+          className="w-full md:w-80 md:shrink-0"
+        />
 
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <FilterChip
             active={overdueOnly}
-            onClick={() => setOverdueOnly((v) => !v)}
+            onClick={() => patchSearch({ overdue: overdueOnly ? undefined : true })}
             icon={AlertTriangle}
             iconColor="text-[var(--status-bad)]"
             count={overdueCount}
@@ -571,7 +515,7 @@ function AssignedPage() {
           </FilterChip>
           <FilterChip
             active={expressOnly}
-            onClick={() => setExpressOnly((v) => !v)}
+            onClick={() => patchSearch({ express: expressOnly ? undefined : true })}
             icon={Zap}
             iconColor="text-[var(--status-bad)]"
             count={expressCount}
@@ -580,7 +524,7 @@ function AssignedPage() {
           </FilterChip>
           <FilterChip
             active={brovaOnly}
-            onClick={() => setBrovaOnly((v) => !v)}
+            onClick={() => patchSearch({ brova: brovaOnly ? undefined : true })}
             icon={Layers}
             iconColor="text-muted-foreground"
             count={brovaCount}
@@ -641,22 +585,31 @@ function AssignedPage() {
             </div>
           ))}
         </div>
-      ) : filteredRows.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="rounded-md border border-dashed border-border bg-card py-10 text-center">
           <p className="text-sm text-muted-foreground">
             {hasFilters ? "No orders match the current filters" : "No orders in production"}
           </p>
         </div>
-      ) : isMobile ? (
-        <div className="space-y-2">
-          {filteredRows.map((group) => (
-            <AssignedOrderCard key={group.order_id} group={group} />
-          ))}
-        </div>
       ) : (
-        <div className="rounded-md border border-border overflow-hidden bg-card py-0 gap-0">
-          <OrdersTable orders={filteredRows} navigate={goToOrder} />
-        </div>
+        <>
+          {totalCount > rows.length && (
+            <p className="mb-3 text-sm text-muted-foreground">
+              Showing first {rows.length} of {totalCount} — refine filters to narrow.
+            </p>
+          )}
+          {isMobile ? (
+            <div className="space-y-2">
+              {rows.map((group) => (
+                <AssignedOrderCard key={group.order_id} group={group} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-md border border-border overflow-hidden bg-card py-0 gap-0">
+              <OrdersTable orders={rows} navigate={goToOrder} />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

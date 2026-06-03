@@ -46,7 +46,7 @@ export const getAppointmentsByDateRange = async (
     console.error("Error fetching appointments:", error);
     return { status: "error", message: error.message, data: [] };
   }
-  return { status: "success", data: data as any };
+  return { status: "success", data: data as AppointmentWithRelations[] };
 };
 
 export const getAppointmentById = async (
@@ -62,18 +62,18 @@ export const getAppointmentById = async (
   if (error) {
     return { status: "error", message: error.message };
   }
-  return { status: "success", data: data as any };
+  return { status: "success", data: data as AppointmentWithRelations };
 };
 
 export const createAppointment = async (
   appointment: Omit<NewAppointment, "id" | "created_at" | "updated_at" | "brand">,
 ): Promise<ApiResponse<Appointment>> => {
-  const payload: any = { ...appointment, brand: getBrand() };
+  const payload: NewAppointment = { ...appointment, brand: getBrand() } as NewAppointment;
   const idempotencyKey: string =
     (payload.idempotency_key as string | undefined) ?? crypto.randomUUID();
   payload.idempotency_key = idempotencyKey;
 
-  let data: any = null;
+  let data: Appointment | null = null;
   for (let attempt = 1; ; attempt++) {
     const res = await db
       .from(TABLE_NAME)
@@ -107,7 +107,7 @@ export const createAppointment = async (
     return { status: "error", message: res.error.message };
   }
 
-  return { status: "success", data: data as any };
+  return { status: "success", data: data as Appointment };
 };
 
 export const updateAppointment = async (
@@ -129,7 +129,7 @@ export const updateAppointment = async (
     console.error("Error updating appointment:", error);
     return { status: "error", message: error.message };
   }
-  return { status: "success", data: data as any };
+  return { status: "success", data: data as Appointment };
 };
 
 export const deleteAppointment = async (

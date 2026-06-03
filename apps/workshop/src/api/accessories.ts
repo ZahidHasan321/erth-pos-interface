@@ -30,7 +30,8 @@ export async function createAccessory(
 
 export async function updateAccessory(
   id: number,
-  accessory: Partial<Accessory>,
+  // Stock columns are owned by the stamping RPCs / stock_movements ledger — never written here.
+  accessory: Partial<Omit<Accessory, "shop_stock" | "workshop_stock">>,
 ): Promise<Accessory> {
   const { data, error } = await withWriteRetry(
     () => db

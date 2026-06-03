@@ -6,13 +6,9 @@ import {
     completeSalesOrder,
     createCompleteSalesOrder
 } from "@/api/orders";
-import { updateShelf } from "@/api/shelf";
-import { updateFabric } from "@/api/fabrics";
 import { showFatouraNotification } from "@/lib/notifications";
 import { type OrderSchema } from "@/components/forms/order-summary-and-payment/order-form.schema";
 import { mapOrderToFormValues } from "@/components/forms/order-summary-and-payment/order-form.mapper";
-import { type ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
-import { type FabricSelectionSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
 import { useRef } from "react";
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -46,7 +42,7 @@ type UpdateOrderPayload = {
 
 type UseOrderMutationsOptions = {
     onOrderCreated?: (orderId: number | undefined, order: OrderSchema) => void;
-    onOrderUpdated?: (action: string | null | undefined, data?: any) => void;
+    onOrderUpdated?: (action: string | null | undefined, data?: unknown) => void;
     onOrderError?: () => void;
     orderType?: "WORK" | "SALES";
 };
@@ -54,9 +50,10 @@ type UseOrderMutationsOptions = {
 /**
  * Maps OrderSchema (form) to Order (API/DB)
  */
-function mapSchemaToOrder(schema: Partial<OrderSchema> & Record<string, any>): Partial<Order> {
+function mapSchemaToOrder(schema: Partial<OrderSchema> & Record<string, unknown>): Partial<Order> {
     const order: Partial<Order> = {};
-    const cleanValue = (val: any) => (val === "" || val === undefined ? null : val);
+    const cleanValue = (val: unknown) => (val === "" || val === undefined ? null : val);
+    const toDate = (val: unknown) => (val ? new Date(val as string) : null);
 
     if (schema.checkout_status) order.checkout_status = schema.checkout_status;
     if (schema.order_date && schema.order_date !== "") order.order_date = new Date(schema.order_date);
@@ -90,16 +87,16 @@ function mapSchemaToOrder(schema: Partial<OrderSchema> & Record<string, any>): P
     if (schema.num_of_fabrics !== undefined) order.num_of_fabrics = schema.num_of_fabrics;
 
     // Add Linking Fields
-    if (schema.linked_order_id !== undefined) order.linked_order_id = schema.linked_order_id;
-    if (schema.linked_date !== undefined) order.linked_date = schema.linked_date ? new Date(schema.linked_date) : null;
-    if (schema.unlinked_date !== undefined) order.unlinked_date = schema.unlinked_date ? new Date(schema.unlinked_date) : null;
+    if (schema.linked_order_id !== undefined) order.linked_order_id = schema.linked_order_id as number | null;
+    if (schema.linked_date !== undefined) order.linked_date = toDate(schema.linked_date);
+    if (schema.unlinked_date !== undefined) order.unlinked_date = toDate(schema.unlinked_date);
 
     // Add Reminder Fields
-    if (schema.r1_date !== undefined) order.r1_date = schema.r1_date ? new Date(schema.r1_date) : null;
-    if (schema.r2_date !== undefined) order.r2_date = schema.r2_date ? new Date(schema.r2_date) : null;
-    if (schema.r3_date !== undefined) order.r3_date = schema.r3_date ? new Date(schema.r3_date) : null;
-    if (schema.call_reminder_date !== undefined) order.call_reminder_date = schema.call_reminder_date ? new Date(schema.call_reminder_date) : null;
-    if (schema.escalation_date !== undefined) order.escalation_date = schema.escalation_date ? new Date(schema.escalation_date) : null;
+    if (schema.r1_date !== undefined) order.r1_date = toDate(schema.r1_date);
+    if (schema.r2_date !== undefined) order.r2_date = toDate(schema.r2_date);
+    if (schema.r3_date !== undefined) order.r3_date = toDate(schema.r3_date);
+    if (schema.call_reminder_date !== undefined) order.call_reminder_date = toDate(schema.call_reminder_date);
+    if (schema.escalation_date !== undefined) order.escalation_date = toDate(schema.escalation_date);
 
     // Add Reminder Notes
     if (schema.r1_notes !== undefined) order.r1_notes = cleanValue(schema.r1_notes) as string;
@@ -190,85 +187,6 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         onError: (err) => toast.error(`Could not update order: ${err instanceof Error ? err.message : String(err)}`),
     });
 
-    const updateShelfMutation = useMutation({
-        mutationFn: (shelfData: ShelfFormValues) => {
-            const promises = shelfData.products.map((item) => {
-                if (item.id && item.stock !== undefined && item.quantity) {
-                    return updateShelf(item.id.toString(), { shop_stock: item.stock - item.quantity });
-                }
-                return Promise.resolve(null);
-            });
-            return Promise.all(promises);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["products"] });
-        },
-        onError: (err) => {
-            toast.error(`Could not update the shelf stock: ${err instanceof Error ? err.message : String(err)}`);
-        },
-    });
-
-    const updateFabricStockMutation = useMutation({
-        mutationFn: async ({
-            fabricSelections,
-            fabricsData,
-        }: {
-            fabricSelections: FabricSelectionSchema[];
-            fabricsData: any[];
-        }) => {
-            const internalFabrics = fabricSelections.filter(
-                (fabric) => fabric.fabric_source === "IN" && fabric.fabric_id
-            );
-
-            if (internalFabrics.length === 0) {
-                return Promise.resolve([]);
-            }
-
-            const promises = internalFabrics.map((fabricSelection) => {
-                const currentFabric = fabricsData.find((f) => f.id.toString() === fabricSelection.fabric_id?.toString());
-                const currentId = fabricSelection.fabric_id;
-
-                if (!currentFabric || !currentId) {
-                    console.error(`Fabric not found: ${fabricSelection.fabric_id}`);
-                    return Promise.resolve(null);
-                }
-
-                const currentStock = parseFloat(currentFabric.shop_stock?.toString() || "0");
-                const usedLength = fabricSelection.fabric_length ?? 0;
-
-                if (isNaN(usedLength) || usedLength <= 0) {
-                    console.error(`Invalid fabric length: ${fabricSelection.fabric_length}`);
-                    return Promise.resolve(null);
-                }
-
-                const newStock = currentStock - usedLength;
-
-                if (newStock < 0) {
-                    console.error(
-                        `Insufficient stock for fabric ${fabricSelection.fabric_id}. Current: ${currentStock}, Requested: ${usedLength}`
-                    );
-                    return Promise.resolve(null);
-                }
-
-                return updateFabric(Number(currentId), {
-                    shop_stock: newStock,
-                } as any);
-            });
-
-            return Promise.all(promises);
-        },
-        onSuccess: (results) => {
-            const successCount = results.filter((r) => r !== null).length;
-            if (successCount > 0) {
-                queryClient.invalidateQueries({ queryKey: ["fabrics"] });
-            }
-        },
-        onError: (error) => {
-            console.error("Failed to update fabric stock:", error);
-            toast.error(`Could not update fabric stock: ${error instanceof Error ? error.message : String(error)}`);
-        },
-    });
-
     const deleteOrderMutation = useMutation({
         mutationFn: (orderId: number) => {
             return deleteOrder(orderId);
@@ -318,7 +236,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
             /** Stable per-submit UUID — see completeWorkOrder in api/orders.ts. */
             idempotencyKey: string;
         }) => {
-            return completeWorkOrder(orderId, checkoutDetails as any, shelfItems, fabricItems, idempotencyKey);
+            return completeWorkOrder(orderId, checkoutDetails as unknown as Parameters<typeof completeWorkOrder>[1], shelfItems, fabricItems, idempotencyKey);
         },
         onSuccess: (response) => {
             if (response.status === "error") {
@@ -365,7 +283,7 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 /** Stable per-submit UUID — see completeSalesOrder in api/orders.ts. */
                 idempotencyKey: string;
             }) => {
-                return completeSalesOrder(orderId, checkoutDetails as any, shelfItems, idempotencyKey);
+                return completeSalesOrder(orderId, checkoutDetails, shelfItems, idempotencyKey);
             },
             onSuccess: (response) => {
                 if (response.status === "error") {
@@ -441,10 +359,6 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
         createOrder: createOrderMutation,
 
         updateOrder: updateOrderMutation,
-
-        updateShelf: updateShelfMutation,
-
-        updateFabricStock: updateFabricStockMutation,
 
         deleteOrder: deleteOrderMutation,
 

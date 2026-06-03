@@ -118,12 +118,28 @@ DECLARE
   v_inv INT;
   v_paid DECIMAL;
   v_session_id INT;
+  v_current NUMERIC;
   v_result JSONB;
 BEGIN
   -- Idempotency: a lost-response replay must not double-decrement stock or
   -- re-bump the invoice. Returns the recorded original result on replay.
+  -- (The on-hand guards below run only on first execution; a replay short-
+  -- circuits here and never re-evaluates them.)
   IF NOT idem_claim(p_idempotency_key, 'complete_work_order') THEN
     RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  -- Already-confirmed guard: idempotency only dedups a lost-response replay of
+  -- the SAME submission. A fresh submit (new key) of an already-confirmed order
+  -- would re-run the decrement loops and double-deduct stock. Return the current
+  -- order/work-order rows in the normal RETURN shape so the caller sees an
+  -- idempotent success, without decrementing again.
+  SELECT * INTO v_order_row FROM orders WHERE id = p_order_id;
+  IF FOUND AND v_order_row.checkout_status = 'confirmed' THEN
+    SELECT * INTO v_work_order_row FROM work_orders WHERE order_id = p_order_id;
+    v_result := to_jsonb(v_order_row) || COALESCE(to_jsonb(v_work_order_row), '{}'::jsonb);
+    PERFORM idem_store(p_idempotency_key, v_result);
+    RETURN v_result;
   END IF;
 
   -- 1. Get or Generate Invoice Number
@@ -213,6 +229,17 @@ BEGIN
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
   LOOP
+    -- Lock + guard before the decrement so the confirm can't drive shop_stock
+    -- negative (mirrors consume_for_order).
+    SELECT shop_stock INTO v_current FROM shelf WHERE id = (v_item->>'id')::int FOR UPDATE;
+    IF v_current IS NULL THEN
+      RAISE EXCEPTION 'complete_work_order: shelf item #% not found', v_item->>'id';
+    END IF;
+    IF v_current < (v_item->>'quantity')::int THEN
+      RAISE EXCEPTION 'complete_work_order: cannot consume % of shelf item #% — only % in shop stock',
+        (v_item->>'quantity')::int, v_item->>'id', v_current;
+    END IF;
+
     UPDATE shelf
     SET stock = stock - (v_item->>'quantity')::int,
         shop_stock = shop_stock - (v_item->>'quantity')::int
@@ -228,9 +255,20 @@ BEGIN
   END LOOP;
 
   -- 5. Deduct Fabric Stock
+  -- Customer-brought fabric never reaches p_fabric_items (the app filters
+  -- fabric_source='IN' before calling), so it's excluded from decrement and guard.
   PERFORM set_config('app.movement_reason', 'work order checkout (fabric)', true);
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_fabric_items)
   LOOP
+    SELECT shop_stock INTO v_current FROM fabrics WHERE id = (v_item->>'id')::int FOR UPDATE;
+    IF v_current IS NULL THEN
+      RAISE EXCEPTION 'complete_work_order: fabric #% not found', v_item->>'id';
+    END IF;
+    IF v_current < (v_item->>'length')::decimal THEN
+      RAISE EXCEPTION 'complete_work_order: cannot consume % of fabric #% — only % in shop stock',
+        (v_item->>'length')::decimal, v_item->>'id', v_current;
+    END IF;
+
     UPDATE fabrics
     SET real_stock = real_stock - (v_item->>'length')::decimal,
         shop_stock = shop_stock - (v_item->>'length')::decimal
@@ -287,11 +325,24 @@ DECLARE
   v_order_row orders%ROWTYPE;
   v_paid DECIMAL;
   v_session_id INT;
+  v_current NUMERIC;
   v_result JSONB;
 BEGIN
   -- Idempotency: a lost-response replay must not double-decrement shelf stock.
+  -- (The on-hand guard below runs only on first execution; a replay short-
+  -- circuits here.)
   IF NOT idem_claim(p_idempotency_key, 'complete_sales_order') THEN
     RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  -- Already-confirmed guard (see complete_work_order): a fresh submit of an
+  -- already-confirmed order would re-run the shelf decrement loop and
+  -- double-deduct. Return the current order row in the normal shape instead.
+  SELECT * INTO v_order_row FROM orders WHERE id = p_order_id;
+  IF FOUND AND v_order_row.checkout_status = 'confirmed' THEN
+    v_result := to_jsonb(v_order_row);
+    PERFORM idem_store(p_idempotency_key, v_result);
+    RETURN v_result;
   END IF;
 
   v_paid := (p_checkout_details->>'paid')::decimal;
@@ -339,6 +390,17 @@ BEGIN
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
   LOOP
+    -- Lock + guard before the decrement so the confirm can't drive shop_stock
+    -- negative (mirrors consume_for_order).
+    SELECT shop_stock INTO v_current FROM shelf WHERE id = (v_item->>'id')::int FOR UPDATE;
+    IF v_current IS NULL THEN
+      RAISE EXCEPTION 'complete_sales_order: shelf item #% not found', v_item->>'id';
+    END IF;
+    IF v_current < (v_item->>'quantity')::int THEN
+      RAISE EXCEPTION 'complete_sales_order: cannot consume % of shelf item #% — only % in shop stock',
+        (v_item->>'quantity')::int, v_item->>'id', v_current;
+    END IF;
+
     UPDATE shelf
     SET stock = stock - (v_item->>'quantity')::int,
         shop_stock = shop_stock - (v_item->>'quantity')::int
@@ -402,10 +464,13 @@ DECLARE
   v_paid DECIMAL;
   v_session_id INT;
   v_brand brand;
+  v_current NUMERIC;
   v_result JSONB;
 BEGIN
   -- Idempotency: a lost-response replay must not create a second order +
   -- payment and double-decrement shelf stock. Returns the original order row.
+  -- (The on-hand guard below runs only on first execution; a replay short-
+  -- circuits here.)
   IF NOT idem_claim(p_idempotency_key, 'create_complete_sales_order') THEN
     RETURN idem_replay(p_idempotency_key);
   END IF;
@@ -469,6 +534,17 @@ BEGIN
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_shelf_items)
   LOOP
+    -- Lock + guard before the decrement so the confirm can't drive shop_stock
+    -- negative (mirrors consume_for_order).
+    SELECT shop_stock INTO v_current FROM shelf WHERE id = (v_item->>'id')::int FOR UPDATE;
+    IF v_current IS NULL THEN
+      RAISE EXCEPTION 'create_complete_sales_order: shelf item #% not found', v_item->>'id';
+    END IF;
+    IF v_current < (v_item->>'quantity')::int THEN
+      RAISE EXCEPTION 'create_complete_sales_order: cannot consume % of shelf item #% — only % in shop stock',
+        (v_item->>'quantity')::int, v_item->>'id', v_current;
+    END IF;
+
     UPDATE shelf
     SET stock = stock - (v_item->>'quantity')::int,
         shop_stock = shop_stock - (v_item->>'quantity')::int
@@ -832,6 +908,7 @@ DECLARE
   v_refund_item JSONB;
   v_shelf_item_id INT;
   v_refund_qty INT;
+  v_refund_qty_capped INT;
   v_session_id INT;
   v_overpayment DECIMAL;
   v_has_items BOOLEAN;
@@ -992,7 +1069,7 @@ BEGIN
         -- as cancelled. "Applicable" = priced (snapshot > 0) or flag set
         -- (express/soaking). Discarded counts as terminal for order_phase + is
         -- filtered out of workshop pipelines.
-        SELECT id, fabric_id, fabric_length INTO v_garment_for_discard
+        SELECT id, fabric_id, fabric_length, fabric_source, garment_type INTO v_garment_for_discard
         FROM garments
         WHERE id = (v_refund_item->>'garment_id')::uuid
           AND order_id = p_order_id
@@ -1017,6 +1094,7 @@ BEGIN
 
           IF COALESCE((v_refund_item->>'fabric_restock')::boolean, false)
              AND v_garment_for_discard.fabric_id IS NOT NULL
+             AND v_garment_for_discard.fabric_source = 'IN'
              AND COALESCE(v_garment_for_discard.fabric_length, 0) > 0 THEN
             PERFORM set_config('app.movement_type', 'return', true);
             PERFORM set_config('app.movement_ref_type', 'order', true);
@@ -1030,10 +1108,44 @@ BEGIN
                 shop_stock = COALESCE(shop_stock, 0) + v_garment_for_discard.fabric_length
             WHERE id = v_garment_for_discard.fabric_id;
           END IF;
+
+          -- Orphaned-finals release (CLAUDE.md §2.6 "Orphaned-finals rule"). If
+          -- the just-discarded garment is a BROVA and the order now has NO
+          -- non-discarded brova left, the parked finals can never be released by
+          -- a brova acceptance — free them (waiting_for_acceptance → waiting_cut)
+          -- so they are not permanently orphaned. Distinct from the accepted
+          -- "all brovas rejected but one still exists to act on → park
+          -- indefinitely" case (there a brova remains). Never auto-creates a
+          -- replacement — that is the workshop's manual Reject-Redo action only.
+          IF v_garment_for_discard.garment_type = 'brova'
+             AND NOT EXISTS (
+               SELECT 1 FROM garments
+               WHERE order_id = p_order_id
+                 AND garment_type = 'brova'
+                 AND piece_stage <> 'discarded'
+             ) THEN
+            UPDATE garments
+            SET piece_stage = 'waiting_cut'
+            WHERE order_id = p_order_id
+              AND garment_type = 'final'
+              AND piece_stage = 'waiting_for_acceptance';
+          END IF;
         END IF;
       ELSIF v_refund_item ? 'shelf_item_id' THEN
         v_shelf_item_id := (v_refund_item->>'shelf_item_id')::int;
         v_refund_qty := COALESCE((v_refund_item->>'quantity')::int, 0);
+
+        -- Cap the refund qty to what is actually unrefunded (ordered − already
+        -- refunded). The flag below caps the cumulative total at quantity; the
+        -- restock must use the SAME capped delta or it would re-stock units that
+        -- never left inventory when a caller passes more than the remainder.
+        SELECT LEAST(v_refund_qty, GREATEST(COALESCE(quantity, 0) - COALESCE(refunded_qty, 0), 0))
+        INTO v_refund_qty_capped
+        FROM order_shelf_items
+        WHERE id = v_shelf_item_id
+          AND order_id = p_order_id;
+        v_refund_qty_capped := COALESCE(v_refund_qty_capped, 0);
+
         UPDATE order_shelf_items
         SET refunded_qty = LEAST(COALESCE(refunded_qty, 0) + v_refund_qty, COALESCE(quantity, 0))
         WHERE id = v_shelf_item_id
@@ -1041,7 +1153,7 @@ BEGIN
 
         -- Restore shelf stock only when restock=true (default true for backward compat).
         -- Set restock=false for damaged/consumed returns that shouldn't re-enter inventory.
-        IF v_refund_qty > 0 AND COALESCE((v_refund_item->>'restock')::boolean, true) THEN
+        IF v_refund_qty_capped > 0 AND COALESCE((v_refund_item->>'restock')::boolean, true) THEN
           -- Stamp ledger context. Required: prior loop iterations (e.g. fabric
           -- restock) may have set 'return'/'garment cancelled' — must overwrite
           -- so the shelf row is logged as its own return, not piggybacked.
@@ -1055,8 +1167,8 @@ BEGIN
           PERFORM set_config('app.movement_notes', COALESCE(p_refund_reason, ''), true);
 
           UPDATE shelf
-          SET stock = stock + v_refund_qty,
-              shop_stock = shop_stock + v_refund_qty
+          SET stock = stock + v_refund_qty_capped,
+              shop_stock = shop_stock + v_refund_qty_capped
           WHERE id = (SELECT shelf_id FROM order_shelf_items WHERE id = v_shelf_item_id);
         END IF;
       END IF;
@@ -1359,14 +1471,65 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- 11f-types. GROUP A enum types + columns — created HERE (ahead of
+-- create_replacement_garment below, and ahead of the report RPCs later) because
+-- this single-batch apply validates a function's parameter types at CREATE time
+-- and SQL-language report functions (get_waste_by_root_cause, …) reference these
+-- columns at CREATE time too. CREATE TYPE / ADD COLUMN are idempotent.
+-- (The canonical root_cause enum + responsible-party helper live in the §2.9
+-- block later; re-stating CREATE TYPE root_cause here is a harmless no-op.)
+DO $$ BEGIN
+  CREATE TYPE root_cause AS ENUM (
+    'production_error', 'qc_escape', 'showroom_error',
+    'customer_change', 'material_defect', 'other'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE redo_priority AS ENUM ('immediate', 'next_slot', 'parked');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE redo_parked_reason AS ENUM (
+    'waiting_material', 'customer_decision', 'approval', 'clarification'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- root_cause set on the DISCARDED ORIGINAL (the attributed scrap). The redo
+-- priority/park fields live on the REPLACEMENT row.
+ALTER TABLE garments ADD COLUMN IF NOT EXISTS root_cause root_cause;
+ALTER TABLE garments ADD COLUMN IF NOT EXISTS redo_priority redo_priority;
+ALTER TABLE garments ADD COLUMN IF NOT EXISTS redo_parked_reason redo_parked_reason;
+ALTER TABLE garments ADD COLUMN IF NOT EXISTS redo_customer_must_provide_fabric BOOLEAN NOT NULL DEFAULT false;
+
+-- Net-zero redo-scrap waste annotation: qty_delta=0 keeps the ledger conserving
+-- while annotated_qty carries the scrapped length; root_cause attributes it.
+-- Reports read SUM(ABS(qty_delta) + COALESCE(annotated_qty,0)) so the two never
+-- double-count (real wastes have annotated_qty NULL; annotations have qty_delta 0).
+ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS annotated_qty NUMERIC(10,2);
+ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS root_cause root_cause;
+
 -- 11f. RPC: Create a replacement garment after a Reject-Redo.
 -- Promoted from apps/workshop/src/api/garments.ts createGarmentForOrder (:1817)
 -- replacement path (+ nextGarmentIdForOrder :1801). Clones the original's
 -- spec columns server-side (one read of truth), starts fresh at
 -- trip 1 / waiting_cut / workshop, and links original.replaced_by_garment_id
 -- (double-replacement guard preserved).
+-- GROUP A (CLAUDE.md §2.5/§4): the workshop creates the redo replacement and,
+-- in the SAME call, (a) attributes the scrap on the discarded original via
+-- root_cause, (b) auto-consumes fresh fabric for the replacement cut, and
+-- (c) records the scrapped fabric as a net-zero material-waste annotation. If
+-- the replacement material is short (or it's customer-brought OUT cloth), the
+-- replacement is PARKED instead of consuming — the scrap annotation is still
+-- written eagerly (the scrap is a fact at discard; only the cut waits).
+-- New signature → drop the old single-arg overload so the function resolves.
+DROP FUNCTION IF EXISTS create_replacement_garment(uuid);
 CREATE OR REPLACE FUNCTION create_replacement_garment(
-  p_replaces_garment_id UUID
+  p_replaces_garment_id UUID,
+  p_root_cause root_cause DEFAULT NULL,
+  p_redo_priority redo_priority DEFAULT 'next_slot',
+  p_user_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -1374,14 +1537,60 @@ DECLARE
   v_next INT;
   v_new_garment_id TEXT;
   v_new_id UUID;
+  v_required NUMERIC;
+  v_must_provide BOOLEAN;
+  v_parked BOOLEAN := false;
+  v_shop_stock NUMERIC;
+  v_unit_cost NUMERIC;
+  v_final_priority redo_priority;
+  v_parked_reason redo_parked_reason;
+  v_parked_text TEXT;
+  v_result JSONB;
 BEGIN
-  SELECT * INTO v_orig FROM garments WHERE id = p_replaces_garment_id;
+  -- Idempotency: a lost-response replay must not create a second replacement,
+  -- double-consume fabric, or write a second scrap annotation.
+  IF NOT idem_claim(p_idempotency_key, 'create_replacement_garment') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  -- Lock the original so the double-replacement guard and the
+  -- replaced_by_garment_id link are race-free.
+  SELECT * INTO v_orig FROM garments WHERE id = p_replaces_garment_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'create_replacement_garment: original garment % not found', p_replaces_garment_id;
   END IF;
   IF v_orig.replaced_by_garment_id IS NOT NULL THEN
-    RAISE EXCEPTION 'create_replacement_garment: original garment already has a replacement';
+    RAISE EXCEPTION 'create_replacement_garment: original garment % already has a replacement', p_replaces_garment_id;
   END IF;
+
+  -- Attribute the scrap on the discarded original (the responsible party is
+  -- derived from root_cause, never stored separately — see §2.9).
+  UPDATE garments SET root_cause = p_root_cause WHERE id = p_replaces_garment_id;
+
+  v_required := COALESCE(v_orig.fabric_length, 0);
+  v_must_provide := (v_orig.fabric_source = 'OUT');
+
+  -- Material availability check for company (IN) fabric. Customer (OUT) cloth is
+  -- never decremented; that path parks on customer_decision below.
+  IF NOT v_must_provide AND v_required > 0 AND v_orig.fabric_id IS NOT NULL THEN
+    SELECT shop_stock, price_per_meter INTO v_shop_stock, v_unit_cost
+      FROM fabrics WHERE id = v_orig.fabric_id FOR UPDATE;
+    IF v_shop_stock IS NULL THEN
+      RAISE EXCEPTION 'create_replacement_garment: fabric % not found for original %', v_orig.fabric_id, p_replaces_garment_id;
+    END IF;
+    -- Short stock → PARK (do not raise, do not decrement). The scrap annotation
+    -- still gets written below; the replacement waits on material.
+    IF v_shop_stock < v_required THEN
+      v_parked := true;
+    END IF;
+  END IF;
+
+  -- Resolve the replacement's redo queue fields.
+  v_final_priority := CASE WHEN v_parked OR v_must_provide THEN 'parked'::redo_priority ELSE p_redo_priority END;
+  v_parked_reason := CASE
+    WHEN v_must_provide THEN 'customer_decision'::redo_parked_reason
+    WHEN v_parked       THEN 'waiting_material'::redo_parked_reason
+    ELSE NULL END;
 
   -- nextGarmentIdForOrder: max numeric suffix of "<order_id>-<n>" siblings + 1.
   SELECT COALESCE(MAX((split_part(garment_id, '-', 2))::int), 0) + 1
@@ -1400,7 +1609,8 @@ BEGIN
     wallet_pocket, pen_holder, mobile_pocket, small_tabaggi,
     jabzour_1, jabzour_2, jabzour_thickness, lines, soaking, express,
     delivery_date, notes, quantity,
-    piece_stage, location, in_production, trip_number
+    piece_stage, location, in_production, trip_number,
+    redo_priority, redo_parked_reason, redo_customer_must_provide_fabric
   )
   SELECT
     order_id, v_new_garment_id, measurement_id, garment_type, fabric_id,
@@ -1413,7 +1623,8 @@ BEGIN
     jabzour_1, jabzour_2, jabzour_thickness,
     COALESCE(lines, 1), COALESCE(soaking, false), COALESCE(express, false),
     delivery_date, notes, COALESCE(quantity, 1),
-    'waiting_cut', 'workshop', false, 1
+    'waiting_cut', 'workshop', (NOT v_parked AND NOT v_must_provide), 1,
+    v_final_priority, v_parked_reason, v_must_provide
   FROM garments WHERE id = p_replaces_garment_id
   RETURNING id INTO v_new_id;
 
@@ -1421,7 +1632,150 @@ BEGIN
      SET replaced_by_garment_id = v_new_id
    WHERE id = p_replaces_garment_id AND replaced_by_garment_id IS NULL;
 
-  RETURN jsonb_build_object('id', v_new_id, 'garment_id', v_new_garment_id);
+  -- Auto-consume fresh fabric for the replacement cut (real -L decrement),
+  -- mirroring complete_work_order's stamp+UPDATE so fabric_stock_audit logs a
+  -- real `consumption` row. Only when not parked and not customer-brought.
+  IF NOT v_parked AND NOT v_must_provide AND v_required > 0 AND v_orig.fabric_id IS NOT NULL THEN
+    PERFORM set_config('app.movement_type', 'consumption', true);
+    PERFORM set_config('app.movement_ref_type', 'garment', true);
+    PERFORM set_config('app.movement_ref_id', '', true);
+    PERFORM set_config('app.movement_user_id', COALESCE(p_user_id::text, ''), true);
+    PERFORM set_config('app.movement_supplier_id', '', true);
+    PERFORM set_config('app.movement_unit_cost', COALESCE(v_unit_cost::text, ''), true);
+    PERFORM set_config('app.movement_reason', 'redo replacement cut', true);
+    PERFORM set_config('app.movement_notes', 'redo replacement cut: ' || v_new_garment_id, true);
+
+    UPDATE fabrics
+       SET real_stock = real_stock - v_required,
+           shop_stock = shop_stock - v_required
+     WHERE id = v_orig.fabric_id;
+  END IF;
+
+  -- Net-zero material-waste annotation for the scrapped original L. Written
+  -- EVEN when parked (the discard is a fact now; only the replacement cut waits).
+  -- Direct INSERT — qty_delta=0 would be dropped by _log_stock_movement, and a
+  -- column change here would mis-fire the consumption stamp. Mirrors the
+  -- lost-in-transit precedent. The unit_cost is the original's fabric price; for
+  -- OUT cloth there is no annotation (it never entered our stock).
+  IF v_required > 0 AND NOT v_must_provide AND v_orig.fabric_id IS NOT NULL THEN
+    IF v_unit_cost IS NULL THEN
+      SELECT price_per_meter INTO v_unit_cost FROM fabrics WHERE id = v_orig.fabric_id;
+    END IF;
+    INSERT INTO stock_movements (
+      item_type, item_id, location, movement_type, qty_delta, annotated_qty,
+      unit_cost, root_cause, ref_type, ref_id, reason, notes, user_id
+    )
+    VALUES (
+      'fabric', v_orig.fabric_id, 'shop', 'waste', 0, v_required,
+      v_unit_cost, p_root_cause, 'garment', NULL, 'redo',
+      'redo scrap: ' || v_orig.garment_id || ' L=' || v_required, p_user_id
+    );
+  END IF;
+
+  v_parked_text := CASE
+    WHEN v_must_provide THEN 'customer_decision'
+    WHEN v_parked       THEN 'waiting_material'
+    ELSE NULL END;
+
+  v_result := jsonb_build_object(
+    'id', v_new_id,
+    'garment_id', v_new_garment_id,
+    'parked', (v_parked OR v_must_provide),
+    'parked_reason', v_parked_text
+  );
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- GROUP A (CLAUDE.md §6 resume-parked action): a manager resumes a parked redo
+-- replacement once material is available (or the OUT-fabric customer decision is
+-- made). For company fabric, this is where the real -L consumption finally
+-- lands; the scrap annotation was already written at creation, so it is NOT
+-- re-written here.
+DROP FUNCTION IF EXISTS resume_parked_redo(uuid, redo_priority, uuid, uuid);
+CREATE OR REPLACE FUNCTION resume_parked_redo(
+  p_garment_id UUID,
+  p_priority redo_priority DEFAULT 'next_slot',
+  p_user_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_g garments%ROWTYPE;
+  v_required NUMERIC;
+  v_shop_stock NUMERIC;
+  v_unit_cost NUMERIC;
+  v_result JSONB;
+BEGIN
+  IF NOT idem_claim(p_idempotency_key, 'resume_parked_redo') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  SELECT * INTO v_g FROM garments WHERE id = p_garment_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'resume_parked_redo: garment % not found', p_garment_id;
+  END IF;
+
+  -- Already active (not parked) → nothing to resume. Idempotent no-op.
+  IF v_g.redo_priority IS DISTINCT FROM 'parked'::redo_priority THEN
+    v_result := jsonb_build_object('resumed', false, 'already_active', true, 'consumed', 0);
+    PERFORM idem_store(p_idempotency_key, v_result);
+    RETURN v_result;
+  END IF;
+
+  -- Customer-brought (OUT) cloth: nothing to consume; just clear the park so the
+  -- replacement becomes schedulable.
+  IF v_g.redo_customer_must_provide_fabric THEN
+    UPDATE garments
+       SET redo_priority = p_priority,
+           redo_parked_reason = NULL,
+           in_production = true
+     WHERE id = p_garment_id;
+    v_result := jsonb_build_object('resumed', true, 'consumed', 0);
+    PERFORM idem_store(p_idempotency_key, v_result);
+    RETURN v_result;
+  END IF;
+
+  v_required := COALESCE(v_g.fabric_length, 0);
+
+  IF v_required > 0 AND v_g.fabric_id IS NOT NULL THEN
+    SELECT shop_stock, price_per_meter INTO v_shop_stock, v_unit_cost
+      FROM fabrics WHERE id = v_g.fabric_id FOR UPDATE;
+    IF v_shop_stock IS NULL THEN
+      RAISE EXCEPTION 'resume_parked_redo: fabric % not found for garment %', v_g.fabric_id, p_garment_id;
+    END IF;
+    -- Still short → stays parked; the manager retries after a restock.
+    IF v_shop_stock < v_required THEN
+      RAISE EXCEPTION 'resume_parked_redo: cannot resume — only % of fabric % on hand, need %',
+        v_shop_stock, v_g.fabric_id, v_required;
+    END IF;
+
+    -- Real -L consumption (the replacement cut), no second waste annotation.
+    PERFORM set_config('app.movement_type', 'consumption', true);
+    PERFORM set_config('app.movement_ref_type', 'garment', true);
+    PERFORM set_config('app.movement_ref_id', '', true);
+    PERFORM set_config('app.movement_user_id', COALESCE(p_user_id::text, ''), true);
+    PERFORM set_config('app.movement_supplier_id', '', true);
+    PERFORM set_config('app.movement_unit_cost', COALESCE(v_unit_cost::text, ''), true);
+    PERFORM set_config('app.movement_reason', 'redo replacement cut', true);
+    PERFORM set_config('app.movement_notes', 'redo replacement cut (resumed): ' || v_g.garment_id, true);
+
+    UPDATE fabrics
+       SET real_stock = real_stock - v_required,
+           shop_stock = shop_stock - v_required
+     WHERE id = v_g.fabric_id;
+  END IF;
+
+  UPDATE garments
+     SET redo_priority = p_priority,
+         redo_parked_reason = NULL,
+         in_production = true
+   WHERE id = p_garment_id;
+
+  v_result := jsonb_build_object('resumed', true, 'consumed', v_required);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -2454,9 +2808,15 @@ DROP POLICY IF EXISTS "transfer_requests_update" ON transfer_requests;
 CREATE POLICY "transfer_requests_update" ON transfer_requests
     FOR UPDATE USING (is_active_user());
 
+-- Only a still-'requested' transfer may be deleted (the cancel/withdraw path).
+-- A 'dispatched'/'partially_received' transfer has already debited the source
+-- and not yet credited the dest; deleting it from any client would lose the
+-- in-transit units with no ledger trail. There is no RPC to cancel a dispatched
+-- transfer and return stock to source — a dispatched transfer is only resolved
+-- via receive_transfer.
 DROP POLICY IF EXISTS "transfer_requests_delete" ON transfer_requests;
 CREATE POLICY "transfer_requests_delete" ON transfer_requests
-    FOR DELETE USING (is_active_user());
+    FOR DELETE USING (is_active_user() AND status = 'requested');
 
 ALTER TABLE transfer_request_items ENABLE ROW LEVEL SECURITY;
 
@@ -2468,13 +2828,16 @@ DROP POLICY IF EXISTS "transfer_request_items_insert" ON transfer_request_items;
 CREATE POLICY "transfer_request_items_insert" ON transfer_request_items
     FOR INSERT WITH CHECK (is_active_user());
 
+-- No broad UPDATE/DELETE policy: dispatched_qty/received_qty (the only record of
+-- in-transit quantity) are written exclusively by the dispatch/receive/direct_send
+-- SECURITY DEFINER RPCs, which bypass RLS. The app never updates or deletes these
+-- rows directly (item rows clean up via ON DELETE CASCADE when a 'requested'
+-- transfer is deleted). Leaving them open would let any client rewrite in-transit
+-- quantities and lose stock with no ledger trail. SELECT (realtime) + INSERT
+-- (app creates request items directly) are the only paths the app needs.
 DROP POLICY IF EXISTS "transfer_request_items_update" ON transfer_request_items;
-CREATE POLICY "transfer_request_items_update" ON transfer_request_items
-    FOR UPDATE USING (is_active_user());
 
 DROP POLICY IF EXISTS "transfer_request_items_delete" ON transfer_request_items;
-CREATE POLICY "transfer_request_items_delete" ON transfer_request_items
-    FOR DELETE USING (is_active_user());
 
 -- ── Appointments ────────────────────────────────────────────────────
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
@@ -3230,8 +3593,11 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Transfer request % not found', p_transfer_id;
   END IF;
-  IF v_transfer.status != 'approved' THEN
-    RAISE EXCEPTION 'Transfer % is not in approved status (current: %)', p_transfer_id, v_transfer.status;
+  -- No approval gate (CLAUDE.md §4): a requested transfer is sent directly with
+  -- whatever the source chooses to send (full / partial / none). Dispatch writes
+  -- dispatched_qty per item straight from the send dialog.
+  IF v_transfer.status != 'requested' THEN
+    RAISE EXCEPTION 'Transfer % is not awaiting dispatch (current: %)', p_transfer_id, v_transfer.status;
   END IF;
 
   -- Stamp ledger context for auto-log triggers (Phase 1 — stock_movements)
@@ -3249,13 +3615,26 @@ BEGIN
   LOOP
     v_dispatched_qty := (v_item->>'dispatched_qty')::decimal;
 
+    -- Reject a non-positive dispatch: a negative qty would ADD phantom stock to
+    -- the source (stock = stock - (negative)), and a 0 dispatch is meaningless.
+    -- Mirrors direct_send_transfer's positive-qty guard.
+    IF v_dispatched_qty IS NULL OR v_dispatched_qty <= 0 THEN
+      RAISE EXCEPTION 'Dispatched quantity must be positive (got %)', v_dispatched_qty;
+    END IF;
+
     -- Update dispatched_qty on the transfer item
     UPDATE transfer_request_items
     SET dispatched_qty = v_dispatched_qty
     WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
 
-    -- Get the transfer item to know which table to deduct from
-    SELECT * INTO v_transfer_item FROM transfer_request_items WHERE id = (v_item->>'id')::int;
+    -- Get the transfer item to know which table to deduct from. Constrain to
+    -- THIS transfer so a foreign item id can't be loaded and have its stock
+    -- debited under this transfer (matches receive_transfer's lookup).
+    SELECT * INTO v_transfer_item FROM transfer_request_items
+      WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Transfer item % does not belong to transfer %', v_item->>'id', p_transfer_id;
+    END IF;
 
     -- Deduct from source location (with stock validation)
     IF v_transfer.direction = 'shop_to_workshop' THEN
@@ -3370,6 +3749,16 @@ BEGIN
       CONTINUE;
     END IF;
 
+    -- Reject a non-positive receive. A negative received_qty would DESTROY
+    -- destination stock (dest_stock + (negative)) while marking the item
+    -- received. An explicit 0 has no legitimate meaning either: a not-received
+    -- item is omitted from the batch (leaving it open for a later partial
+    -- receive), whereas receiving 0 would close the item out and book the whole
+    -- dispatched amount as lost. So reject <= 0.
+    IF v_received_qty IS NULL OR v_received_qty <= 0 THEN
+      RAISE EXCEPTION 'Received quantity must be positive (got %) for item %', v_received_qty, v_transfer_item.id;
+    END IF;
+
     -- Guardrail: received cannot exceed dispatched. If it does, the caller is
     -- reporting more than what left the source — reject instead of silently
     -- inflating stock.
@@ -3428,9 +3817,15 @@ BEGIN
       END IF;
     END IF;
 
-    -- Log a `waste` movement for the missing portion at the SOURCE location
-    -- (informational: source was already debited at dispatch via transfer_out).
-    -- Direct INSERT — no column change, so auto-trigger doesn't fire.
+    -- Log a `waste` movement annotating the missing portion at the SOURCE
+    -- location. The source was ALREADY debited the full dispatched_qty at
+    -- dispatch (transfer_out -dispatched). Booking another -missing here would
+    -- DOUBLE-COUNT the loss in the ledger: the per-item sum of qty_delta would
+    -- read more negative than the real physical change. So this row is a
+    -- net-zero audit annotation — qty_delta = 0 keeps the ledger conserving
+    -- (sum of qty_delta == net physical change) while the lost quantity stays
+    -- auditable in the notes. Direct INSERT — no column change, so the
+    -- auto-trigger doesn't fire.
     IF v_missing_qty > 0 THEN
       INSERT INTO stock_movements (
         item_type, item_id, location, movement_type, qty_delta,
@@ -3448,10 +3843,14 @@ BEGIN
           ELSE 'workshop'::stock_location
         END,
         'waste'::stock_movement_type,
-        -v_missing_qty,
+        0,
         'transfer', p_transfer_id, p_received_by,
         'lost in transit',
-        COALESCE(v_item->>'discrepancy_note', '')
+        format('lost in transit: %s unit(s) dispatched but not received%s',
+               v_missing_qty,
+               CASE WHEN COALESCE(v_item->>'discrepancy_note', '') <> ''
+                    THEN ' — ' || (v_item->>'discrepancy_note')
+                    ELSE '' END)
       );
     END IF;
   END LOOP;
@@ -3485,89 +3884,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Approve a transfer request: set per-item approved_qty and advance the header
--- to 'approved'. Atomic + idempotent + status-guarded. Previously this was a
--- per-item PostgREST loop plus a separate header update with no status guard —
--- a stale drawer / double-click could re-approve an already-dispatched transfer
--- and a mid-loop network drop left approved_qty partially applied. The
--- status='requested' guard + single transaction + idem key close both holes.
-CREATE OR REPLACE FUNCTION approve_transfer(
-  p_transfer_id INT,
-  p_items JSONB,  -- [{ id: number, approved_qty: number }]
-  p_idempotency_key UUID DEFAULT NULL
-)
-RETURNS JSONB AS $$
-DECLARE
-  v_transfer RECORD;
-  v_item JSONB;
-  v_result JSONB;
-BEGIN
-  IF NOT idem_claim(p_idempotency_key, 'approve_transfer') THEN
-    RETURN idem_replay(p_idempotency_key);
-  END IF;
-
-  SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Transfer request % not found', p_transfer_id;
-  END IF;
-  IF v_transfer.status != 'requested' THEN
-    RAISE EXCEPTION 'Transfer % is not awaiting approval (current: %)', p_transfer_id, v_transfer.status;
-  END IF;
-
-  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-  LOOP
-    IF (v_item->>'approved_qty')::decimal < 0 THEN
-      RAISE EXCEPTION 'Approved quantity cannot be negative (item %)', v_item->>'id';
-    END IF;
-    UPDATE transfer_request_items
-    SET approved_qty = (v_item->>'approved_qty')::decimal
-    WHERE id = (v_item->>'id')::int AND transfer_request_id = p_transfer_id;
-  END LOOP;
-
-  UPDATE transfer_requests
-  SET status = 'approved', approved_at = NOW()
-  WHERE id = p_transfer_id;
-
-  v_result := jsonb_build_object('success', true, 'transfer_id', p_transfer_id);
-  PERFORM idem_store(p_idempotency_key, v_result);
-  RETURN v_result;
-END;
-$$ LANGUAGE plpgsql;
-
--- Reject a transfer request. Same status guard as approve: only a still-
--- 'requested' transfer can be rejected, so a dispatched/received transfer
--- can't have its lifecycle blanked out while stock is already moved.
-CREATE OR REPLACE FUNCTION reject_transfer(
-  p_transfer_id INT,
-  p_rejection_reason TEXT,
-  p_idempotency_key UUID DEFAULT NULL
-)
-RETURNS JSONB AS $$
-DECLARE
-  v_transfer RECORD;
-  v_result JSONB;
-BEGIN
-  IF NOT idem_claim(p_idempotency_key, 'reject_transfer') THEN
-    RETURN idem_replay(p_idempotency_key);
-  END IF;
-
-  SELECT * INTO v_transfer FROM transfer_requests WHERE id = p_transfer_id FOR UPDATE;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Transfer request % not found', p_transfer_id;
-  END IF;
-  IF v_transfer.status != 'requested' THEN
-    RAISE EXCEPTION 'Transfer % is not awaiting approval (current: %)', p_transfer_id, v_transfer.status;
-  END IF;
-
-  UPDATE transfer_requests
-  SET status = 'rejected', rejection_reason = p_rejection_reason
-  WHERE id = p_transfer_id;
-
-  v_result := jsonb_build_object('success', true, 'transfer_id', p_transfer_id);
-  PERFORM idem_store(p_idempotency_key, v_result);
-  RETURN v_result;
-END;
-$$ LANGUAGE plpgsql;
+-- approve_transfer / reject_transfer REMOVED — the transfer flow has no approval
+-- gate (CLAUDE.md §4). A requested transfer is sent directly via dispatch_transfer
+-- (full / partial / none), and a still-requested transfer is withdrawn by deleting
+-- it (transfers:cancel). Dropped rather than left dead so no caller can resurrect
+-- the old path. The 'approved'/'rejected' enum values + approved_qty/approved_at/
+-- rejection_reason columns remain (Postgres can't drop an enum value cleanly) but
+-- are now unreachable.
+DROP FUNCTION IF EXISTS approve_transfer(integer, jsonb, uuid);
+DROP FUNCTION IF EXISTS reject_transfer(integer, text, uuid);
 
 -- ============================================================
 -- NOTIFICATION SYSTEM — Triggers & RPCs
@@ -3716,9 +4041,10 @@ BEGIN
   --   workshop_to_shop  → source=workshop, destination=shop     (shop requested)
   --
   -- Who to notify depends on which side took the action:
-  --   approved / rejected / dispatched → action by SOURCE (approver) → notify DESTINATION (requester)
-  --   received / partially_received    → action by DESTINATION (receiver) → notify SOURCE (sender)
-  IF NEW.status IN ('approved', 'rejected', 'dispatched') THEN
+  --   dispatched                    → action by SOURCE (sender) → notify DESTINATION (requester)
+  --   received / partially_received → action by DESTINATION (receiver) → notify SOURCE (sender)
+  -- ('approved'/'rejected' are no longer produced — there is no approval gate.)
+  IF NEW.status = 'dispatched' THEN
     v_target_dept := CASE WHEN NEW.direction = 'shop_to_workshop' THEN 'workshop' ELSE 'shop' END;
   ELSIF NEW.status IN ('received', 'partially_received') THEN
     v_target_dept := CASE WHEN NEW.direction = 'shop_to_workshop' THEN 'shop' ELSE 'workshop' END;
@@ -3754,7 +4080,14 @@ DROP FUNCTION IF EXISTS get_my_notifications(INTEGER);
 DROP FUNCTION IF EXISTS get_my_notifications(INTEGER, TEXT);
 DROP FUNCTION IF EXISTS get_my_notifications(INTEGER, TEXT, INTEGER);
 DROP FUNCTION IF EXISTS get_my_notifications(INTEGER, TEXT, INTEGER, TEXT);
-CREATE OR REPLACE FUNCTION get_my_notifications(p_limit INTEGER DEFAULT 50, p_department TEXT DEFAULT NULL, p_offset INTEGER DEFAULT 0, p_brand TEXT DEFAULT NULL)
+CREATE OR REPLACE FUNCTION get_my_notifications(
+  p_limit INTEGER DEFAULT 50,
+  p_department TEXT DEFAULT NULL,
+  p_offset INTEGER DEFAULT 0,
+  p_brand TEXT DEFAULT NULL,
+  p_type TEXT DEFAULT NULL,
+  p_unread_only BOOLEAN DEFAULT FALSE
+)
 RETURNS JSONB AS $$
   SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
   FROM (
@@ -3776,6 +4109,8 @@ RETURNS JSONB AS $$
       AND nr.user_id = get_my_user_id()
     WHERE n.expires_at > now()
       AND (p_brand IS NULL OR n.brand = p_brand::brand)
+      AND (p_type IS NULL OR n.type::text = p_type)
+      AND (NOT p_unread_only OR nr.read_at IS NULL)
       AND (
         (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
         OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
@@ -3784,6 +4119,31 @@ RETURNS JSONB AS $$
     LIMIT p_limit
     OFFSET p_offset
   ) t;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
+
+-- Total count matching the same scope/type/unread filters as
+-- get_my_notifications — for correct server-side pagination (hasMore) when a
+-- type/unread filter is active (client-side filtering of one page is wrong).
+CREATE OR REPLACE FUNCTION get_my_notifications_count(
+  p_department TEXT DEFAULT NULL,
+  p_type TEXT DEFAULT NULL,
+  p_unread_only BOOLEAN DEFAULT FALSE,
+  p_brand TEXT DEFAULT NULL
+)
+RETURNS INTEGER AS $$
+  SELECT count(*)::integer
+  FROM notifications n
+  LEFT JOIN notification_reads nr
+    ON nr.notification_id = n.id
+    AND nr.user_id = get_my_user_id()
+  WHERE n.expires_at > now()
+    AND (p_brand IS NULL OR n.brand = p_brand::brand)
+    AND (p_type IS NULL OR n.type::text = p_type)
+    AND (NOT p_unread_only OR nr.read_at IS NULL)
+    AND (
+      (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
+      OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
+    );
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Get unread notification count (department + user-scoped combined)
@@ -4214,10 +4574,12 @@ CREATE INDEX IF NOT EXISTS work_orders_completed_delivery_idx
     ON work_orders(order_phase, delivery_date DESC)
     WHERE order_phase = 'completed';
 
+DROP FUNCTION IF EXISTS get_completed_orders_page(INT, INT, INT);
 CREATE OR REPLACE FUNCTION get_completed_orders_page(
     p_page INT DEFAULT 1,
     p_page_size INT DEFAULT 20,
-    p_days_back INT DEFAULT NULL
+    p_days_back INT DEFAULT NULL,
+    p_search TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -4227,6 +4589,7 @@ DECLARE
     v_result JSONB;
     v_page_size INT := GREATEST(COALESCE(p_page_size, 20), 1);
     v_offset INT := GREATEST(COALESCE(p_page, 1) - 1, 0) * v_page_size;
+    v_search TEXT := NULLIF(LOWER(TRIM(COALESCE(p_search, ''))), '');
     v_cutoff TIMESTAMPTZ := CASE
         WHEN p_days_back IS NULL THEN NULL
         ELSE NOW() - (p_days_back || ' days')::INTERVAL
@@ -4248,6 +4611,11 @@ BEGIN
         WHERE o.checkout_status::text = 'confirmed'
           AND wo.order_phase::text = 'completed'
           AND (v_cutoff IS NULL OR wo.delivery_date >= v_cutoff)
+          AND (v_search IS NULL OR (
+                 LOWER(COALESCE(c.name, '')) LIKE '%' || v_search || '%'
+              OR LOWER(COALESCE(wo.invoice_number::text, '')) LIKE '%' || v_search || '%'
+              OR REPLACE(COALESCE(c.phone, ''), ' ', '') LIKE '%' || REPLACE(v_search, ' ', '') || '%'
+          ))
     ),
     ranked AS (
         SELECT
@@ -4657,11 +5025,15 @@ END;
 $$;
 
 -- ─── Paginated list RPC ────────────────────────────────────────────────
+DROP FUNCTION IF EXISTS get_assigned_orders_page(TEXT, TEXT[], INT, INT);
 CREATE OR REPLACE FUNCTION get_assigned_orders_page(
     p_tab TEXT DEFAULT 'all',
     p_chips TEXT[] DEFAULT NULL,
     p_page INT DEFAULT 1,
-    p_page_size INT DEFAULT 20
+    p_page_size INT DEFAULT 20,
+    p_search TEXT DEFAULT NULL,
+    p_sort TEXT DEFAULT NULL,
+    p_brands TEXT[] DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -4675,6 +5047,11 @@ DECLARE
     v_chip_express BOOLEAN := 'express'  = ANY(v_chips);
     v_chip_delivery BOOLEAN := 'delivery' = ANY(v_chips);
     v_chip_soaking BOOLEAN  := 'soaking'  = ANY(v_chips);
+    v_chip_overdue BOOLEAN  := 'overdue'  = ANY(v_chips);
+    v_chip_brova BOOLEAN    := 'brova'    = ANY(v_chips);
+    v_search TEXT := NULLIF(LOWER(TRIM(COALESCE(p_search, ''))), '');
+    v_sort TEXT := CASE WHEN p_sort IN ('asc', 'desc') THEN p_sort ELSE NULL END;
+    v_brands TEXT[] := CASE WHEN p_brands IS NULL OR cardinality(p_brands) = 0 THEN NULL ELSE p_brands END;
 BEGIN
     WITH base AS (
         SELECT
@@ -4741,27 +5118,53 @@ BEGIN
             ELSE TRUE
         END
     ),
-    -- Chip counts reflect post-tab, pre-chip filter set.
+    -- Chip counts reflect post-tab, pre-chip filter set (the full in-production
+    -- set for tab='all'), so a chip badge shows the unnarrowed total.
     chip_counts AS (
         SELECT
             COUNT(*) FILTER (WHERE any_express)     AS express_count,
             COUNT(*) FILTER (WHERE home_delivery)   AS delivery_count,
-            COUNT(*) FILTER (WHERE any_soaking)     AS soaking_count
+            COUNT(*) FILTER (WHERE any_soaking)     AS soaking_count,
+            COUNT(*) FILTER (WHERE is_overdue)      AS overdue_count,
+            COUNT(*) FILTER (WHERE has_any_brova)   AS brova_count
         FROM tab_filtered
     ),
+    brand_counts AS (
+        SELECT COALESCE(jsonb_object_agg(brand, cnt), '{}'::jsonb) AS brands
+        FROM (
+            SELECT brand, COUNT(*) AS cnt
+            FROM tab_filtered
+            WHERE brand IS NOT NULL
+            GROUP BY brand
+        ) b
+    ),
+    -- Chips + brand + search narrow the result set (not the chip counts above).
     chip_filtered AS (
         SELECT * FROM tab_filtered
         WHERE (NOT v_chip_express  OR any_express)
           AND (NOT v_chip_delivery OR home_delivery)
           AND (NOT v_chip_soaking  OR any_soaking)
+          AND (NOT v_chip_overdue  OR is_overdue)
+          AND (NOT v_chip_brova    OR has_any_brova)
+          AND (v_brands IS NULL OR brand = ANY(v_brands))
+          AND (v_search IS NULL OR (
+                 LOWER(COALESCE(customer_name, '')) LIKE '%' || v_search || '%'
+              OR LOWER(COALESCE(invoice_number::text, '')) LIKE '%' || v_search || '%'
+              OR REPLACE(COALESCE(customer_phone, ''), ' ', '') LIKE '%' || REPLACE(v_search, ' ', '') || '%'
+              OR order_id::text LIKE '%' || v_search || '%'
+          ))
     ),
     ranked AS (
         SELECT cf.*,
             row_number() OVER (
                 ORDER BY
-                    (is_overdue)::int DESC,
-                    (any_express)::int DESC,
-                    COALESCE(days_to_delivery, 999) ASC,
+                    -- Explicit delivery sort when requested; no-delivery rows sink.
+                    CASE WHEN v_sort = 'asc'  THEN COALESCE(days_to_delivery, 2147483647) END ASC,
+                    CASE WHEN v_sort = 'desc' THEN COALESCE(days_to_delivery, -2147483648) END DESC,
+                    -- Default urgency ranking when no explicit sort.
+                    CASE WHEN v_sort IS NULL THEN (is_overdue)::int END DESC,
+                    CASE WHEN v_sort IS NULL THEN (any_express)::int END DESC,
+                    CASE WHEN v_sort IS NULL THEN COALESCE(days_to_delivery, 999) END ASC,
                     order_id ASC
             ) AS rn
         FROM chip_filtered cf
@@ -4854,12 +5257,16 @@ BEGIN
         LEFT JOIN page_garment_summaries pgs ON pgs.order_id = p.order_id
     )
     SELECT jsonb_build_object(
-        'data',        COALESCE((SELECT jsonb_agg(row_json ORDER BY rn) FROM page_rows), '[]'::jsonb),
-        'total_count', (SELECT COUNT(*) FROM chip_filtered),
+        'data',             COALESCE((SELECT jsonb_agg(row_json ORDER BY rn) FROM page_rows), '[]'::jsonb),
+        'total_count',      (SELECT COUNT(*) FROM chip_filtered),
+        'total_unfiltered', (SELECT COUNT(*) FROM tab_filtered),
         'chip_counts', jsonb_build_object(
             'express',  (SELECT express_count  FROM chip_counts),
             'delivery', (SELECT delivery_count FROM chip_counts),
-            'soaking',  (SELECT soaking_count  FROM chip_counts)
+            'soaking',  (SELECT soaking_count  FROM chip_counts),
+            'overdue',  (SELECT overdue_count  FROM chip_counts),
+            'brova',    (SELECT brova_count    FROM chip_counts),
+            'brands',   (SELECT brands FROM brand_counts)
         )
     )
     INTO v_result;
@@ -5102,7 +5509,7 @@ BEGIN
     qty_delta, qty_before, qty_after,
     ref_type, ref_id,
     supplier_id, unit_cost,
-    reason, notes,
+    reason, notes, image_url,
     user_id
   )
   VALUES (
@@ -5113,6 +5520,7 @@ BEGIN
     COALESCE(_movement_setting('app.movement_reason'),
              CASE WHEN v_type = 'adjustment' THEN 'unattributed' ELSE NULL END),
     _movement_setting('app.movement_notes'),
+    _movement_setting('app.movement_image_url'),
     v_user_id
   );
 END;
@@ -5127,10 +5535,14 @@ BEGIN
   IF COALESCE(NEW.shop_stock, 0) <> COALESCE(OLD.shop_stock, 0) THEN
     PERFORM _log_stock_movement('fabric', NEW.id, 'shop',
       OLD.shop_stock, NEW.shop_stock);
+    PERFORM _notify_low_stock_crossing('fabric', NEW.id, 'shop',
+      OLD.shop_stock, NEW.shop_stock, NEW.low_stock_threshold);
   END IF;
   IF COALESCE(NEW.workshop_stock, 0) <> COALESCE(OLD.workshop_stock, 0) THEN
     PERFORM _log_stock_movement('fabric', NEW.id, 'workshop',
       OLD.workshop_stock, NEW.workshop_stock);
+    PERFORM _notify_low_stock_crossing('fabric', NEW.id, 'workshop',
+      OLD.workshop_stock, NEW.workshop_stock, NEW.low_stock_threshold);
   END IF;
   RETURN NEW;
 END;
@@ -5150,10 +5562,14 @@ BEGIN
   IF COALESCE(NEW.shop_stock, 0) <> COALESCE(OLD.shop_stock, 0) THEN
     PERFORM _log_stock_movement('shelf', NEW.id, 'shop',
       OLD.shop_stock::numeric, NEW.shop_stock::numeric);
+    PERFORM _notify_low_stock_crossing('shelf', NEW.id, 'shop',
+      OLD.shop_stock::numeric, NEW.shop_stock::numeric, NEW.low_stock_threshold::numeric);
   END IF;
   IF COALESCE(NEW.workshop_stock, 0) <> COALESCE(OLD.workshop_stock, 0) THEN
     PERFORM _log_stock_movement('shelf', NEW.id, 'workshop',
       OLD.workshop_stock::numeric, NEW.workshop_stock::numeric);
+    PERFORM _notify_low_stock_crossing('shelf', NEW.id, 'workshop',
+      OLD.workshop_stock::numeric, NEW.workshop_stock::numeric, NEW.low_stock_threshold::numeric);
   END IF;
   RETURN NEW;
 END;
@@ -5173,10 +5589,14 @@ BEGIN
   IF COALESCE(NEW.shop_stock, 0) <> COALESCE(OLD.shop_stock, 0) THEN
     PERFORM _log_stock_movement('accessory', NEW.id, 'shop',
       OLD.shop_stock, NEW.shop_stock);
+    PERFORM _notify_low_stock_crossing('accessory', NEW.id, 'shop',
+      OLD.shop_stock, NEW.shop_stock, NEW.low_stock_threshold);
   END IF;
   IF COALESCE(NEW.workshop_stock, 0) <> COALESCE(OLD.workshop_stock, 0) THEN
     PERFORM _log_stock_movement('accessory', NEW.id, 'workshop',
       OLD.workshop_stock, NEW.workshop_stock);
+    PERFORM _notify_low_stock_crossing('accessory', NEW.id, 'workshop',
+      OLD.workshop_stock, NEW.workshop_stock, NEW.low_stock_threshold);
   END IF;
   RETURN NEW;
 END;
@@ -5229,6 +5649,7 @@ BEGIN
   PERFORM set_config('app.movement_unit_cost', COALESCE(p_unit_cost::text, ''), true);
   PERFORM set_config('app.movement_reason', 'supplier delivery', true);
   PERFORM set_config('app.movement_notes', COALESCE(p_notes, ''), true);
+  PERFORM set_config('app.movement_image_url', '', true);
 
   IF p_item_type = 'fabric' THEN
     IF p_location = 'shop' THEN
@@ -5297,29 +5718,33 @@ BEGIN
   PERFORM set_config('app.movement_unit_cost', '', true);
   PERFORM set_config('app.movement_reason', p_reason, true);
   PERFORM set_config('app.movement_notes', COALESCE(p_notes, ''), true);
+  PERFORM set_config('app.movement_image_url', '', true);
 
+  -- FOR UPDATE serializes the read→absolute-write so a restock/consume/waste
+  -- committed by a concurrent txn between this SELECT and UPDATE isn't silently
+  -- clobbered by the absolute set (lost stock). Absolute-set semantics unchanged.
   IF p_item_type = 'fabric' THEN
     IF p_location = 'shop' THEN
-      SELECT shop_stock INTO v_old_qty FROM fabrics WHERE id = p_item_id;
+      SELECT shop_stock INTO v_old_qty FROM fabrics WHERE id = p_item_id FOR UPDATE;
       UPDATE fabrics SET shop_stock = p_new_qty WHERE id = p_item_id;
     ELSE
-      SELECT workshop_stock INTO v_old_qty FROM fabrics WHERE id = p_item_id;
+      SELECT workshop_stock INTO v_old_qty FROM fabrics WHERE id = p_item_id FOR UPDATE;
       UPDATE fabrics SET workshop_stock = p_new_qty WHERE id = p_item_id;
     END IF;
   ELSIF p_item_type = 'shelf' THEN
     IF p_location = 'shop' THEN
-      SELECT shop_stock INTO v_old_qty FROM shelf WHERE id = p_item_id;
+      SELECT shop_stock INTO v_old_qty FROM shelf WHERE id = p_item_id FOR UPDATE;
       UPDATE shelf SET shop_stock = p_new_qty::int WHERE id = p_item_id;
     ELSE
-      SELECT workshop_stock INTO v_old_qty FROM shelf WHERE id = p_item_id;
+      SELECT workshop_stock INTO v_old_qty FROM shelf WHERE id = p_item_id FOR UPDATE;
       UPDATE shelf SET workshop_stock = p_new_qty::int WHERE id = p_item_id;
     END IF;
   ELSIF p_item_type = 'accessory' THEN
     IF p_location = 'shop' THEN
-      SELECT shop_stock INTO v_old_qty FROM accessories WHERE id = p_item_id;
+      SELECT shop_stock INTO v_old_qty FROM accessories WHERE id = p_item_id FOR UPDATE;
       UPDATE accessories SET shop_stock = p_new_qty WHERE id = p_item_id;
     ELSE
-      SELECT workshop_stock INTO v_old_qty FROM accessories WHERE id = p_item_id;
+      SELECT workshop_stock INTO v_old_qty FROM accessories WHERE id = p_item_id FOR UPDATE;
       UPDATE accessories SET workshop_stock = p_new_qty WHERE id = p_item_id;
     END IF;
   END IF;
@@ -5368,6 +5793,7 @@ BEGIN
   PERFORM set_config('app.movement_unit_cost', '', true);
   PERFORM set_config('app.movement_reason', 'order consumption', true);
   PERFORM set_config('app.movement_notes', '', true);
+  PERFORM set_config('app.movement_image_url', '', true);
 
   -- Fabric consumption (per-garment context in notes)
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_fabric_items)
@@ -5442,7 +5868,10 @@ BEGIN
   INTO v_result
   FROM (
     SELECT movement_type::text,
-           SUM(ABS(qty_delta)) AS total,
+           -- Net-zero waste annotations carry their amount in annotated_qty
+           -- (qty_delta=0); add it so redo scrap surfaces without double-counting
+           -- real wastes (which have annotated_qty NULL).
+           SUM(ABS(qty_delta) + COALESCE(annotated_qty, 0)) AS total,
            COUNT(*) AS cnt
     FROM stock_movements
     WHERE created_at >= p_from AND created_at < p_to
@@ -5467,7 +5896,8 @@ DECLARE
   v_result JSONB;
 BEGIN
   WITH sums AS (
-    SELECT item_type, item_id, SUM(ABS(qty_delta)) AS total
+    SELECT item_type, item_id,
+           SUM(ABS(qty_delta) + COALESCE(annotated_qty, 0)) AS total
     FROM stock_movements
     WHERE created_at >= p_from AND created_at < p_to
       AND movement_type = p_movement_type
@@ -5488,6 +5918,494 @@ BEGIN
   SELECT jsonb_agg(row_to_json(enriched)) INTO v_result FROM enriched;
 
   RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ─── Waste broken down by root_cause (Q11 by-root-cause card) ─────────────
+-- Groups `waste` movements in [from, to) by root_cause (NULL → 'unattributed').
+-- Uses the same ABS(qty_delta)+annotated_qty measure as the aggregates so redo
+-- net-zero scrap annotations surface with their length and cost impact.
+CREATE OR REPLACE FUNCTION get_waste_by_root_cause(
+  p_from TIMESTAMPTZ,
+  p_to TIMESTAMPTZ
+)
+RETURNS JSONB AS $$
+  SELECT COALESCE(jsonb_object_agg(rc, payload), '{}'::jsonb)
+  FROM (
+    SELECT COALESCE(root_cause::text, 'unattributed') AS rc,
+           jsonb_build_object(
+             'qty',  SUM(ABS(qty_delta) + COALESCE(annotated_qty, 0)),
+             'cost', SUM((ABS(qty_delta) + COALESCE(annotated_qty, 0)) * COALESCE(unit_cost, 0))
+           ) AS payload
+    FROM stock_movements
+    WHERE movement_type = 'waste'
+      AND created_at >= p_from AND created_at < p_to
+    GROUP BY COALESCE(root_cause::text, 'unattributed')
+  ) AS t;
+$$ LANGUAGE sql STABLE;
+
+-- ─── Finals correctly parked while a replacement brova is in flight ───────
+-- CLAUDE.md §2.8 workshop label "Finals waiting on replacement brova": flag-only.
+-- Per order, count finals still at waiting_for_acceptance where the order has a
+-- brova that was discarded (Reject-Redo) and whose replacement row is still in
+-- flight. Distinct from the §2.6 last-brova-gone auto-release (here a brova
+-- lineage still exists to act on). Returns only orders with count > 0.
+CREATE OR REPLACE FUNCTION finals_waiting_on_replacement_brova(
+  p_order_id INT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+           'order_id', order_id,
+           'finals_waiting', finals_waiting
+         )), '[]'::jsonb)
+  FROM (
+    SELECT f.order_id, COUNT(*) AS finals_waiting
+    FROM garments f
+    WHERE f.garment_type = 'final'
+      AND f.piece_stage = 'waiting_for_acceptance'
+      AND (p_order_id IS NULL OR f.order_id = p_order_id)
+      AND EXISTS (
+        SELECT 1
+        FROM garments b
+        JOIN garments r ON r.id = b.replaced_by_garment_id
+        WHERE b.order_id = f.order_id
+          AND b.garment_type = 'brova'
+          AND b.piece_stage = 'discarded'
+          AND b.replaced_by_garment_id IS NOT NULL
+          AND r.piece_stage NOT IN ('completed', 'discarded')
+      )
+    GROUP BY f.order_id
+  ) AS t;
+$$ LANGUAGE sql STABLE;
+
+-- ════════════════════════════════════════════════════════════════════════
+-- ROOT-CAUSE TAXONOMY — shared attribution vocabulary  (CLAUDE.md §2.9)
+-- ════════════════════════════════════════════════════════════════════════
+-- The canonical "who is responsible / why" enum, settled ahead of Groups A/C/D
+-- (redo+scrap, repeated-returns investigation, performance attribution) so all
+-- three speak one language. schema.ts mirrors this for TS types. Created here
+-- (not via db:push) so the type exists before any column references it.
+DO $$ BEGIN
+  CREATE TYPE root_cause AS ENUM (
+    'production_error', 'qc_escape', 'showroom_error',
+    'customer_change', 'material_defect', 'other'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Responsible party is a deterministic derivation of root_cause (never stored
+-- separately) — performance attribution (Q14) keys off this single mapping.
+-- 'other' → NULL (unattributed). Distinct from the §2.5 measurement-reason
+-- gates and the §4 WASTE_REASONS physical-reason axis (see §2.9).
+CREATE OR REPLACE FUNCTION root_cause_responsible_party(p_root_cause root_cause)
+RETURNS TEXT LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE p_root_cause
+    WHEN 'production_error' THEN 'production'
+    WHEN 'qc_escape'        THEN 'qc'
+    WHEN 'showroom_error'   THEN 'showroom'
+    WHEN 'customer_change'  THEN 'customer'
+    WHEN 'material_defect'  THEN 'supplier'
+    ELSE NULL
+  END;
+$$;
+
+-- ════════════════════════════════════════════════════════════════════════
+-- GROUP A — Redo lifecycle, material & waste  (CLAUDE.md §2.5/§4/§6)
+-- ════════════════════════════════════════════════════════════════════════
+-- The Group A enum TYPES (redo_priority, redo_parked_reason) and the garments /
+-- stock_movements COLUMNS are created up at the 11f-types block (before
+-- create_replacement_garment and the report RPCs reference them within this
+-- single batch). The RPCs (create_replacement_garment, resume_parked_redo,
+-- get_waste_by_root_cause, finals_waiting_on_replacement_brova) live alongside
+-- their related code above.
+
+-- ════════════════════════════════════════════════════════════════════════
+-- GROUP E — low-stock alerts, damage/waste, stocktake  (CLAUDE.md §4)
+-- ════════════════════════════════════════════════════════════════════════
+-- Schema additions are kept here (idempotent) so a single db:triggers run
+-- applies them; schema.ts mirrors these for TS types. ALTER TYPE ADD VALUE is
+-- allowed inside this implicit transaction on PG12+ (the value is only used at
+-- runtime, never during apply).
+ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'low_stock';
+ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+DO $$ BEGIN
+  CREATE TYPE stocktake_status AS ENUM ('open', 'validated');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS stocktake_sessions (
+  id           SERIAL PRIMARY KEY,
+  side         stock_location NOT NULL,
+  brand        brand NOT NULL DEFAULT 'ERTH',
+  status       stocktake_status NOT NULL DEFAULT 'open',
+  started_by   UUID REFERENCES users(id),
+  started_at   TIMESTAMP NOT NULL DEFAULT now(),
+  validated_by UUID REFERENCES users(id),
+  validated_at TIMESTAMP,
+  notes        TEXT
+);
+CREATE INDEX IF NOT EXISTS stocktake_sessions_side_status_idx ON stocktake_sessions(side, status);
+CREATE INDEX IF NOT EXISTS stocktake_sessions_side_validated_idx ON stocktake_sessions(side, validated_at);
+
+CREATE TABLE IF NOT EXISTS stocktake_counts (
+  id          SERIAL PRIMARY KEY,
+  session_id  INTEGER NOT NULL REFERENCES stocktake_sessions(id) ON DELETE CASCADE,
+  item_type   stock_item_type NOT NULL,
+  item_id     INTEGER NOT NULL,
+  system_qty  NUMERIC(10,2),
+  counted_qty NUMERIC(10,2),
+  variance    NUMERIC(10,2),
+  reason      TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS stocktake_counts_session_item_idx ON stocktake_counts(session_id, item_type, item_id);
+
+-- Reads are direct (SELECT policy); writes go only through the SECURITY DEFINER
+-- RPCs below, so staff cannot bypass the manager-gated validate by writing the
+-- table directly.
+ALTER TABLE stocktake_sessions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "stocktake_sessions_select" ON stocktake_sessions;
+CREATE POLICY "stocktake_sessions_select" ON stocktake_sessions FOR SELECT USING (is_active_user());
+
+ALTER TABLE stocktake_counts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "stocktake_counts_select" ON stocktake_counts;
+CREATE POLICY "stocktake_counts_select" ON stocktake_counts FOR SELECT USING (is_active_user());
+
+-- ─── Low-stock threshold + crossing notification ─────────────────────────
+-- Per-item override else per-type default (must match LOW_STOCK_THRESHOLDS in
+-- the apps' lib/inventory.ts).
+CREATE OR REPLACE FUNCTION _resolve_low_stock_threshold(p_item_type stock_item_type, p_override NUMERIC)
+RETURNS NUMERIC AS $$
+BEGIN
+  IF p_override IS NOT NULL AND p_override > 0 THEN
+    RETURN p_override;
+  END IF;
+  RETURN CASE p_item_type
+    WHEN 'fabric'    THEN 5
+    WHEN 'shelf'     THEN 3
+    WHEN 'accessory' THEN 10
+    ELSE 0 END;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- Fire ONE low_stock notification when a side's own count crosses below its
+-- threshold (falling edge only; staying-low does not re-fire). SECURITY DEFINER
+-- so it can insert into notifications (RLS) from the plain audit trigger.
+CREATE OR REPLACE FUNCTION _notify_low_stock_crossing(
+  p_item_type stock_item_type, p_item_id INT, p_location stock_location,
+  p_old NUMERIC, p_new NUMERIC, p_threshold_override NUMERIC
+)
+RETURNS VOID AS $$
+DECLARE
+  v_threshold NUMERIC := _resolve_low_stock_threshold(p_item_type, p_threshold_override);
+  v_name TEXT;
+BEGIN
+  IF v_threshold <= 0 THEN RETURN; END IF;
+  IF NOT (COALESCE(p_old, 0) >= v_threshold AND COALESCE(p_new, 0) < v_threshold) THEN
+    RETURN;  -- not a falling-edge crossing
+  END IF;
+
+  v_name := CASE p_item_type
+    WHEN 'fabric'    THEN (SELECT name FROM fabrics     WHERE id = p_item_id)
+    WHEN 'shelf'     THEN (SELECT type FROM shelf       WHERE id = p_item_id)
+    WHEN 'accessory' THEN (SELECT name FROM accessories WHERE id = p_item_id)
+  END;
+
+  INSERT INTO notifications (department, brand, type, title, body, metadata, expires_at)
+  VALUES (
+    p_location::text::department,
+    'ERTH',
+    'low_stock',
+    'Low stock',
+    format('%s is low: %s left',
+           COALESCE(v_name, p_item_type::text || ' #' || p_item_id),
+           trim(to_char(COALESCE(p_new, 0), 'FM999990.##'))),
+    jsonb_build_object('item_type', p_item_type, 'item_id', p_item_id,
+                       'location', p_location, 'new_qty', p_new, 'threshold', v_threshold),
+    NOW() + INTERVAL '7 days'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
+
+-- ─── RPC: record_waste ───────────────────────────────────────────────────
+-- Dedicated Damage/Waste action (distinct from Adjust). Removes p_qty from the
+-- side's own count as a 'waste' movement with a categorized reason, optional
+-- photo, and recorded cost impact. RBAC-by-amount: at/above the cost threshold
+-- only a manager/admin may record (a non-manager is rejected, not queued).
+DROP FUNCTION IF EXISTS record_waste(stock_item_type, integer, stock_location, numeric, text, text, text, numeric, uuid, uuid);
+CREATE OR REPLACE FUNCTION record_waste(
+  p_item_type stock_item_type,
+  p_item_id INT,
+  p_location stock_location,
+  p_qty NUMERIC,
+  p_reason TEXT,                       -- category: supplier_defect|staff_mistake|customer_damage|lost|mis_cut|other
+  p_note TEXT DEFAULT NULL,
+  p_image_url TEXT DEFAULT NULL,
+  p_unit_cost NUMERIC DEFAULT NULL,
+  p_user_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_threshold CONSTANT NUMERIC := 25;  -- cost (KWD); mirror of WASTE_APPROVAL_THRESHOLD in lib/inventory.ts
+  v_current NUMERIC;
+  v_unit_cost NUMERIC;
+  v_cost NUMERIC;
+  v_new_qty NUMERIC;
+  v_result JSONB;
+BEGIN
+  IF NOT idem_claim(p_idempotency_key, 'record_waste') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  IF p_qty <= 0 THEN
+    RAISE EXCEPTION 'record_waste: quantity must be positive (got %)', p_qty;
+  END IF;
+  IF p_reason IS NULL OR length(trim(p_reason)) = 0 THEN
+    RAISE EXCEPTION 'record_waste: reason category is required';
+  END IF;
+
+  -- FOR UPDATE locks the row before we compute v_new_qty, so two concurrent
+  -- wastes on the same item can't both read the same v_current and have the
+  -- second absolute write clobber the first (a lost decrement = lost stock).
+  IF p_item_type = 'fabric' THEN
+    SELECT (CASE WHEN p_location = 'shop' THEN shop_stock ELSE workshop_stock END), price_per_meter
+      INTO v_current, v_unit_cost FROM fabrics WHERE id = p_item_id FOR UPDATE;
+  ELSIF p_item_type = 'shelf' THEN
+    SELECT (CASE WHEN p_location = 'shop' THEN shop_stock ELSE workshop_stock END), price
+      INTO v_current, v_unit_cost FROM shelf WHERE id = p_item_id FOR UPDATE;
+  ELSIF p_item_type = 'accessory' THEN
+    SELECT (CASE WHEN p_location = 'shop' THEN shop_stock ELSE workshop_stock END), price
+      INTO v_current, v_unit_cost FROM accessories WHERE id = p_item_id FOR UPDATE;
+  END IF;
+
+  IF v_current IS NULL THEN
+    RAISE EXCEPTION 'record_waste: item % of type % not found', p_item_id, p_item_type;
+  END IF;
+  IF v_current < p_qty THEN
+    RAISE EXCEPTION 'record_waste: cannot waste % — only % on hand at %', p_qty, v_current, p_location;
+  END IF;
+
+  v_unit_cost := COALESCE(p_unit_cost, v_unit_cost);
+  v_cost := p_qty * COALESCE(v_unit_cost, 0);
+
+  IF v_cost >= v_threshold AND NOT is_manager_or_above() THEN
+    RAISE EXCEPTION 'record_waste: waste cost % is at/above the % approval threshold — needs manager approval', v_cost, v_threshold;
+  END IF;
+
+  v_new_qty := v_current - p_qty;
+
+  PERFORM set_config('app.movement_type', 'waste', true);
+  PERFORM set_config('app.movement_ref_type', 'waste', true);
+  PERFORM set_config('app.movement_ref_id', '', true);
+  PERFORM set_config('app.movement_user_id', COALESCE(p_user_id::text, ''), true);
+  PERFORM set_config('app.movement_supplier_id', '', true);
+  PERFORM set_config('app.movement_unit_cost', COALESCE(v_unit_cost::text, ''), true);
+  PERFORM set_config('app.movement_reason', p_reason, true);
+  PERFORM set_config('app.movement_notes', COALESCE(p_note, ''), true);
+  PERFORM set_config('app.movement_image_url', COALESCE(p_image_url, ''), true);
+
+  IF p_item_type = 'fabric' THEN
+    IF p_location = 'shop' THEN UPDATE fabrics SET shop_stock = v_new_qty WHERE id = p_item_id;
+    ELSE UPDATE fabrics SET workshop_stock = v_new_qty WHERE id = p_item_id; END IF;
+  ELSIF p_item_type = 'shelf' THEN
+    IF p_location = 'shop' THEN UPDATE shelf SET shop_stock = v_new_qty::int WHERE id = p_item_id;
+    ELSE UPDATE shelf SET workshop_stock = v_new_qty::int WHERE id = p_item_id; END IF;
+  ELSIF p_item_type = 'accessory' THEN
+    IF p_location = 'shop' THEN UPDATE accessories SET shop_stock = v_new_qty WHERE id = p_item_id;
+    ELSE UPDATE accessories SET workshop_stock = v_new_qty WHERE id = p_item_id; END IF;
+  END IF;
+
+  -- Don't let the photo leak onto a later movement in this transaction.
+  PERFORM set_config('app.movement_image_url', '', true);
+
+  v_result := jsonb_build_object('success', true, 'new_stock', v_new_qty, 'cost', v_cost);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ─── Stocktake: start / save counts / validate / status ──────────────────
+-- Open (or return the existing open) stocktake session for a side.
+DROP FUNCTION IF EXISTS start_stocktake(stock_location, brand, uuid, uuid);
+CREATE OR REPLACE FUNCTION start_stocktake(
+  p_side stock_location,
+  p_brand brand DEFAULT 'ERTH',
+  p_user_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_id INT;
+  v_result JSONB;
+BEGIN
+  IF NOT idem_claim(p_idempotency_key, 'start_stocktake') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  SELECT id INTO v_id FROM stocktake_sessions
+    WHERE side = p_side AND status = 'open' ORDER BY started_at DESC LIMIT 1;
+
+  IF v_id IS NULL THEN
+    INSERT INTO stocktake_sessions (side, brand, status, started_by)
+    VALUES (p_side, p_brand, 'open', p_user_id)
+    RETURNING id INTO v_id;
+  END IF;
+
+  v_result := jsonb_build_object('success', true, 'session_id', v_id);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
+
+-- Upsert entered counts. No stock change yet. (Idempotent by nature.)
+DROP FUNCTION IF EXISTS save_stocktake_counts(integer, jsonb, uuid);
+CREATE OR REPLACE FUNCTION save_stocktake_counts(
+  p_session_id INT,
+  p_counts JSONB,            -- [{ item_type, item_id, counted_qty (nullable), reason (nullable) }]
+  p_user_id UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_item JSONB;
+  v_status stocktake_status;
+BEGIN
+  SELECT status INTO v_status FROM stocktake_sessions WHERE id = p_session_id;
+  IF v_status IS NULL THEN
+    RAISE EXCEPTION 'save_stocktake_counts: session % not found', p_session_id;
+  END IF;
+  IF v_status <> 'open' THEN
+    RAISE EXCEPTION 'save_stocktake_counts: session % is already validated', p_session_id;
+  END IF;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_counts)
+  LOOP
+    INSERT INTO stocktake_counts (session_id, item_type, item_id, counted_qty, reason)
+    VALUES (
+      p_session_id,
+      (v_item->>'item_type')::stock_item_type,
+      (v_item->>'item_id')::int,
+      NULLIF(v_item->>'counted_qty', '')::numeric,
+      NULLIF(v_item->>'reason', '')
+    )
+    ON CONFLICT (session_id, item_type, item_id)
+    DO UPDATE SET counted_qty = EXCLUDED.counted_qty, reason = EXCLUDED.reason;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'session_id', p_session_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
+
+-- Validate (manager-only): snapshot system_qty + variance per counted line,
+-- apply each non-zero variance as an adjustment (reason 'stocktake: <line>'),
+-- freeze the session, reset the side's cadence clock. A non-zero variance with
+-- no line reason aborts the whole validate.
+DROP FUNCTION IF EXISTS validate_stocktake(integer, uuid, uuid);
+CREATE OR REPLACE FUNCTION validate_stocktake(
+  p_session_id INT,
+  p_user_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_session stocktake_sessions%ROWTYPE;
+  v_count stocktake_counts%ROWTYPE;
+  v_system NUMERIC;
+  v_variance NUMERIC;
+  v_applied INT := 0;
+  v_result JSONB;
+BEGIN
+  IF NOT idem_claim(p_idempotency_key, 'validate_stocktake') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  IF NOT is_manager_or_above() THEN
+    RAISE EXCEPTION 'validate_stocktake: only a manager may validate a stocktake';
+  END IF;
+
+  SELECT * INTO v_session FROM stocktake_sessions WHERE id = p_session_id FOR UPDATE;
+  IF v_session.id IS NULL THEN
+    RAISE EXCEPTION 'validate_stocktake: session % not found', p_session_id;
+  END IF;
+  IF v_session.status <> 'open' THEN
+    RAISE EXCEPTION 'validate_stocktake: session % already validated', p_session_id;
+  END IF;
+
+  FOR v_count IN
+    SELECT * FROM stocktake_counts WHERE session_id = p_session_id AND counted_qty IS NOT NULL
+  LOOP
+    IF v_count.item_type = 'fabric' THEN
+      SELECT (CASE WHEN v_session.side = 'shop' THEN shop_stock ELSE workshop_stock END)
+        INTO v_system FROM fabrics WHERE id = v_count.item_id;
+    ELSIF v_count.item_type = 'shelf' THEN
+      SELECT (CASE WHEN v_session.side = 'shop' THEN shop_stock ELSE workshop_stock END)
+        INTO v_system FROM shelf WHERE id = v_count.item_id;
+    ELSIF v_count.item_type = 'accessory' THEN
+      SELECT (CASE WHEN v_session.side = 'shop' THEN shop_stock ELSE workshop_stock END)
+        INTO v_system FROM accessories WHERE id = v_count.item_id;
+    END IF;
+
+    v_variance := v_count.counted_qty - COALESCE(v_system, 0);
+
+    UPDATE stocktake_counts
+      SET system_qty = COALESCE(v_system, 0), variance = v_variance
+      WHERE id = v_count.id;
+
+    IF v_variance <> 0 THEN
+      IF v_count.reason IS NULL OR length(trim(v_count.reason)) = 0 THEN
+        RAISE EXCEPTION 'validate_stocktake: % #% has variance % but no reason', v_count.item_type, v_count.item_id, v_variance;
+      END IF;
+      PERFORM adjust_stock(
+        v_count.item_type, v_count.item_id, v_session.side,
+        v_count.counted_qty,
+        'stocktake: ' || v_count.reason,
+        NULL, p_user_id
+      );
+      v_applied := v_applied + 1;
+    END IF;
+  END LOOP;
+
+  UPDATE stocktake_sessions
+    SET status = 'validated', validated_by = p_user_id, validated_at = now()
+    WHERE id = p_session_id;
+
+  v_result := jsonb_build_object('success', true, 'session_id', p_session_id, 'adjustments_applied', v_applied);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
+
+-- Per-side cadence status for the soft-block UI. Monthly cadence; tier 0 = ok,
+-- 1 = overdue (warn), 3 = >3 days overdue (hard nag — still dismissible).
+DROP FUNCTION IF EXISTS get_stocktake_status(stock_location);
+CREATE OR REPLACE FUNCTION get_stocktake_status(p_side stock_location)
+RETURNS JSONB AS $$
+DECLARE
+  v_last TIMESTAMP;
+  v_open INT;
+  v_due TIMESTAMP;
+  v_overdue BOOLEAN;
+  v_tier INT;
+  v_days_overdue INT;
+BEGIN
+  SELECT MAX(validated_at) INTO v_last FROM stocktake_sessions
+    WHERE side = p_side AND status = 'validated';
+  SELECT id INTO v_open FROM stocktake_sessions
+    WHERE side = p_side AND status = 'open' ORDER BY started_at DESC LIMIT 1;
+
+  v_due := COALESCE(v_last, '1970-01-01'::timestamp) + INTERVAL '1 month';
+  v_overdue := now() > v_due;
+  v_days_overdue := GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (now() - v_due)) / 86400))::int;
+  v_tier := CASE
+    WHEN NOT v_overdue THEN 0
+    WHEN now() > v_due + INTERVAL '3 days' THEN 3
+    ELSE 1 END;
+
+  RETURN jsonb_build_object(
+    'last_validated_at', v_last,
+    'open_session_id', v_open,
+    'overdue', v_overdue,
+    'days_overdue', v_days_overdue,
+    'tier', v_tier
+  );
 END;
 $$ LANGUAGE plpgsql STABLE;
 

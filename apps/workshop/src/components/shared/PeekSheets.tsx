@@ -40,7 +40,7 @@ function formatStyleName(raw: string): string {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground/70 mb-2">
+    <p className="text-sm font-medium text-muted-foreground mb-2">
       {children}
     </p>
   );
@@ -109,7 +109,7 @@ export function OrderPeekSheet({ orderId, open, onOpenChange }: OrderPeekSheetPr
             {/* Header */}
             <SheetHeader className="px-5 pt-5 pb-4 border-b bg-muted/30">
               <div className="flex items-center gap-2 flex-wrap">
-                <SheetTitle className="font-mono font-black text-xl">
+                <SheetTitle className="font-mono font-semibold text-xl">
                   Order #{orderId}
                 </SheetTitle>
                 {brands.map((b) => <BrandBadge key={b} brand={b} />)}
@@ -182,13 +182,13 @@ function OrderGarmentRow({ garment }: { garment: WorkshopGarment }) {
         className="w-full px-3 py-2.5 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors"
       >
         <GarmentTypeBadge type={garment.garment_type ?? "final"} />
-        <span className="font-mono font-bold text-sm">{garment.garment_id ?? garment.id.slice(0, 8)}</span>
+        <span className="font-mono font-medium text-sm">{garment.garment_id ?? garment.id.slice(0, 8)}</span>
         {isParked && (
-          <span className="text-[10px] font-semibold text-muted-foreground italic">parked</span>
+          <span className="text-[11px] font-medium text-muted-foreground italic">parked</span>
         )}
         {garment.express && <ExpressBadge />}
         {garment.soaking && (
-          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 flex items-center gap-0.5">
+          <span className="text-[11px] font-medium uppercase px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 flex items-center gap-0.5">
             <Droplets className="w-2.5 h-2.5" aria-hidden="true" /> Soak
           </span>
         )}
@@ -288,13 +288,13 @@ function GarmentPeekContent({ garment }: { garment: WorkshopGarment }) {
       )}>
         <div className="flex items-center gap-2 flex-wrap">
           <GarmentTypeBadge type={garment.garment_type ?? "final"} />
-          <SheetTitle className="font-mono font-black text-xl">
+          <SheetTitle className="font-mono font-semibold text-xl">
             {garment.garment_id ?? garment.id.slice(0, 8)}
           </SheetTitle>
           <BrandBadge brand={garment.order_brand} />
           {garment.express && <ExpressBadge />}
           {garment.soaking && (
-            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 flex items-center gap-0.5">
+            <span className="text-[11px] font-medium uppercase px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 flex items-center gap-0.5">
               <Droplets className="w-2.5 h-2.5" aria-hidden="true" /> Soak
             </span>
           )}

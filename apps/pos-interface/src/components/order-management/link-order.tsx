@@ -66,7 +66,7 @@ export default function LinkOrder() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingCustomerOrders, setIsLoadingCustomerOrders] = useState(false);
 
-  function validateOrder(order: any): boolean {
+  function validateOrder(order: Order): boolean {
     if (order.checkout_status !== "confirmed") {
       toast.warning("Only confirmed orders can be linked.");
       return false;
@@ -78,13 +78,13 @@ export default function LinkOrder() {
     return true;
   }
 
-  function mapOrderToSelected(order: any): SelectedOrder {
+  function mapOrderToSelected(order: Order): SelectedOrder {
     return {
       id: order.id,
       invoiceNumber: order.invoice_number,
       orderDate: order.order_date,
       deliveryDate: order.delivery_date,
-      customerId: order.customer_id,
+      customerId: order.customer_id ?? undefined,
       customerName: order.customer?.name,
       customerPhone: order.customer?.phone ?? undefined,
       orderPhase: order.order_phase,
@@ -93,7 +93,7 @@ export default function LinkOrder() {
     };
   }
 
-  async function addOrdersToSelection(ordersToProcess: any[]) {
+  async function addOrdersToSelection(ordersToProcess: Order[]) {
     const ordersMap = new Map<number, SelectedOrder>();
     const idsToFetch = new Set<number>();
 
@@ -103,7 +103,7 @@ export default function LinkOrder() {
 
       if (order.linked_order_id) idsToFetch.add(order.linked_order_id);
       if (order.child_orders) {
-        order.child_orders.forEach((c: any) => idsToFetch.add(c.id || c.order_id));
+        order.child_orders.forEach((c) => idsToFetch.add(c.id));
       }
     }
 
@@ -214,13 +214,13 @@ export default function LinkOrder() {
       await Promise.all(
         selectedOrders.map((order) => {
           const isPrimary = order.id === primaryOrderId;
-          const updateData: any = { delivery_date: reviseDate.toISOString() };
+          const updateData: Partial<Order> = { delivery_date: reviseDate };
           if (isPrimary) {
             updateData.linked_order_id = null;
             updateData.unlinked_date = null;
           } else {
             updateData.linked_order_id = primaryOrderId;
-            updateData.linked_date = now.toISOString();
+            updateData.linked_date = now;
             updateData.unlinked_date = null;
           }
           return updateOrder(updateData, order.id);
@@ -405,7 +405,7 @@ export default function LinkOrder() {
                     </tr>
                   </thead>
                   <tbody>
-                    {customerOrders.map((order: any) => {
+                    {customerOrders.map((order) => {
                       const isChild = !!order.linked_order_id;
                       const isExistingPrimary =
                         order.child_orders && order.child_orders.length > 0;

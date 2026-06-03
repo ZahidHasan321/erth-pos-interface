@@ -354,17 +354,17 @@ function WorkerRow({
             <span className="text-sm text-muted-foreground">—</span>
           )}
 
-          <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center justify-end gap-0.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors">
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="p-1.5 rounded-md hover:text-foreground hover:bg-muted transition-colors"
               aria-label="Edit worker"
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
+              className="p-1.5 rounded-md hover:text-destructive hover:bg-muted transition-colors"
               aria-label="Remove worker"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -403,6 +403,22 @@ function WorkerRow({
                   {w.rating}
                 </span>
               )}
+              <div className="flex items-center gap-0.5 text-muted-foreground">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                  className="flex items-center justify-center size-11 rounded-md hover:text-foreground hover:bg-muted transition-colors"
+                  aria-label="Edit worker"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                  className="flex items-center justify-center size-11 rounded-md hover:text-destructive hover:bg-muted transition-colors"
+                  aria-label="Remove worker"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -519,18 +535,36 @@ function WorkerRow({
               </div>
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <div className="text-base font-medium tabular-nums">{actual}{target > 0 ? `/${target}` : ""}</div>
-            {target > 0 && (
-              <span
-                className={cn(
-                  "text-sm font-medium tabular-nums",
-                  eff >= 90 ? "text-[var(--status-ok)]" : eff >= 70 ? "text-[var(--status-warn)]" : "text-[var(--status-bad)]",
-                )}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="text-right">
+              <div className="text-base font-medium tabular-nums">{actual}{target > 0 ? `/${target}` : ""}</div>
+              {target > 0 && (
+                <span
+                  className={cn(
+                    "text-sm font-medium tabular-nums",
+                    eff >= 90 ? "text-[var(--status-ok)]" : eff >= 70 ? "text-[var(--status-warn)]" : "text-[var(--status-bad)]",
+                  )}
+                >
+                  {eff}%
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-0.5 text-muted-foreground">
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                className="flex items-center justify-center size-11 rounded-md hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Edit worker"
               >
-                {eff}%
-              </span>
-            )}
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                className="flex items-center justify-center size-11 rounded-md hover:text-destructive hover:bg-muted transition-colors"
+                aria-label="Remove worker"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

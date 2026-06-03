@@ -58,7 +58,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
     header: "Order",
     size: 65,
     cell: ({ row }) => {
-      const linkedOrderId = (row.original.order as any).linked_order_id;
+      const linkedOrderId = row.original.order.linked_order_id;
       return (
         <div className="flex flex-col">
           <div className="flex items-center gap-1">
@@ -190,15 +190,15 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
     header: "Garments",
     size: 90,
     cell: ({ row }) => {
-      const garments = (row.original.order as any).garments || [];
+      const garments = row.original.order.garments ?? [];
       const total = garments.length;
       if (total === 0) return <span className="text-xs text-muted-foreground">—</span>;
 
-      const atShop = garments.filter((g: any) => g.location === "shop" && g.piece_stage !== "completed").length;
-      const brovas = garments.filter((g: any) => g.garment_type === "brova");
-      const finals = garments.filter((g: any) => g.garment_type === "final");
-      const brovasAtShop = brovas.filter((g: any) => g.location === "shop" && g.piece_stage !== "completed").length;
-      const finalsAtShop = finals.filter((g: any) => g.location === "shop" && g.piece_stage !== "completed").length;
+      const atShop = garments.filter((g) => g.location === "shop" && g.piece_stage !== "completed").length;
+      const brovas = garments.filter((g) => g.garment_type === "brova");
+      const finals = garments.filter((g) => g.garment_type === "final");
+      const brovasAtShop = brovas.filter((g) => g.location === "shop" && g.piece_stage !== "completed").length;
+      const finalsAtShop = finals.filter((g) => g.location === "shop" && g.piece_stage !== "completed").length;
 
       return (
         <div className="flex flex-col gap-0.5">

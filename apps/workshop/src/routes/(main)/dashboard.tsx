@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   useWorkshopGarments,
@@ -11,6 +11,7 @@ import {
   StatsCard,
   EmptyState,
 } from "@/components/shared/PageShell";
+import { RedoPendingDialog } from "@/components/shared/RedoPendingDialog";
 import { Skeleton } from "@repo/ui/skeleton";
 import { cn, getLocalDateStr, parseUtcTimestamp } from "@/lib/utils";
 import {
@@ -73,6 +74,7 @@ const PLAN_KEY_TO_STAGE: Record<string, string> = {
 function DashboardPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
   const { data: redoPending = [] } = useRedoReplacementsPending();
+  const [redoDialogOpen, setRedoDialogOpen] = useState(false);
 
   // Orders that still have a final parked at waiting_for_acceptance. Drives
   // the "indefinite parking" check below — we need brova-acceptance counts
@@ -178,8 +180,9 @@ function DashboardPage() {
       label: string;
       count: number;
       desc: string;
-      href: string;
+      href?: string;
       search?: Record<string, unknown>;
+      onClick?: () => void;
       icon: typeof Inbox;
       tone: ActionTone;
     }[] = [];
@@ -213,8 +216,8 @@ function DashboardPage() {
         key: "redo-pending",
         label: "Redo replacements pending",
         count: exceptions.redoPending,
-        desc: "Discarded by Reject-Redo — workshop must create a new garment",
-        href: "/assigned",
+        desc: "Discarded by Reject-Redo — create the replacement garment",
+        onClick: () => setRedoDialogOpen(true),
         icon: RotateCcw,
         tone: "warn",
       });
@@ -243,6 +246,7 @@ function DashboardPage() {
     }
 
     return cards;
+  // setRedoDialogOpen is a stable setState dispatcher; only `exceptions` drives content.
   }, [exceptions]);
 
   // ── Production pipeline (from actual garment data) ────────────────
@@ -344,7 +348,7 @@ function DashboardPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto pb-10">
-      <PageHeader icon={LayoutDashboard} title="Workshop overview" subtitle="Live production status" />
+      <PageHeader icon={LayoutDashboard} title="Workshop overview" />
 
       {/* ── Action required ───────────────────────────────────────── */}
       {!isLoading && actionCards.length > 0 && (
@@ -359,16 +363,12 @@ function DashboardPage() {
             {actionCards.map((card) => {
               const tone = ACTION_TONE[card.tone];
               const Icon = card.icon;
-              return (
-                <Link
-                  key={card.key}
-                  to={card.href}
-                  search={card.search}
-                  className={cn(
-                    "border rounded-md p-3 flex items-start gap-3 transition-colors group",
-                    tone.card,
-                  )}
-                >
+              const cardClass = cn(
+                "border rounded-md p-3 flex items-start gap-3 transition-colors group text-left w-full",
+                tone.card,
+              );
+              const body = (
+                <>
                   <Icon className={cn("w-5 h-5 shrink-0 mt-0.5", tone.icon)} aria-hidden="true" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 mb-0.5">
@@ -380,6 +380,15 @@ function DashboardPage() {
                     <p className="text-xs text-muted-foreground">{card.desc}</p>
                   </div>
                   <ArrowRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors shrink-0 mt-1" aria-hidden="true" />
+                </>
+              );
+              return card.onClick ? (
+                <button key={card.key} type="button" onClick={card.onClick} className={cn(cardClass, "cursor-pointer")}>
+                  {body}
+                </button>
+              ) : (
+                <Link key={card.key} to={card.href!} search={card.search} className={cardClass}>
+                  {body}
                 </Link>
               );
             })}
@@ -500,6 +509,11 @@ function DashboardPage() {
         </SectionCard>
       )}
 
+      <RedoPendingDialog
+        open={redoDialogOpen}
+        onClose={() => setRedoDialogOpen(false)}
+        pending={redoPending}
+      />
     </div>
   );
 }

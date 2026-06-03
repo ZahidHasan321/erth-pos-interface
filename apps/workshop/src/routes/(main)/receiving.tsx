@@ -10,8 +10,9 @@ import {
 import { Button } from "@repo/ui/button";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Badge } from "@repo/ui/badge";
-import { Input } from "@repo/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { matchesGarmentSearch } from "@/lib/garment-search";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@/components/shared/table";
 import { BrandBadge, ExpressBadge, AlterationBadge } from "@/components/shared/StageBadge";
 import { cn, formatDate, getDeliveryUrgency } from "@/lib/utils";
 import type { WorkshopGarment } from "@repo/database";
@@ -20,12 +21,18 @@ import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import {
   Inbox, Clock, Package, AlertTriangle, CircleX, Zap, Home,
-  Droplets, Search, Loader2, Scissors,
+  Droplets, Loader2, Scissors,
 } from "lucide-react";
+
+// URL holds the search text so a filtered view is bookmarkable. Empty = bare URL.
+type ReceivingSearch = { q?: string };
 
 export const Route = createFileRoute("/(main)/receiving")({
   component: ReceivingPage,
   head: () => ({ meta: [{ title: "Receiving" }] }),
+  validateSearch: (raw: Record<string, unknown>): ReceivingSearch => ({
+    q: typeof raw.q === "string" && raw.q ? raw.q : undefined,
+  }),
 });
 
 // ── Alteration-out badge (number only present on trip 2+) ───────────────────
@@ -97,7 +104,7 @@ function GarmentRow({
             <div className="flex items-center gap-1">
               {!hideExpress && garment.express && <ExpressBadge />}
               {garment.soaking && (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-muted px-2 py-0.5 rounded-md">
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-info)] bg-[var(--status-info-bg)] px-2 py-0.5 rounded-md">
                   <Droplets className="w-3 h-3" /> Soak
                 </span>
               )}
@@ -148,8 +155,8 @@ function GarmentRow({
             <span className="text-sm text-muted-foreground">—</span>
           )}
           {garment.home_delivery && (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-muted px-2 py-0.5 rounded-md">
-              <Home className="w-3 h-3" /> Home
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
+              <Home className="w-3 h-3 text-indigo-700" /> Home
             </span>
           )}
         </div>
@@ -157,27 +164,28 @@ function GarmentRow({
       <TableCell className="px-3 py-3">
         <div className="flex items-center justify-end gap-1.5">
           {actionVariant === "found" ? (
-            <Button size="sm" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs h-7">
+            <Button size="sm-touch" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs">
               {receivePending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
               Found — Receive
             </Button>
           ) : actionVariant === "receive-only" ? (
-            <Button size="sm" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs h-7">
+            <Button size="sm-touch" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs">
               {receivePending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
               Receive
             </Button>
           ) : actionVariant === "receive-lost" ? (
             <>
-              <Button size="sm" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs h-7">
+              <Button size="sm-touch" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs">
                 {receivePending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                 Receive
               </Button>
+              <div className="w-px self-stretch bg-border mx-1" aria-hidden="true" />
               <Button
-                size="sm"
+                size="sm-touch"
                 variant="ghost"
                 onClick={onLost}
                 disabled={rowBusy}
-                className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
               >
                 {lostPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
                 Lost
@@ -185,25 +193,28 @@ function GarmentRow({
             </>
           ) : (
             <>
-              <Button size="sm" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs h-7">
+              <Button size="sm-touch" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs">
                 {receivePending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                 Receive
               </Button>
-              <Button size="sm" onClick={onReceiveAndStart} disabled={rowBusy} className="text-xs h-7">
+              <Button size="sm-touch" onClick={onReceiveAndStart} disabled={rowBusy} className="text-xs">
                 {receiveStartPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                 Receive & Start
               </Button>
               {actionVariant === "receive-start-lost" && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={onLost}
-                  disabled={rowBusy}
-                  className="text-xs h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  {lostPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
-                  Lost
-                </Button>
+                <>
+                  <div className="w-px self-stretch bg-border mx-1" aria-hidden="true" />
+                  <Button
+                    size="sm-touch"
+                    variant="ghost"
+                    onClick={onLost}
+                    disabled={rowBusy}
+                    className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    {lostPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+                    Lost
+                  </Button>
+                </>
               )}
             </>
           )}
@@ -364,16 +375,14 @@ function ReceivingPage() {
   const isReceiveStartPending = (id: string) => receiveStartPendingIds.has(id);
   const isLostPending = (id: string) => lostPendingIds.has(id);
 
-  const [search, setSearch] = useState("");
+  const search = Route.useSearch().q ?? "";
+  const navigate = Route.useNavigate();
+  const setSearch = (value: string) =>
+    navigate({ search: { q: value || undefined }, replace: true });
   const searchFilter = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     if (!q) return null;
-    return (g: WorkshopGarment) =>
-      (g.customer_name ?? "").toLowerCase().includes(q) ||
-      String(g.order_id).includes(q) ||
-      (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
-      (g.customer_mobile ?? "").replace(/\s+/g, "").includes(q.replace(/\s+/g, "")) ||
-      (g.garment_id ?? "").toLowerCase().includes(q);
+    return (g: WorkshopGarment) => matchesGarmentSearch(g, q);
   }, [search]);
 
   const applySearch = <T extends WorkshopGarment>(arr: T[]) =>
@@ -488,15 +497,12 @@ function ReceivingPage() {
       />
 
       <div className="flex items-center gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Customer, order #, invoice, phone…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Customer, order #, invoice, phone…"
+          className="max-w-sm flex-1"
+        />
         {allVisible.length > 0 && (
           <Button
             variant={allSelected ? "secondary" : "outline"}

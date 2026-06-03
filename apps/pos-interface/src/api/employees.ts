@@ -23,6 +23,6 @@ export const getEmployees = async (): Promise<ApiResponse<Employee[]>> => {
 
   return {
     status: 'success',
-    data: (data as any) as Employee[],
+    data: (data as unknown) as Employee[],
   };
 };

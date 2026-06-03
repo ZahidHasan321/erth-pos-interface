@@ -29,7 +29,8 @@ export async function createFabric(
 
 export async function updateFabric(
   id: number,
-  fabric: Partial<Omit<Fabric, "id">>,
+  // Stock columns are owned by the stamping RPCs / stock_movements ledger — never written here.
+  fabric: Partial<Omit<Fabric, "id" | "shop_stock" | "workshop_stock" | "real_stock">>,
 ): Promise<Fabric> {
   const { data, error } = await withWriteRetry(
     () => db

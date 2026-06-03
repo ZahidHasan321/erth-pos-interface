@@ -9,7 +9,7 @@ import {
 import { mapCustomerToFormValues } from "@/components/forms/customer-demographics/demographics-form.mapper";
 import { OrderSummaryAndPaymentForm } from "@/components/forms/order-summary-and-payment";
 import { ShelfForm } from "@/components/forms/shelf";
-import { shelfFormSchema, type ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
+import { shelfFormSchema, type ShelfFormValues, type ShelfProduct } from "@/components/forms/shelf/shelf-form.schema";
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
@@ -23,7 +23,7 @@ import {
     type OrderSchema,
 } from "@/components/forms/order-summary-and-payment/order-form.schema";
 import { createSalesOrderStore } from "@/store/current-sales-order";
-import type { Customer } from "@repo/database";
+import type { Customer, Order } from "@repo/database";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -75,7 +75,7 @@ function NewSalesOrder() {
     });
 
     const OrderForm = useForm<OrderSchema>({
-        resolver: zodResolver(orderSchema) as any,
+        resolver: zodResolver(orderSchema) as Resolver<OrderSchema>,
         defaultValues: {
             ...orderDefaults,
             order_type: "SALES",
@@ -136,9 +136,10 @@ function NewSalesOrder() {
                 }
 
                 // 2. Load Shelf Items
-                let mappedShelfProducts: any[] = [];
+                type ShelfItemWithShelf = { shelf_id: number; quantity: number; unit_price: number; shelf?: { type?: string | null; brand?: string | null; shop_stock?: number | null; serial_number?: string | null } | null };
+                let mappedShelfProducts: ShelfProduct[] = [];
                 if (orderData.shelf_items && orderData.shelf_items.length > 0) {
-                    mappedShelfProducts = orderData.shelf_items.map((si: any) => ({
+                    mappedShelfProducts = (orderData.shelf_items as ShelfItemWithShelf[]).map((si) => ({
                         id: si.shelf_id.toString(),
                         serial_number: si.shelf?.serial_number || "",
                         product_type: si.shelf?.type || "",
@@ -214,7 +215,7 @@ function NewSalesOrder() {
         onOrderUpdated: (action, data) => {
             if (action === "updated") {
                 if (data) {
-                    const updatedOrderSchema = mapOrderToSchema(data);
+                    const updatedOrderSchema = mapOrderToSchema(data as Order);
                     setOrder(updatedOrderSchema);
                     OrderForm.reset(updatedOrderSchema);
                 }
@@ -235,7 +236,7 @@ function NewSalesOrder() {
     const handleClearCustomer = () => {
         demographicsForm.reset(customerDemographicsDefaults);
         setCustomerDemographics(customerDemographicsDefaults);
-        OrderForm.setValue("customer_id", undefined as any);
+        OrderForm.setValue("customer_id", undefined);
     };
 
     // ============================================================================

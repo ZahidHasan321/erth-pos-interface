@@ -1,4 +1,4 @@
-import type { Order } from "@repo/database";
+import type { Order, CheckoutStatus, OrderPhase, OrderType, PaymentType, DiscountType } from "@repo/database";
 import { type OrderSchema } from "./order-form.schema";
 
 /**
@@ -68,10 +68,10 @@ export function mapOrderToFormValues(order: Order): OrderSchema {
 export function mapFormValuesToOrder(formValues: OrderSchema): Partial<Order> {
     return {
         ...formValues,
-        checkout_status: formValues.checkout_status as any,
-        order_phase: formValues.order_phase as any,
-        order_type: formValues.order_type as any,
-        payment_type: formValues.payment_type as any,
-        discount_type: formValues.discount_type as any,
+        checkout_status: formValues.checkout_status as CheckoutStatus,
+        order_phase: formValues.order_phase as OrderPhase,
+        order_type: formValues.order_type as OrderType,
+        payment_type: formValues.payment_type as PaymentType,
+        discount_type: formValues.discount_type as DiscountType,
     } as Partial<Order>;
 }

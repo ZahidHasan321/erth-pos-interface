@@ -156,7 +156,7 @@ export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, d
                     onChange={(e) => commitInput(e.target.value)}
                     onBlur={() => setDeltaInput(String(delta))}
                     className={cn(
-                      "h-12 border-0 rounded-none text-center text-xl font-bold tabular-nums focus-visible:ring-0 pr-12",
+                      "h-12 border-0 rounded-none text-center text-xl font-semibold tabular-nums focus-visible:ring-0 pr-12",
                       direction === "add" && "text-green-700",
                       direction === "remove" && "text-red-700",
                     )}

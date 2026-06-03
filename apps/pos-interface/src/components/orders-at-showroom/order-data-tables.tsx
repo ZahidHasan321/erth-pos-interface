@@ -82,13 +82,13 @@ function GarmentList({ row }: { row: OrderRow }) {
       </h4>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
         {row.garments
-          .filter((g: any) => {
+          .filter((g) => {
             if (row.showroomStatus.label === "ready_for_pickup") return true;
             return g.locationKey === "shop";
           })
           .map((garment) => {
-            const tripNum = (garment.garment as any).trip_number ?? 1;
-            const garmentType = (garment.garment as any).garment_type as string | null;
+            const tripNum = garment.garment.trip_number ?? 1;
+            const garmentType = garment.garment.garment_type as string | null;
             const isAlterationReturn = isAlterationTrip(tripNum);
             const alterationNum = getAlterationNumber(tripNum);
             const isAlterationGarment = garmentType === "alteration";
@@ -181,15 +181,15 @@ function MobileOrderRow({
   onToggle: () => void;
   onSelect: () => void;
 }) {
-  const linkedOrderId = (row.order as any).linked_order_id;
+  const linkedOrderId = row.order.linked_order_id;
   const overdue = daysOverdue(row.deliveryDate);
   const balance = row.balance || 0;
   const status = statusBadge(row);
   const showFeedback = row.showroomStatus.hasPhysicalItems;
   const showDispatch = row.showroomStatus.label === "needs_action";
-  const garments = (row.order as any).garments || [];
+  const garments = row.order.garments || [];
   const atShop = garments.filter(
-    (g: any) => g.location === "shop" && g.piece_stage !== "completed",
+    (g) => g.location === "shop" && g.piece_stage !== "completed",
   ).length;
 
   return (
@@ -389,7 +389,7 @@ export function OrderDataTable({
     const childrenByParent = new Map<string, OrderRow[]>();
 
     data.forEach((row) => {
-      const parentId = (row.order as any).linked_order_id;
+      const parentId = row.order.linked_order_id;
       if (parentId) {
         const key = String(parentId);
         if (!childrenByParent.has(key)) childrenByParent.set(key, []);
@@ -399,7 +399,7 @@ export function OrderDataTable({
 
     data.forEach((row) => {
       if (added.has(row.orderId)) return;
-      if ((row.order as any).linked_order_id) return; // added under its primary
+      if (row.order.linked_order_id) return; // added under its primary
       grouped.push(row);
       added.add(row.orderId);
       const children = childrenByParent.get(row.orderId) || [];
@@ -498,7 +498,7 @@ export function OrderDataTable({
                     aria-expanded={row.getIsExpanded()}
                     className={cn(
                         "hover:bg-muted/30 border-b border-border/40 cursor-pointer transition-colors",
-                        (row.original.order as any).linked_order_id && "border-l-4 border-l-blue-300/70 bg-blue-50/30",
+                        row.original.order.linked_order_id && "border-l-4 border-l-blue-300/70 bg-blue-50/30",
                         selectedOrderId && row.original.order.id === selectedOrderId && "bg-primary/10 border-l-4 border-l-primary"
                     )}
                     onClick={() => row.toggleExpanded()}

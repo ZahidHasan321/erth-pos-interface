@@ -18,7 +18,7 @@ import { showNotificationToast } from '@/components/notification-toast';
 import { useAuth } from '@/context/auth';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): { (...args: Parameters<T>): void; cancel: () => void } {
+function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): { (...args: Parameters<T>): void; cancel: () => void } {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const debounced = ((...args: Parameters<T>) => {
     if (timer) clearTimeout(timer);

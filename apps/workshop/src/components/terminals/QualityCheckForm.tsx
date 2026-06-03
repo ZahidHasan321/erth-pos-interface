@@ -274,7 +274,7 @@ export function QualityCheckForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [measurement]);
   const expectedOptions: Record<string, unknown> = {};
-  for (const o of QC_OPTIONS) expectedOptions[o.key] = (garment as any)[o.key];
+  for (const o of QC_OPTIONS) expectedOptions[o.key] = (garment as unknown as Record<string, unknown>)[o.key];
   // jabzour_1/2 are stored in DB as enum + text; QC operator sees visual values.
   const j = normalizeExpectedJabzour(expectedOptions.jabzour_1, expectedOptions.jabzour_2);
   expectedOptions.jabzour_1 = j.jabzour_1;
@@ -368,8 +368,8 @@ export function QualityCheckForm({
         clearDraft(draftKey);
         toast.success(`${garment.garment_id} passed QC`);
         router.history.back();
-      } catch (err: any) {
-        toast.error(`QC submit failed: ${err?.message ?? "Unknown error"}`);
+      } catch (err: unknown) {
+        toast.error(`QC submit failed: ${err instanceof Error ? err.message : "Unknown error"}`);
       }
     } else {
       // Pre-select stages from previous fail if rework, else empty.
@@ -396,8 +396,8 @@ export function QualityCheckForm({
       toast.warning(`${garment.garment_id} returned to ${stageNames}`);
       setFailDialogOpen(false);
       router.history.back();
-    } catch (err: any) {
-      toast.error(`QC submit failed: ${err?.message ?? "Unknown error"}`);
+    } catch (err: unknown) {
+      toast.error(`QC submit failed: ${err instanceof Error ? err.message : "Unknown error"}`);
     }
   };
 
@@ -425,17 +425,17 @@ export function QualityCheckForm({
       {/* Header — inspector + rework indicator */}
       <div className="bg-card border rounded-xl p-4 shadow-sm flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
             Quality Check
             {isRework && (
-              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold">
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[11px] font-medium">
                 <AlertTriangle className="w-3 h-3" />
                 Rework — re-checking {enabledKeys.size} field
                 {enabledKeys.size === 1 ? "" : "s"}
               </span>
             )}
             {!isRework && isAlteration && (
-              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 px-2 py-0.5 text-[10px] font-bold">
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 px-2 py-0.5 text-[11px] font-medium">
                 <AlertTriangle className="w-3 h-3" />
                 Alteration — checking only flagged fields
               </span>
@@ -446,10 +446,10 @@ export function QualityCheckForm({
               onClick={() => setOverrideInspector(true)}
               className="flex items-center gap-2 text-sm cursor-pointer hover:opacity-80"
             >
-              <span className="text-xs uppercase tracking-wider text-emerald-600 font-bold">
+              <span className="text-xs uppercase tracking-wider text-emerald-600 font-medium">
                 Inspector
               </span>
-              <span className="font-bold text-emerald-900">{inspector}</span>
+              <span className="font-medium text-emerald-900">{inspector}</span>
               <span className="text-xs text-muted-foreground">(change)</span>
             </button>
           ) : (
@@ -525,7 +525,7 @@ export function QualityCheckForm({
           </details>
         )}
         <Button
-          className="w-full h-12 text-base font-bold"
+          className="w-full h-12 text-base font-medium"
           disabled={!canSubmit || submitMut.isPending}
           onClick={handleSubmit}
         >
@@ -619,7 +619,7 @@ function SectionCard({
   return (
     <div className="bg-card border rounded-xl p-4 shadow-sm">
       <div className="flex items-baseline justify-between mb-3">
-        <h4 className="text-sm font-bold">{title}</h4>
+        <h4 className="text-sm font-medium">{title}</h4>
         {subtitle && (
           <span className="text-xs text-muted-foreground">{subtitle}</span>
         )}
@@ -708,7 +708,7 @@ function MeasurementGrid({
                 )}
                 placeholder="—"
               />
-              <div className="h-5 flex items-center justify-center mt-1 text-[10px] text-muted-foreground/70">
+              <div className="h-5 flex items-center justify-center mt-1 text-[11px] text-muted-foreground/70">
                 {measuredNum != null && Number.isFinite(measuredNum) ? (
                   <span className="inline-flex items-center gap-0.5">
                     <span>=</span>
@@ -838,7 +838,7 @@ function OptionGroups({
                       key={pos}
                       className={cn(
                         "flex items-center gap-2 text-sm rounded px-1",
-                        showFail && "text-red-700 font-bold",
+                        showFail && "text-red-700 font-medium",
                       )}
                     >
                       <input
@@ -1040,7 +1040,7 @@ function OptionGroup({
 }) {
   return (
     <div className="rounded-lg border bg-background p-3 space-y-2">
-      <h5 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+      <h5 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
         {title}
       </h5>
       {children}
@@ -1063,7 +1063,7 @@ function SubLabel({
     <div
       className={cn(
         "text-[11px] font-medium mb-1",
-        failed ? "text-red-600 font-semibold" : "text-muted-foreground",
+        failed ? "text-red-600 font-medium" : "text-muted-foreground",
         className,
       )}
     >
@@ -1106,7 +1106,7 @@ function LinesPicker({
             disabled={disabled}
             onClick={() => onChange(o.value)}
             className={cn(
-              "px-4 py-1.5 rounded-md text-sm font-bold transition-colors",
+              "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
               showFail
                 ? "bg-red-500 text-white shadow-sm"
                 : selected

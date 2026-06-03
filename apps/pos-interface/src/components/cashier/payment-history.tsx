@@ -15,8 +15,33 @@ import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
 import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { PaymentReceipt, type PaymentReceiptData, type ReceiptGarment, type ReceiptShelfItem } from "./payment-receipt";
 
+interface RefundItemRecord {
+    garment_id?: string;
+    fabric?: boolean;
+    stitching?: boolean;
+    style?: boolean;
+    express?: boolean;
+    soaking?: boolean;
+    soaking_hours?: number | null;
+    shelf_item_id?: number | null;
+    quantity?: number;
+    amount?: number;
+}
+
+interface TransactionRecord {
+    id: number;
+    amount: number;
+    payment_type?: string | null;
+    payment_ref_no?: string | null;
+    transaction_type: "payment" | "refund";
+    refund_reason?: string | null;
+    refund_items?: RefundItemRecord[] | null;
+    created_at: string;
+    cashier?: { name: string } | null;
+}
+
 interface PaymentHistoryProps {
-    transactions: any[];
+    transactions: TransactionRecord[];
     orderId: number;
     invoiceNumber?: number;
     invoiceRevision?: number;
@@ -65,7 +90,7 @@ export function PaymentHistory({
         }
     }, [pendingPrint, receiptData, handlePrint]);
 
-    const printTransaction = useCallback((tx: any) => {
+    const printTransaction = useCallback((tx: TransactionRecord) => {
         // Same-millisecond ties: tiebreak by id so two transactions stamped at the
         // same instant don't both count toward the earlier one's prior-paid total.
         const txTs = parseUtcTimestamp(tx.created_at).getTime();
@@ -76,7 +101,7 @@ export function PaymentHistory({
                 if (ts > txTs) return false;
                 return t.id <= tx.id;
             })
-            .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+            .reduce((sum: number, t) => sum + (t.amount || 0), 0);
 
         const invoiceDisplay = invoiceNumber ? `${invoiceNumber}${invoiceRevision ? `-R${invoiceRevision}` : ""}` : undefined;
         setReceiptData({
@@ -88,8 +113,8 @@ export function PaymentHistory({
             customerPhone,
             transactionAmount: tx.amount,
             transactionType: tx.transaction_type,
-            paymentType: tx.payment_type,
-            paymentRefNo: tx.payment_ref_no,
+            paymentType: tx.payment_type ?? "",
+            paymentRefNo: tx.payment_ref_no ?? undefined,
             orderTotal,
             totalPaid: paid,
             remainingBalance: orderTotal - paid,
@@ -128,11 +153,11 @@ export function PaymentHistory({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {transactions.map((tx: any) => {
+                        {transactions.map((tx) => {
                             const isRefund = tx.transaction_type === "refund";
                             const hasRefundDetails = isRefund && (tx.refund_reason || (tx.refund_items && tx.refund_items.length > 0));
                             const isExpanded = expandedTx === tx.id;
-                            const refundItems: any[] = tx.refund_items || [];
+                            const refundItems: RefundItemRecord[] = tx.refund_items || [];
 
                             return (
                                 <Fragment key={tx.id}>
@@ -192,7 +217,7 @@ export function PaymentHistory({
                                         </TableCell>
                                     </TableRow>
 
-                                    {/* Refund details — expanded row */}
+                                    {/* Refund details - expanded row */}
                                     {isExpanded && hasRefundDetails && (
                                         <TableRow className="hover:bg-red-50/60 bg-red-50/40">
                                             <TableCell colSpan={7} className="px-4 py-2">
@@ -204,7 +229,7 @@ export function PaymentHistory({
                                                 )}
                                                 {refundItems.length > 0 && (
                                                     <div className="space-y-1">
-                                                        {refundItems.map((item: any, i: number) => {
+                                                        {refundItems.map((item, i: number) => {
                                                             if (item.garment_id) {
                                                                 const parts = [
                                                                     item.fabric && "Fabric",
@@ -218,7 +243,7 @@ export function PaymentHistory({
                                                                         <Shirt className="h-3 w-3 shrink-0" />
                                                                         <span className="font-medium">{item.garment_id.slice(0, 8)}</span>
                                                                         <span className="text-red-500">{parts.join(", ")}</span>
-                                                                        <span className="ml-auto font-semibold tabular-nums">{fmt(item.amount)} KD</span>
+                                                                        <span className="ml-auto font-semibold tabular-nums">{fmt(item.amount ?? 0)} KD</span>
                                                                     </div>
                                                                 );
                                                             }
@@ -228,7 +253,7 @@ export function PaymentHistory({
                                                                         <Package className="h-3 w-3 shrink-0" />
                                                                         <span className="font-medium">Shelf item</span>
                                                                         <span className="text-red-500">x{item.quantity}</span>
-                                                                        <span className="ml-auto font-semibold tabular-nums">{fmt(item.amount)} KD</span>
+                                                                        <span className="ml-auto font-semibold tabular-nums">{fmt(item.amount ?? 0)} KD</span>
                                                                     </div>
                                                                 );
                                                             }

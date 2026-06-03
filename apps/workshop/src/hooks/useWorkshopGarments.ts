@@ -8,6 +8,7 @@ import {
   getBoardGarments,
   getCompletedTodayGarments,
   getRedoReplacementsPending,
+  getParkedRedos,
   getGarmentById,
   getOrderGarments,
   getAssignedOverview,
@@ -19,6 +20,7 @@ import {
   getOrderLocationBreakdown,
   type AssignedTab,
   type AssignedChip,
+  type AssignedSort,
 } from '@/api/garments';
 
 // Query keys. After the scoped-fetch refactor, each page has its own cache
@@ -33,6 +35,8 @@ export const COMPLETED_TODAY_KEY = ['completed-today-garments'] as const;
 export const ASSIGNED_OVERVIEW_KEY = ['assigned-overview'] as const;
 export const ASSIGNED_PAGE_KEY = ['assigned-page'] as const;
 export const COMPLETED_VIEW_KEY = ['completed-view-garments'] as const;
+export const PARKED_REDOS_KEY = ['parked-redos'] as const;
+export const REDO_PENDING_KEY = ['redo-replacements-pending'] as const;
 
 // Legacy shared cache key. Still used by pages that have not been
 // scope-converted (parking, receiving, dispatch, dashboard, quality-check,
@@ -84,18 +88,33 @@ export function useAssignedOverview() {
 
 /**
  * Paginated list for Assigned Orders list tabs (production/ready/attention/all).
- * Each page re-fetches when tab/chips/page change; keepPreviousData avoids
- * skeleton flash between pages.
+ * Filtering/sorting/counting is server-side: tab, chips, search, sort and brand
+ * narrowing all live in the queryKey so each filter change refetches. The
+ * SearchInput debounces its onChange→URL write, so typing won't thrash.
+ * keepPreviousData avoids skeleton flash between filter changes.
  */
 export function useAssignedOrdersPage(args: {
   tab: AssignedTab;
   chips: AssignedChip[];
   page: number;
   pageSize: number;
+  search?: string;
+  sort?: AssignedSort;
+  brands?: string[];
 }) {
   const chipsKey = [...args.chips].sort().join(',');
+  const brandsKey = [...(args.brands ?? [])].sort().join(',');
   return useQuery({
-    queryKey: [...ASSIGNED_PAGE_KEY, args.tab, chipsKey, args.page, args.pageSize],
+    queryKey: [
+      ...ASSIGNED_PAGE_KEY,
+      args.tab,
+      chipsKey,
+      args.page,
+      args.pageSize,
+      args.search ?? '',
+      args.sort ?? '',
+      brandsKey,
+    ],
     queryFn: () => getAssignedOrdersPage(args),
     staleTime: LIST_STALE_TIME,
     placeholderData: keepPreviousData,
@@ -108,10 +127,10 @@ export function useAssignedOrdersPage(args: {
  * WORKSHOP_QUERY (measurement/style/fabric joins) and paginated client-side.
  * Now hits get_completed_orders_page which returns pre-grouped, slimmed rows.
  */
-export function useCompletedOrders(page: number, pageSize: number) {
+export function useCompletedOrders(page: number, pageSize: number, search?: string) {
   return useQuery({
-    queryKey: [...COMPLETED_VIEW_KEY, page, pageSize],
-    queryFn: () => getCompletedOrdersPage(page, pageSize),
+    queryKey: [...COMPLETED_VIEW_KEY, page, pageSize, search ?? ''],
+    queryFn: () => getCompletedOrdersPage(page, pageSize, search),
     staleTime: LIST_STALE_TIME,
     placeholderData: keepPreviousData,
   });
@@ -201,8 +220,20 @@ export function useCompletedTodayGarments() {
  *  query — used by the dashboard exception card. */
 export function useRedoReplacementsPending() {
   return useQuery({
-    queryKey: ['redo-replacements-pending'],
+    queryKey: REDO_PENDING_KEY,
     queryFn: getRedoReplacementsPending,
+    staleTime: LIST_STALE_TIME,
+  });
+}
+
+/** Parked redo replacements (in_production=false, redo_priority='parked').
+ *  Drives the scheduler's "Parked redos — needs manager decision" section.
+ *  Separate from useSchedulerGarments because parked rows fall outside its
+ *  in_production=true filter. */
+export function useParkedRedos() {
+  return useQuery({
+    queryKey: PARKED_REDOS_KEY,
+    queryFn: getParkedRedos,
     staleTime: LIST_STALE_TIME,
   });
 }

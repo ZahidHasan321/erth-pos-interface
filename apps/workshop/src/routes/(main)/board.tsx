@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Columns3, Loader2, Zap, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Columns3, Loader2, Zap } from "lucide-react";
 import { Button } from "@repo/ui/button";
-import { Input } from "@repo/ui/input";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { matchesGarmentSearch } from "@/lib/garment-search";
 import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
 import { Calendar } from "@repo/ui/calendar";
 import { Skeleton } from "@repo/ui/skeleton";
@@ -14,9 +15,20 @@ import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { cn, getLocalDateStr, getDeliveryUrgency, formatDate, TIMEZONE } from "@/lib/utils";
 import type { WorkshopGarment, ProductionPlan } from "@repo/database";
 
+// URL is the source of truth for the board's mode/date/search. Defaults (live
+// mode, today, empty search) reproduce a bare URL exactly — the default-valued
+// keys are omitted. `date` only matters in scheduled mode; it's dropped when it
+// equals today to keep the URL clean.
+type BoardSearch = { mode?: "scheduled"; date?: string; q?: string };
+
 export const Route = createFileRoute("/(main)/board")({
   component: BoardPage,
   head: () => ({ meta: [{ title: "Production Board" }] }),
+  validateSearch: (raw: Record<string, unknown>): BoardSearch => ({
+    mode: raw.mode === "scheduled" ? "scheduled" : undefined,
+    date: typeof raw.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.date) ? raw.date : undefined,
+    q: typeof raw.q === "string" && raw.q ? raw.q : undefined,
+  }),
 });
 
 const STAGE_TO_PLAN_KEY: Record<string, keyof ProductionPlan> = {
@@ -83,28 +95,28 @@ const MODE_OPTIONS = [
 
 function BoardPage() {
   const today = useMemo(() => getLocalDateStr(), []);
-  const [mode, setMode] = useState<BoardMode>("live");
-  const [dateStr, setDateStr] = useState<string>(today);
+  const sp = Route.useSearch();
+  const mode: BoardMode = sp.mode ?? "live";
+  const search = sp.q ?? "";
+  const dateStr = sp.date ?? today;
+  const navigate = Route.useNavigate();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [search, setSearch] = useState("");
+
+  const setMode = (m: BoardMode) =>
+    navigate({ search: (prev) => ({ ...prev, mode: m === "live" ? undefined : m }), replace: true });
+  // `date` is dropped when it equals today so live/today views stay bare.
+  const setDateStr = (d: string) =>
+    navigate({ search: (prev) => ({ ...prev, date: d === today ? undefined : d }), replace: true });
+  const setSearch = (value: string) =>
+    navigate({ search: (prev) => ({ ...prev, q: value || undefined }), replace: true });
 
   const queryDate = mode === "live" ? null : dateStr;
   const { data: garments = [], isLoading, isFetching } = useBoardGarments(queryDate);
 
   const filteredGarments = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     if (!q) return garments;
-    const qDigits = q.replace(/\s+/g, "");
-    return garments.filter(
-      (g) =>
-        (g.customer_name ?? "").toLowerCase().includes(q) ||
-        String(g.order_id).includes(q) ||
-        (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
-        (g.customer_mobile ?? "").replace(/\s+/g, "").includes(qDigits) ||
-        (g.garment_id ?? "").toLowerCase().includes(q) ||
-        (g.fabric_name ?? "").toLowerCase().includes(q) ||
-        (g.style_name ?? "").toLowerCase().includes(q),
-    );
+    return garments.filter((g) => matchesGarmentSearch(g, q, { includeFabricStyle: true }));
   }, [garments, search]);
 
   const byStage = useMemo(() => {
@@ -201,15 +213,12 @@ function BoardPage() {
         </div>
       </PageHeader>
 
-      <div className="relative max-w-sm mb-3">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        <Input
-          placeholder="Garment, customer, order, fabric, style…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Garment, customer, order, fabric, style…"
+        className="max-w-sm mb-3"
+      />
 
       <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x">
         {BOARD_STAGES.map((stage) => (

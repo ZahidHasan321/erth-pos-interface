@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowDownToLine, Loader2, Minus, Plus, Store, Hammer } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
@@ -58,7 +59,7 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
       reset();
       onClose();
     },
-    onError: (err: any) => toast.error(`Restock failed: ${err?.message ?? String(err)}`),
+    onError: (err: unknown) => toast.error(`Restock failed: ${err instanceof Error ? err.message : String(err)}`),
   });
 
   function reset() {
@@ -211,7 +212,7 @@ function Section({ label, hint, children }: { label: string; hint?: string; chil
   );
 }
 
-function LocationOption({ icon: Icon, label, active, onClick }: { icon: any; label: string; active: boolean; onClick: () => void }) {
+function LocationOption({ icon: Icon, label, active, onClick }: { icon: LucideIcon; label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"

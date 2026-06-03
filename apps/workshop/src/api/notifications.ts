@@ -18,10 +18,32 @@ export async function getNotifications(limit = 50): Promise<NotificationItem[]> 
   return (data as NotificationItem[]) ?? [];
 }
 
-export async function getNotificationsPaginated(limit: number, offset: number): Promise<NotificationItem[]> {
-  const { data, error } = await db.rpc("get_my_notifications", { p_limit: limit, p_offset: offset, p_department: "workshop" });
+export async function getNotificationsPaginated(
+  limit: number,
+  offset: number,
+  type?: string,
+  unreadOnly?: boolean,
+): Promise<NotificationItem[]> {
+  const { data, error } = await db.rpc("get_my_notifications", {
+    p_limit: limit,
+    p_offset: offset,
+    p_department: "workshop",
+    p_type: type ?? null,
+    p_unread_only: unreadOnly ?? false,
+  });
   if (error) throw error;
   return (data as NotificationItem[]) ?? [];
+}
+
+/** Total count of notifications matching the same type/unread filters — for pagination. */
+export async function getNotificationsCount(type?: string, unreadOnly?: boolean): Promise<number> {
+  const { data, error } = await db.rpc("get_my_notifications_count", {
+    p_department: "workshop",
+    p_type: type ?? null,
+    p_unread_only: unreadOnly ?? false,
+  });
+  if (error) throw error;
+  return (data as number) ?? 0;
 }
 
 export async function getUnreadCount(): Promise<number> {

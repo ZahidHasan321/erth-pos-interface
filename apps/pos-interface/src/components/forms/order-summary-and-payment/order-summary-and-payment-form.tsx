@@ -13,7 +13,7 @@ import {
   StickyNote,
 } from "lucide-react";
 import React from "react";
-import { useWatch, type UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn, type FieldErrors } from "react-hook-form";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
@@ -339,12 +339,12 @@ export function OrderSummaryAndPaymentForm({
     onConfirm(data);
   };
 
-  const onInvalid = (errors: any) => {
+  const onInvalid = (errors: FieldErrors<OrderSchemaType>) => {
     console.error("Order Form Validation Errors:", errors);
     const errorKeys = Object.keys(errors);
     if (errorKeys.length > 0) {
       const firstKey = errorKeys[0];
-      const error = errors[firstKey];
+      const error = errors[firstKey as keyof typeof errors];
       const message = error?.message || `Invalid value for ${firstKey}`;
       toast.error(message);
     }

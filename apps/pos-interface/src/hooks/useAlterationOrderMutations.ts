@@ -32,7 +32,7 @@ export function useAlterationOrderMutations() {
                     refetchType: "active",
                 });
             }
-            toast.success(`Alteration order #${(order as any).invoice_number ?? order.id} created`);
+            toast.success(`Alteration order #${order.invoice_number ?? order.id} created`);
         },
         onError: (err: unknown) => {
             const message = err instanceof Error ? err.message : "Could not create alteration order";

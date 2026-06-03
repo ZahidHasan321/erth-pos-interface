@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, LockKeyhole, ArrowDownUp, XCircle, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -33,7 +33,7 @@ function OpenRegisterScreen() {
     const mutation = useOpenRegisterMutation();
 
     const form = useForm<OpenFormValues>({
-        resolver: zodResolver(openSchema) as any,
+        resolver: zodResolver(openSchema) as Resolver<OpenFormValues>,
         defaultValues: { opening_float: undefined as unknown as number },
     });
 

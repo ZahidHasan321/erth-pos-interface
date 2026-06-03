@@ -32,12 +32,12 @@ export const Route = createFileRoute("/cashier")({
                 search: { redirect: location.href },
             });
         }
-        const user = (context.auth as any).user;
+        const user = (context.auth as { user?: { role?: string; job_functions?: string[]; brands?: string[] } }).user;
         // Terminal workshop staff have no place in POS at all.
         if (user && user.role === "staff" && Array.isArray(user.job_functions) && user.job_functions.length > 0) {
             throw redirect({
                 to: "/login",
-                search: { redirect: undefined, error: "terminal_user_on_pos" } as any,
+                search: { redirect: undefined },
             });
         }
         // Brand gate: the cashier shell only exists for brands on the

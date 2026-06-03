@@ -165,10 +165,13 @@ export type AppointmentStatus = (typeof appointmentStatusEnum.enumValues)[number
 export type TransactionType = (typeof transactionTypeEnum.enumValues)[number];
 
 // --- TRANSFER / INVENTORY ENUMS ---
+// Live flow has NO approval gate (CLAUDE.md §4): requested → dispatched →
+// received/partially_received. "approved"/"rejected" are retained-but-dead — no
+// code path produces them — because Postgres can't drop an enum value cleanly.
 export const transferStatusEnum = pgEnum("transfer_status", [
     "requested",
-    "approved",
-    "rejected",
+    "approved",            // dead — see note above
+    "rejected",            // dead — see note above
     "dispatched",
     "received",
     "partially_received",
@@ -197,6 +200,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
     "transfer_requested",
     "transfer_status_changed",
     "garment_redo_requested",
+    "low_stock",
 ]);
 export type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
 
@@ -261,11 +265,50 @@ export const adjustmentReasonEnum = pgEnum("adjustment_reason", [
 ]);
 export type AdjustmentReason = (typeof adjustmentReasonEnum.enumValues)[number];
 
+// --- STOCKTAKE (periodic physical count, per side) ---
+export const stocktakeStatusEnum = pgEnum("stocktake_status", ["open", "validated"]);
+export type StocktakeStatus = (typeof stocktakeStatusEnum.enumValues)[number];
+
 export const styleRuleTypeEnum = pgEnum("style_rule_type", [
     "flat_override",
     "additive",
 ]);
 export type StyleRuleType = (typeof styleRuleTypeEnum.enumValues)[number];
+
+// --- ROOT-CAUSE TAXONOMY (shared attribution vocabulary — CLAUDE.md §2.9) ---
+// One canonical "who is responsible / why" enum shared by redo+scrap recording,
+// redo material waste, the repeated-returns investigation workflow, and
+// performance attribution (Groups A/C/D). The responsible party is DERIVED in
+// SQL (root_cause_responsible_party in triggers.sql), never stored separately.
+// Distinct from the §2.5 measurement-reason gates (the measurement-scoped view)
+// and §4 WASTE_REASONS (the physical-reason axis) — see §2.9. The DB type is
+// created in triggers.sql (not via db:push) so it exists ahead of any column.
+export const rootCauseEnum = pgEnum("root_cause", [
+    "production_error",
+    "qc_escape",
+    "showroom_error",
+    "customer_change",
+    "material_defect",
+    "other",
+]);
+export type RootCause = (typeof rootCauseEnum.enumValues)[number];
+
+// Group A redo lifecycle (CLAUDE.md §2.5/§6). Created in triggers.sql (not via
+// db:push) so the types exist ahead of the garment columns referencing them.
+export const redoPriorityEnum = pgEnum("redo_priority", [
+    "immediate",
+    "next_slot",
+    "parked",
+]);
+export type RedoPriority = (typeof redoPriorityEnum.enumValues)[number];
+
+export const redoParkedReasonEnum = pgEnum("redo_parked_reason", [
+    "waiting_material",
+    "customer_decision",
+    "approval",
+    "clarification",
+]);
+export type RedoParkedReason = (typeof redoParkedReasonEnum.enumValues)[number];
 
 
 // --- 0. PRICES ---
@@ -888,6 +931,17 @@ export const garments = pgTable("garments", {
     // Set on a discarded garment (piece_stage='discarded') to point at its replacement row.
     // Unique: one discarded original can be replaced at most once. Null for all other garments.
     replaced_by_garment_id: uuid("replaced_by_garment_id").references((): AnyPgColumn => garments.id, { onDelete: 'set null' }),
+
+    // --- Group A redo lifecycle (CLAUDE.md §2.5/§6) ---
+    // root_cause is set on the DISCARDED ORIGINAL (the attributed scrap); the
+    // responsible party is derived in SQL (§2.9), never stored separately.
+    root_cause: rootCauseEnum("root_cause"),
+    // The next three live on the REPLACEMENT row. Manager priority queue control
+    // (immediate/next_slot/parked); the parked reason; and a flag that the
+    // customer must provide replacement cloth (OUT fabric — parked customer_decision).
+    redo_priority: redoPriorityEnum("redo_priority"),
+    redo_parked_reason: redoParkedReasonEnum("redo_parked_reason"),
+    redo_customer_must_provide_fabric: boolean("redo_customer_must_provide_fabric").default(false).notNull(),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
     orderGarmentIdUnique: uniqueIndex("garments_order_garment_id_unique").on(t.order_id, t.garment_id),
@@ -1308,6 +1362,14 @@ export const stockMovements = pgTable("stock_movements", {
     // human context
     reason: text("reason"),
     notes: text("notes"),
+    image_url: text("image_url"),  // optional photo (e.g. damage/waste evidence)
+    // Group A net-zero waste annotation (CLAUDE.md §4 redo material waste): a
+    // `waste` row with qty_delta=0 carries the scrapped length here so reports
+    // surface it (SUM(ABS(qty_delta)+COALESCE(annotated_qty,0))) without
+    // double-counting real wastes (whose annotated_qty is NULL). root_cause
+    // attributes the loss (§2.9); responsible party is derived in SQL.
+    annotated_qty: numeric("annotated_qty", { precision: 10, scale: 2 }),
+    root_cause: rootCauseEnum("root_cause"),
     // who/when
     user_id: uuid("user_id").references(() => users.id),
     created_at: timestamp("created_at").defaultNow().notNull(),
@@ -1317,6 +1379,40 @@ export const stockMovements = pgTable("stock_movements", {
     createdAtIdx: index("stock_movements_created_at_idx").on(t.created_at),
     refIdx: index("stock_movements_ref_idx").on(t.ref_type, t.ref_id),
     typeCreatedIdx: index("stock_movements_type_created_idx").on(t.movement_type, t.created_at),
+}));
+
+// --- 18. STOCKTAKE (periodic physical count, per side) ---
+// A controlled monthly recount run per side (shop counts its own holdings,
+// workshop its own). Counts are entered against the side's full item set; a
+// manager validates to commit each non-zero variance as an 'adjustment'
+// movement (reason='stocktake'), which freezes the session and resets the
+// side's cadence clock. Validated sessions are retained for history.
+export const stocktakeSessions = pgTable("stocktake_sessions", {
+    id: serial("id").primaryKey(),
+    side: stockLocationEnum("side").notNull(),  // 'shop' | 'workshop' — which side's stock is counted
+    brand: brandEnum("brand").notNull().default("ERTH"),
+    status: stocktakeStatusEnum("status").notNull().default("open"),
+    started_by: uuid("started_by").references(() => users.id),
+    started_at: timestamp("started_at").defaultNow().notNull(),
+    validated_by: uuid("validated_by").references(() => users.id),
+    validated_at: timestamp("validated_at"),
+    notes: text("notes"),
+}, (t) => ({
+    sideStatusIdx: index("stocktake_sessions_side_status_idx").on(t.side, t.status),
+    sideValidatedIdx: index("stocktake_sessions_side_validated_idx").on(t.side, t.validated_at),
+}));
+
+export const stocktakeCounts = pgTable("stocktake_counts", {
+    id: serial("id").primaryKey(),
+    session_id: integer("session_id").references(() => stocktakeSessions.id, { onDelete: 'cascade' }).notNull(),
+    item_type: stockItemTypeEnum("item_type").notNull(),
+    item_id: integer("item_id").notNull(),  // soft-ref to fabrics/shelf/accessories
+    system_qty: numeric("system_qty", { precision: 10, scale: 2 }),    // snapshot taken at validate time
+    counted_qty: numeric("counted_qty", { precision: 10, scale: 2 }),  // physical count entered; null = not yet counted
+    variance: numeric("variance", { precision: 10, scale: 2 }),        // counted − system (set at validate)
+    reason: text("reason"),                                            // required when variance != 0
+}, (t) => ({
+    sessionItemIdx: uniqueIndex("stocktake_counts_session_item_idx").on(t.session_id, t.item_type, t.item_id),
 }));
 
 // --- RELATIONS ---

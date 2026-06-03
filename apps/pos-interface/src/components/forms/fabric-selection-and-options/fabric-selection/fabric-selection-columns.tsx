@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@repo/ui/dropdown-menu";
 import { MoreHorizontal, Printer, Trash2 } from "lucide-react";
+import type { Row, Table } from "@tanstack/react-table";
 
 export const columns: ColumnDef<GarmentSchema>[] = [
   // IDs
@@ -106,7 +107,7 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   },
 ];
 
-function ActionCell({ row, table }: { row: any; table: any }) {
+function ActionCell({ row, table }: { row: Row<GarmentSchema>; table: Table<GarmentSchema> }) {
   const meta = table.options.meta as {
     removeRow: (rowIndex: number) => void;
     isFormDisabled?: boolean;

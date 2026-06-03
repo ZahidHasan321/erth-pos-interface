@@ -57,7 +57,7 @@ export const GarmentCard = memo(function GarmentCard({
           <div className="flex items-start justify-between gap-1 flex-wrap">
             <div className="flex items-center gap-1.5">
               <GarmentTypeBadgeCompact type={garment.garment_type ?? "final"} />
-              <span className="font-mono font-black text-lg leading-tight">
+              <span className="font-mono font-medium text-lg leading-tight">
                 {garment.garment_id ?? garment.id.slice(0, 8)}
               </span>
             </div>
@@ -65,7 +65,7 @@ export const GarmentCard = memo(function GarmentCard({
               <BrandBadge brand={garment.order_brand} />
               {garment.express && <ExpressBadge />}
               {garment.start_time && (
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Started</span>
+                <span className="text-xs font-medium text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Started</span>
               )}
             </div>
           </div>
@@ -86,11 +86,11 @@ export const GarmentCard = memo(function GarmentCard({
             <p className="text-xs text-muted-foreground capitalize mt-0.5 truncate">{garment.style_name}</p>
           )}
           <div className="flex items-center gap-1.5 mt-auto pt-2 flex-wrap">
-            {hasSoaking && (garment.piece_stage === "waiting_cut" || garment.piece_stage === "soaking") && <span className="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">Soak</span>}
+            {hasSoaking && (garment.piece_stage === "waiting_cut" || garment.piece_stage === "soaking") && <span className="text-xs font-medium text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">Soak</span>}
             <QcFixBadge tripNumber={garment.trip_number} tripHistory={garment.trip_history} />
             <AlterationBadge tripNumber={garment.trip_number} garmentType={garment.garment_type} />
             {garment.assigned_date && (
-              <span className="text-[10px] font-semibold text-red-600">{formatDate(garment.assigned_date)}</span>
+              <span className="text-[11px] font-medium text-red-600">{formatDate(garment.assigned_date)}</span>
             )}
             {garment.invoice_number && (
               <span className="text-xs font-medium text-muted-foreground ml-auto">#{garment.invoice_number}</span>
@@ -139,7 +139,7 @@ export const GarmentCard = memo(function GarmentCard({
                 />
               )}
               <GarmentTypeBadge type={garment.garment_type ?? "final"} />
-              <span className="font-mono font-black text-lg shrink-0">
+              <span className="font-mono font-medium text-lg shrink-0">
                 {garment.garment_id ?? garment.id.slice(0, 8)}
               </span>
               {!compact && garment.invoice_number && (
@@ -174,7 +174,7 @@ export const GarmentCard = memo(function GarmentCard({
                   <>
                     {!hideStage && <StageBadge stage={garment.piece_stage} garmentType={garment.garment_type} inProduction={garment.in_production} location={garment.location} />}
                     {garment.acceptance_status && garment.feedback_status && garment.feedback_status !== "accepted" && (
-                      <Badge variant="outline" className="border-0 font-semibold text-xs uppercase tracking-wide bg-emerald-200 text-emerald-900">Accepted</Badge>
+                      <Badge variant="outline" className="border-0 font-medium text-xs uppercase tracking-wide bg-emerald-200 text-emerald-900">Accepted</Badge>
                     )}
                     <FeedbackStatusBadge status={garment.feedback_status} />
                     <QcFixBadge tripNumber={garment.trip_number} tripHistory={garment.trip_history} />
@@ -193,7 +193,7 @@ export const GarmentCard = memo(function GarmentCard({
                 )}
                 {effectiveDeliveryDate && (
                   <span className={cn(
-                    "inline-flex items-center gap-1 text-sm font-bold tabular-nums px-2 py-0.5 rounded-md",
+                    "inline-flex items-center gap-1 text-sm font-medium tabular-nums px-2 py-0.5 rounded-md",
                     urgency.pill,
                   )}>
                     <CalendarClock className="w-3.5 h-3.5" aria-hidden="true" />

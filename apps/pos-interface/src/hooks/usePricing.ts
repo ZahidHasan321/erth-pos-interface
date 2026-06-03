@@ -47,8 +47,8 @@ export function usePricing() {
   const stitchingChild = getPrice('STITCHING_CHILD') || 7;
 
   const calculateOrderTotal = (
-    garments: any[],
-    shelfItems: any[],
+    garments: { fabricAmount?: number; style?: string; style_id?: string | null; [key: string]: unknown }[],
+    shelfItems: { unitPrice?: number; quantity?: number; [key: string]: unknown }[],
     homeDelivery: boolean,
     expressCount: number,
     stitchingBaseOverride?: number
@@ -66,7 +66,7 @@ export function usePricing() {
 
     // 3. Calculate Style (sum of style extras from styles table)
     const styleTotal = garments.reduce((acc, g) => {
-        return acc + calculateGarmentStylePrice(g, styles, stylePricingRules);
+        return acc + calculateGarmentStylePrice(g as Parameters<typeof calculateGarmentStylePrice>[0], styles, stylePricingRules);
     }, 0);
 
     // 4. Delivery

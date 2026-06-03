@@ -38,7 +38,7 @@ export type FilterState = {
 
 type OrderFiltersProps = {
   filters: FilterState;
-  onFilterChange: (key: keyof FilterState, value: any) => void;
+  onFilterChange: (key: keyof FilterState, value: FilterState[keyof FilterState]) => void;
   onClearFilters: () => void;
   className?: string;
 };

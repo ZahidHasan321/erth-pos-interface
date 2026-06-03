@@ -3,14 +3,18 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { usePerformanceData, type WorkerKpi, type UnitKpi } from "@/hooks/usePerformance";
 import { WORKER_SCOPED_STAGES, UNIT_SCOPED_STAGES, GROUP_SCOPED_STAGES } from "@/lib/stage-shape";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
+import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Input } from "@repo/ui/input";
+import { FilterChip, FilterChipGroup } from "@/components/shared/FilterChip";
 import { PageHeader, SectionCard, EmptyState } from "@/components/shared/PageShell";
 import { cn, getLocalDateStr, getKuwaitDayRange, TIMEZONE } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
   Cell, LineChart, Line, CartesianGrid, ReferenceLine,
 } from "recharts";
+import type { ValueType, NameType } from "recharts/types/component/DefaultTooltipContent";
+import type { Payload } from "recharts/types/component/DefaultTooltipContent";
 import {
   TrendingUp, ShieldCheck,
   Package2, Star, ChevronDown, ChevronUp,
@@ -19,9 +23,34 @@ import {
   Timer, CalendarClock, ThumbsUp, Droplets, Rocket,
 } from "lucide-react";
 
+// URL is the source of truth for the date preset, stage filter, breakdown tab,
+// worker search and sort. Defaults (week / all stages / workers tab / efficiency
+// desc / empty search) are omitted to keep a bare URL.
+type Preset = "today" | "week" | "month" | "quarter";
+type PerfTab = "workers" | "units";
+type PerformanceSearch = {
+  preset?: Preset;
+  stage?: string;
+  tab?: PerfTab;
+  q?: string;
+  sort?: string;
+  dir?: "asc" | "desc";
+};
+
+const isPreset = (v: unknown): v is Preset =>
+  v === "today" || v === "week" || v === "month" || v === "quarter";
+
 export const Route = createFileRoute("/(main)/performance/")({
   component: PerformancePage,
   head: () => ({ meta: [{ title: "Performance" }] }),
+  validateSearch: (raw: Record<string, unknown>): PerformanceSearch => ({
+    preset: isPreset(raw.preset) ? raw.preset : undefined,
+    stage: typeof raw.stage === "string" && raw.stage ? raw.stage : undefined,
+    tab: raw.tab === "units" ? "units" : undefined,
+    q: typeof raw.q === "string" && raw.q ? raw.q : undefined,
+    sort: typeof raw.sort === "string" && raw.sort && raw.sort !== "efficiency" ? raw.sort : undefined,
+    dir: raw.dir === "asc" ? "asc" : undefined,
+  }),
 });
 
 // TEMP DISABLED: post_cutting hidden from production flow
@@ -149,52 +178,6 @@ function SecondaryStat({
         <span className="text-base font-medium tabular-nums shrink-0">{value}</span>
         {hint && <span className="text-xs text-muted-foreground truncate">{hint}</span>}
       </div>
-    </div>
-  );
-}
-
-// ── Stage Filter Pills ──────────────────────────────────────────────
-
-function StageFilter({
-  selected,
-  onSelect,
-  stages,
-}: {
-  selected: string | null;
-  onSelect: (stage: string | null) => void;
-  stages: string[];
-}) {
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <button
-        onClick={() => onSelect(null)}
-        className={cn(
-          "px-2.5 py-1 rounded-md text-xs font-medium border transition-colors",
-          selected === null
-            ? "bg-muted text-foreground border-border"
-            : "bg-card text-muted-foreground border-border hover:text-foreground",
-        )}
-      >
-        All stages
-      </button>
-      {stages.map((stage) => (
-        <button
-          key={stage}
-          onClick={() => onSelect(selected === stage ? null : stage)}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors",
-            selected === stage
-              ? "bg-muted text-foreground border-border"
-              : "bg-card text-muted-foreground border-border hover:text-foreground",
-          )}
-        >
-          <span
-            className="w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: STAGE_COLORS[stage] }}
-          />
-          {STAGE_LABELS[stage]}
-        </button>
-      ))}
     </div>
   );
 }
@@ -551,7 +534,7 @@ function UnitTable({ units }: { units: UnitKpi[] }) {
                       key={m}
                       className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-card border border-border"
                     >
-                      <span className="w-4 h-4 rounded-md bg-muted flex items-center justify-center text-[10px] font-medium text-muted-foreground">
+                      <span className="w-4 h-4 rounded-md bg-muted flex items-center justify-center text-[11px] font-medium text-muted-foreground">
                         {m.charAt(0).toUpperCase()}
                       </span>
                       {m}
@@ -602,12 +585,23 @@ function UnitTable({ units }: { units: UnitKpi[] }) {
 
 function PerformancePage() {
   const navigate = useNavigate();
-  const [preset, setPreset] = useState("week");
-  const [sortBy, setSortBy] = useState("efficiency");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [stageFilter, setStageFilter] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [tab, setTab] = useState<"workers" | "units">("workers");
+  // URL is the source of truth for preset / stage / tab / search / sort.
+  const sp = Route.useSearch();
+  const preset = sp.preset ?? "week";
+  const sortBy = sp.sort ?? "efficiency";
+  const sortDir: "asc" | "desc" = sp.dir ?? "desc";
+  const stageFilter = sp.stage ?? null;
+  const searchQuery = sp.q ?? "";
+  const tab: PerfTab = sp.tab ?? "workers";
+  const navFilters = Route.useNavigate();
+  const patch = (p: Partial<PerformanceSearch>) =>
+    navFilters({ search: (prev) => ({ ...prev, ...p }), replace: true });
+  const setPreset = (v: string) => patch({ preset: isPreset(v) && v !== "week" ? v : undefined });
+  const setSortBy = (v: string) => patch({ sort: v === "efficiency" ? undefined : v });
+  const setSortDir = (v: "asc" | "desc") => patch({ dir: v === "desc" ? undefined : v });
+  const setStageFilter = (v: string | null) => patch({ stage: v ?? undefined });
+  const setSearchQuery = (v: string) => patch({ q: v || undefined });
+  const setTab = (v: PerfTab) => patch({ tab: v === "workers" ? undefined : v });
 
   const dateRange = useMemo(() => getDateRange(preset), [preset]);
   const { workers, daily, summary, units, stageCycleTimes, isLoading } = usePerformanceData(dateRange);
@@ -640,8 +634,8 @@ function PerformancePage() {
 
   const sortedWorkers = useMemo(() => {
     const sorted = [...filteredWorkers].sort((a, b) => {
-      const av = (a as any)[sortBy] ?? "";
-      const bv = (b as any)[sortBy] ?? "";
+      const av = (a as unknown as Record<string, unknown>)[sortBy] ?? "";
+      const bv = (b as unknown as Record<string, unknown>)[sortBy] ?? "";
       if (typeof av === "number" && typeof bv === "number") return av - bv;
       return String(av).localeCompare(String(bv));
     });
@@ -671,7 +665,6 @@ function PerformancePage() {
       <PageHeader
         icon={TrendingUp}
         title="Production Performance"
-        subtitle="Worker efficiency and output tracking"
       >
         <Select value={preset} onValueChange={setPreset}>
           <SelectTrigger className="w-[140px] h-9">
@@ -777,7 +770,29 @@ function PerformancePage() {
           {/* Stage filter — flat row, no card wrapper */}
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-sm text-muted-foreground">Stage</span>
-            <StageFilter selected={stageFilter} onSelect={setStageFilter} stages={availableStages} />
+            <FilterChipGroup>
+              <FilterChip
+                active={stageFilter === null}
+                onClick={() => setStageFilter(null)}
+              >
+                All stages
+              </FilterChip>
+              {availableStages.map((stage) => (
+                <FilterChip
+                  key={stage}
+                  active={stageFilter === stage}
+                  onClick={() => setStageFilter(stageFilter === stage ? null : stage)}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: STAGE_COLORS[stage] }}
+                    />
+                    {STAGE_LABELS[stage]}
+                  </span>
+                </FilterChip>
+              ))}
+            </FilterChipGroup>
             <span className="text-xs text-muted-foreground">
               {tab === "workers" ? "Worker-scoped stages" : "Unit / group-scoped stages"}
             </span>
@@ -856,8 +871,8 @@ function PerformancePage() {
                     <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={60} />
                     <RechartsTooltip
                       contentStyle={{ fontSize: 12, borderRadius: 6, border: "1px solid var(--border)" }}
-                      formatter={(value: any, _name: any, props: any) => [
-                        `${value} min (n=${props.payload?.sampleCount ?? 0})`,
+                      formatter={(value: ValueType | undefined, _name: NameType | undefined, item: Payload<ValueType, NameType>) => [
+                        `${value} min (n=${(item.payload as { sampleCount?: number } | undefined)?.sampleCount ?? 0})`,
                         "Avg time",
                       ]}
                     />
@@ -888,20 +903,15 @@ function PerformancePage() {
           {/* Breakdown */}
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="inline-flex border border-border rounded-md bg-card p-0.5">
-                {(["workers", "units"] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTab(t)}
-                    className={cn(
-                      "px-3 py-1 text-sm font-medium rounded-sm transition-colors",
-                      tab === t ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {t === "workers" ? "Workers" : "Units"}
-                  </button>
-                ))}
-              </div>
+              <SlidingPillSwitcher
+                value={tab}
+                onChange={setTab}
+                size="sm"
+                options={[
+                  { value: "workers", label: "Workers" },
+                  { value: "units", label: "Units" },
+                ]}
+              />
               {tab === "workers" && (
                 <div className="relative w-full max-w-[240px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />

@@ -4,8 +4,6 @@ import {
   getTransferBadgeCounts,
   createTransferRequest,
   createTransferRequestsBatch,
-  approveTransferRequest,
-  rejectTransferRequest,
   reviseTransferRequest,
   dispatchTransfer,
   directSendTransfer,
@@ -80,32 +78,6 @@ export function useCreateTransfersBatch() {
   return useMutation({
     mutationFn: (data: { direction: string; notes?: string; groups: TransferGroup[] }) =>
       createTransferRequestsBatch({ ...data, requested_by: user!.id, brand: getBrand() }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
-      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
-    },
-  });
-}
-
-export function useApproveTransfer() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, items }: { id: number; items: { id: number; approved_qty: number }[] }) =>
-      approveTransferRequest(id, items),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
-      queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });
-    },
-  });
-}
-
-export function useRejectTransfer() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
-      rejectTransferRequest(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TRANSFER_KEY] });
       queryClient.invalidateQueries({ queryKey: [TRANSFER_BADGE_KEY] });

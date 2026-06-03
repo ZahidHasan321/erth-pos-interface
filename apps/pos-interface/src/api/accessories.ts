@@ -22,9 +22,12 @@ export const createAccessory = async (
   return data as Accessory;
 };
 
+// Stock columns are intentionally not accepted here. All stock changes go
+// through the stamping RPCs so the stock_movements ledger stays complete
+// (CLAUDE.md §4); a metadata UPDATE must never carry an absolute stock figure.
 export const updateAccessory = async (
   id: number,
-  accessory: Partial<Accessory>,
+  accessory: Partial<Omit<Accessory, "shop_stock" | "workshop_stock">>,
 ): Promise<Accessory> => {
   const { data, error } = await withWriteRetry(
     () => db

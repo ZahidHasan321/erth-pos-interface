@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck } from "lucide-react";
+import { Bell, Truck, PackageCheck, Eye, ArrowRightLeft, CheckCheck, AlertTriangle } from "lucide-react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Button } from "@repo/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
@@ -14,6 +14,7 @@ const TYPE_ICONS: Record<string, typeof Bell> = {
   garment_awaiting_trial: Eye,
   transfer_requested: ArrowRightLeft,
   transfer_status_changed: ArrowRightLeft,
+  low_stock: AlertTriangle,
 };
 
 type NotificationLink = { to: string; search?: Record<string, string> };
@@ -32,9 +33,16 @@ function getNotificationLink(notification: NotificationItem, mainSegment: string
         ? { to: `/${mainSegment}/orders/order-management/feedback/${orderId}` }
         : { to: `/${mainSegment}/orders/orders-at-showroom`, search: { stage: "brova_trial" } };
     case "transfer_requested":
-      return { to: `/${mainSegment}/store/approve-requests`, search: { tab: "pending" } };
+      return { to: `/${mainSegment}/store/transfers` };
     case "transfer_status_changed":
-      return { to: `/${mainSegment}/store/approve-requests`, search: { tab: "approved" } };
+      return { to: `/${mainSegment}/store/transfers` };
+    case "low_stock": {
+      const itemType = meta?.item_type;
+      const id = meta?.item_id;
+      return typeof itemType === "string" && (typeof id === "number" || typeof id === "string")
+        ? { to: `/${mainSegment}/store/inventory/${itemType}/${id}` }
+        : { to: `/${mainSegment}/store/inventory` };
+    }
     default:
       return null;
   }
@@ -123,7 +131,7 @@ export function NotificationBell() {
 
   const handleNavigate = (link: NotificationLink) => {
     setOpen(false);
-    navigate({ to: link.to, search: link.search as any });
+    navigate({ to: link.to, search: link.search });
   };
 
   return (

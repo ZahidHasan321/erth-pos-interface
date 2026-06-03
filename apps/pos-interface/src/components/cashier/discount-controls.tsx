@@ -92,7 +92,7 @@ export function DiscountControls({
             referralCode: discountType === "referral" ? referralCode : undefined,
             newOrderTotal: Math.max(0, newTotal),
         }, {
-            onSuccess: (res: any) => {
+            onSuccess: (res) => {
                 if (!res || res.status !== "error") onSaved?.();
             },
         });
@@ -107,7 +107,7 @@ export function DiscountControls({
             referralCode: undefined,
             newOrderTotal: subtotal,
         }, {
-            onSuccess: (res: any) => {
+            onSuccess: (res) => {
                 if (!res || res.status !== "error") onSaved?.();
             },
         });

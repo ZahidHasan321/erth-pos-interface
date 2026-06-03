@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import type { Resolver } from "react-hook-form";
 import { useForm } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -74,7 +75,7 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
     const employees = Array.isArray(employeesRaw) ? employeesRaw : [];
 
     const form = useForm<PaymentFormValues>({
-        resolver: zodResolver(paymentSchema) as any,
+        resolver: zodResolver(paymentSchema) as Resolver<PaymentFormValues>,
         defaultValues: {
             amount: undefined as unknown as number,
             payment_type: "knet",
@@ -252,7 +253,7 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
                         <ChipToggle
                             key={key}
                             active={form.watch("payment_type") === key}
-                            onClick={() => form.setValue("payment_type", key as any)}
+                            onClick={() => form.setValue("payment_type", key as PaymentFormValues["payment_type"])}
                             className="py-1 px-2.5 text-[11px]">
                             {label}
                         </ChipToggle>
@@ -280,7 +281,7 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
                         </SelectTrigger>
                         <SelectContent>
                             {employees.length > 0
-                                ? employees.map((emp: any) => (
+                                ? employees.map((emp: { id: string; name: string }) => (
                                     <SelectItem key={emp.id} value={emp.id}>
                                         {emp.name}
                                     </SelectItem>

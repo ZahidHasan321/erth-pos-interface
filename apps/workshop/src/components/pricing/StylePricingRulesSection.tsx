@@ -30,7 +30,7 @@ export function StylePricingRulesSection({ brand }: Props) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2.5">
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">
+        <p className="text-sm font-medium text-muted-foreground">
           Style Pricing Rules
         </p>
         <Button size="sm" variant="outline" className="h-7 gap-1.5" onClick={() => setEditing("new")}>
@@ -127,21 +127,21 @@ function RuleCard({ rule, styles, onEdit }: { rule: StylePricingRule; styles: St
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-sm">{styleName}</span>
-          <code className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{rule.style_code}</code>
+          <span className="font-medium text-sm">{styleName}</span>
+          <code className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{rule.style_code}</code>
           <span className={cn(
-            "text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded",
+            "text-[11px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded",
             rule.rule_type === "flat_override" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600",
           )}>
             {rule.rule_type === "flat_override" ? "Flat override" : "Additive"}
           </span>
           {rule.priority !== 0 && (
-            <span className="text-[10px] text-muted-foreground">priority {rule.priority}</span>
+            <span className="text-[11px] text-muted-foreground">priority {rule.priority}</span>
           )}
         </div>
         {rule.rule_type === "flat_override" && rate != null && (
           <p className="text-xs text-muted-foreground mt-0.5">
-            Garment price = <span className="font-mono font-bold tabular-nums text-foreground">{rate.toFixed(3)} KD</span>. Other style options ignored.
+            Garment price = <span className="font-mono font-medium tabular-nums text-foreground">{rate.toFixed(3)} KD</span>. Other style options ignored.
           </p>
         )}
         {rule.description && (
@@ -316,7 +316,7 @@ function RuleDialog({
                   {selectedOption?.name ?? styleCode}
                 </div>
               </div>
-              <p className="ml-auto text-[10px] text-muted-foreground max-w-[18ch] text-right">
+              <p className="ml-auto text-[11px] text-muted-foreground max-w-[18ch] text-right">
                 Style cannot be changed. Delete and recreate to retarget.
               </p>
             </div>
@@ -454,7 +454,7 @@ function RuleDialog({
               onFocus={(e) => e.target.select()}
               className="h-9 font-mono"
             />
-            <p className="text-[10px] text-muted-foreground mt-1">Higher wins.</p>
+            <p className="text-[11px] text-muted-foreground mt-1">Higher wins.</p>
           </div>
           <div>
             <Label className="text-xs font-medium">Active</Label>

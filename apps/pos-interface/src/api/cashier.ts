@@ -23,7 +23,7 @@ const CASHIER_ORDER_QUERY_INNER = CASHIER_ORDER_QUERY.replace(
     'workOrder:work_orders!order_id!inner('
 );
 
-function flattenCashierOrder(data: any): Order | null {
+function flattenCashierOrder(data: Record<string, unknown> | null): Order | null {
     if (!data) return null;
     const { workOrder, customer, taker, ...core } = data;
     const workData = Array.isArray(workOrder) ? workOrder[0] : workOrder;
@@ -63,27 +63,28 @@ export interface CashierOrderListItem {
     garment_ready: number;
 }
 
-function flattenOrderListItem(data: any): CashierOrderListItem {
-    const workData = Array.isArray(data.workOrder) ? data.workOrder[0] : data.workOrder;
-    const customerData = Array.isArray(data.customer) ? data.customer[0] : data.customer;
-    const garments = Array.isArray(data.garments) ? data.garments : [];
+function flattenOrderListItem(data: Record<string, unknown>): CashierOrderListItem {
+    type NestedRow = Record<string, unknown>;
+    const workData = (Array.isArray(data.workOrder) ? data.workOrder[0] : data.workOrder) as NestedRow | null | undefined;
+    const customerData = (Array.isArray(data.customer) ? data.customer[0] : data.customer) as NestedRow | null | undefined;
+    const garments = (Array.isArray(data.garments) ? data.garments : []) as NestedRow[];
     const readyStages = ["ready_for_pickup", "brova_trialed", "awaiting_trial"];
     return {
-        id: data.id,
-        order_type: data.order_type,
-        checkout_status: data.checkout_status,
+        id: data.id as number,
+        order_type: data.order_type as string,
+        checkout_status: data.checkout_status as string,
         order_total: Number(data.order_total) || 0,
         paid: Number(data.paid) || 0,
-        order_date: data.order_date,
-        invoice_number: workData?.invoice_number,
-        invoice_revision: workData?.invoice_revision ?? 0,
-        order_phase: workData?.order_phase,
-        delivery_date: workData?.delivery_date,
-        home_delivery: workData?.home_delivery,
-        customer_name: customerData?.name,
-        customer_phone: customerData?.phone,
+        order_date: data.order_date as string,
+        invoice_number: workData?.invoice_number as number | undefined,
+        invoice_revision: (workData?.invoice_revision as number | undefined) ?? 0,
+        order_phase: workData?.order_phase as string | undefined,
+        delivery_date: workData?.delivery_date as string | undefined,
+        home_delivery: workData?.home_delivery as boolean | undefined,
+        customer_name: customerData?.name as string | undefined,
+        customer_phone: customerData?.phone as string | undefined,
         garment_total: garments.length,
-        garment_ready: garments.filter((g: any) => g.location === "shop" && readyStages.includes(g.piece_stage)).length,
+        garment_ready: garments.filter((g) => g.location === "shop" && readyStages.includes(g.piece_stage as string)).length,
     };
 }
 
@@ -153,7 +154,7 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
             return { status: 'success', data: [] };
         }
 
-        return { status: 'success', data: (data || []).map(flattenOrderListItem) };
+        return { status: 'success', data: ((data || []) as Record<string, unknown>[]).map(flattenOrderListItem) };
     }
 
     // For other filters: simple query with limit
@@ -214,7 +215,7 @@ export const searchOrderForCashier = async (
             .neq('checkout_status', 'draft')
             .maybeSingle();
         if (byId) {
-            return { status: 'success', data: flattenCashierOrder(byId) as Order };
+            return { status: 'success', data: flattenCashierOrder(byId as unknown as Record<string, unknown>) as Order };
         }
 
         // Try by invoice number (needs !inner join)
@@ -226,7 +227,7 @@ export const searchOrderForCashier = async (
             .eq('workOrder.invoice_number', numericVal)
             .maybeSingle();
         if (byInvoice) {
-            return { status: 'success', data: flattenCashierOrder(byInvoice) as Order };
+            return { status: 'success', data: flattenCashierOrder(byInvoice as unknown as Record<string, unknown>) as Order };
         }
     }
 
@@ -247,7 +248,7 @@ export const searchOrderForCashier = async (
             .limit(1)
             .maybeSingle();
         if (byCustomer) {
-            return { status: 'success', data: flattenCashierOrder(byCustomer) as Order };
+            return { status: 'success', data: flattenCashierOrder(byCustomer as unknown as Record<string, unknown>) as Order };
         }
     }
 
@@ -268,7 +269,7 @@ export const searchCashierOrderList = async (
         p_limit: 20,
     });
 
-    const customerIds = (customers || []).map((c: any) => c.id);
+    const customerIds = (customers || []).map((c: { id: number }) => c.id);
 
     // Build combined query: by order id, invoice, or matching customer
     let query_ = db

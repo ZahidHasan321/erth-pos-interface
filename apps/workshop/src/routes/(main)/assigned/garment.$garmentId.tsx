@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useGarment } from "@/hooks/useWorkshopGarments";
 import { useUpdateGarmentDetails } from "@/hooks/useGarmentMutations";
 import { getAllFeedbackForGarment } from "@/api/feedback";
 import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
+import { RedoDialog } from "@/components/shared/RedoDialog";
 import {
   GarmentHeader,
   NotesSection,
@@ -248,6 +249,7 @@ function SidebarTab({
 // Surfaces only for discarded garments. Disabled if already replaced.
 function DiscardedReplacementCta({ garment }: { garment: WorkshopGarment }) {
   const { user } = useAuth();
+  const [redoOpen, setRedoOpen] = useState(false);
   if (garment.piece_stage !== "discarded") return null;
   if (!canEdit(user, "/assigned")) return null;
   const replacedById = (garment as WorkshopGarment & { replaced_by_garment_id: string | null }).replaced_by_garment_id;
@@ -259,16 +261,13 @@ function DiscardedReplacementCta({ garment }: { garment: WorkshopGarment }) {
     );
   }
   return (
-    <Button asChild variant="destructive" size="sm">
-      <Link
-        to="/assigned/$orderId/add-garment"
-        params={{ orderId: String(garment.order_id) }}
-        search={{ replaces: garment.id }}
-      >
+    <>
+      <Button variant="destructive" size="sm" onClick={() => setRedoOpen(true)}>
         <Replace className="w-4 h-4 mr-1" />
         Create replacement
-      </Link>
-    </Button>
+      </Button>
+      <RedoDialog open={redoOpen} onClose={() => setRedoOpen(false)} garmentId={garment.id} />
+    </>
   );
 }
 

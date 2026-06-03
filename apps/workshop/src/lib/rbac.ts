@@ -60,23 +60,28 @@ const PERMISSIONS: PermissionMatrix = {
   "/completed":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
   "/store":           { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
   "/store/transfers": { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/store/stocktake": { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "full", "staff:shop": "none" },
   "/store/reports":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
 
   // Inventory type permissions — controls create/edit visibility within the inventory page.
-  // Workshop manages accessories + shelf; fabrics are owned by the shop.
+  // Workshop manages accessories only; fabrics and shelf items are shop-owned (fabrics are
+  // view-only here as transferred-in stock; shelf items aren't shown in the workshop at all).
   "inventory:fabrics":     { admin: "full", "manager:workshop": "view", "staff:workshop": "view" },
   "inventory:accessories": { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
-  "inventory:shelf":       { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
+  "inventory:shelf":       { admin: "full" },
 
   // Stock action permissions
   "inventory:restock":     { admin: "full", "manager:workshop": "full" },
   "inventory:adjust":      { admin: "full", "manager:workshop": "full" },
+  // Waste is staff-allowed; over the cost threshold the RPC requires a manager.
+  "inventory:waste":       { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
+  "inventory:stocktake":   { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
   "inventory:delete":      { admin: "full" },
   "suppliers:manage":      { admin: "full", "manager:workshop": "full" },
 
-  // Transfers — request anywhere; approve/dispatch/receive gated by side at render-time
+  // Transfers — request anywhere; send (dispatch)/receive gated by side at render-time.
+  // No approve step (CLAUDE.md §4): a requested transfer is sent directly.
   "transfers:request":     { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
-  "transfers:approve":     { admin: "full", "manager:workshop": "full" },
   "transfers:dispatch":    { admin: "full", "manager:workshop": "full" },
   "transfers:receive":     { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
   "transfers:cancel":      { admin: "full", "manager:workshop": "full" },

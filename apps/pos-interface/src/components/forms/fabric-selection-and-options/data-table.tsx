@@ -7,6 +7,7 @@ import {
     type RowData,
     useReactTable,
 } from "@tanstack/react-table";
+import type { Style, StylePricingRule } from "@repo/database";
 
 import {
     Table,
@@ -30,7 +31,7 @@ interface DataTableProps<TData, TValue> {
     removeRow: (rowIndex: number) => void;
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
     isFormDisabled?: boolean;
-    styles?: any[];
+    styles?: Style[];
     checkoutStatus?: "draft" | "confirmed" | "cancelled";
     fatoura?: number;
     orderDate?: Date | string | null;
@@ -41,7 +42,7 @@ interface DataTableProps<TData, TValue> {
     tempStockUsage?: Map<string, number>;
     stockValidationActive?: boolean;
     stitchingPrice?: number;
-    stylePricingRules?: any[];
+    stylePricingRules?: StylePricingRule[];
 }
 
 export function DataTable<TData, TValue>({
@@ -90,7 +91,7 @@ export function DataTable<TData, TValue>({
             removeRow: (rowIndex: number) => void;
             updateData: (rowIndex: number, columnId: string, value: unknown) => void;
             isFormDisabled?: boolean;
-            styles?: any[];
+            styles?: Style[];
             checkoutStatus?: "draft" | "confirmed" | "cancelled";
             fatoura?: number;
             orderDate?: Date | string | null;
@@ -101,7 +102,7 @@ export function DataTable<TData, TValue>({
             tempStockUsage?: Map<string, number>;
             stockValidationActive?: boolean;
             stitchingPrice?: number;
-            stylePricingRules?: any[];
+            stylePricingRules?: StylePricingRule[];
         },
     });
 

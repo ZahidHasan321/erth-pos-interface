@@ -5,15 +5,17 @@ import { PageHeader, EmptyState, GarmentTypeBadge, StatsCard } from "@/component
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
-import { Input } from "@repo/ui/input";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { matchesGarmentSearch } from "@/lib/garment-search";
 import { DatePicker } from "@repo/ui/date-picker";
 import { Skeleton } from "@repo/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@repo/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableContainer } from "@/components/shared/table";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import { getLocalDateStr, parseUtcTimestamp, toLocalDateStr, clickableProps, TIMEZONE, getKuwaitDayRange } from "@/lib/utils";
 import type { WorkshopGarment, StageTimings, StageTimingEntry, TripHistoryEntry, QcAttempt } from "@repo/database";
 import { getQcReturnStages } from "@repo/database";
 import { ArrowLeft, History, Check, X, Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import type { Matcher } from "react-day-picker";
 
 export const Route = createFileRoute("/(main)/terminals/$stage/history")({
   component: TerminalHistoryPage,
@@ -150,16 +152,9 @@ function TerminalHistoryPage() {
   const stageLabel = PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
 
   const searchFilter = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     if (!q) return null;
-    return (g: WorkshopGarment) =>
-      (g.customer_name ?? "").toLowerCase().includes(q) ||
-      String(g.order_id).includes(q) ||
-      (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
-      (g.customer_mobile ?? "").replace(/\s+/g, "").includes(q.replace(/\s+/g, "")) ||
-      (g.garment_id ?? "").toLowerCase().includes(q) ||
-      (g.fabric_name ?? "").toLowerCase().includes(q) ||
-      (g.style_name ?? "").toLowerCase().includes(q);
+    return (g: WorkshopGarment) => matchesGarmentSearch(g, q, { includeFabricStyle: true });
   }, [search]);
 
   const rows = useMemo(() => {
@@ -224,7 +219,7 @@ function TerminalHistoryPage() {
                   const dd = String(d.getDate()).padStart(2, "0");
                   setDateStr(`${yy}-${mm}-${dd}`);
                 }}
-                calendarProps={{ disabled: { after: new Date() } as any }}
+                calendarProps={{ disabled: { after: new Date() } as Matcher }}
                 displayFormat="PPP"
               />
             </div>
@@ -251,10 +246,10 @@ function TerminalHistoryPage() {
         </div>
         <div className="flex-1 min-w-[220px] space-y-1">
           <label className="text-sm font-medium text-muted-foreground">Search</label>
-          <Input
-            placeholder="Garment, customer, order, fabric, style…"
+          <SearchInput
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={setSearch}
+            placeholder="Garment, customer, order, fabric, style…"
           />
         </div>
       </div>

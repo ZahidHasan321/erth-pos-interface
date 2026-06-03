@@ -1,9 +1,66 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import type { OrderRow, GarmentRowData } from "@/components/orders-at-showroom/types";
+import type { Order, Garment, Customer } from "@repo/database";
 import { ORDER_PHASE_LABELS, PIECE_STAGE_LABELS, LOCATION_LABELS } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { getBrand } from "@/api/orders";
 import { parseUtcTimestamp, getKuwaitMidnight } from "@/lib/utils";
+
+/**
+ * Garment row as returned by the showroom RPC.
+ * Dates arrive as strings (not Date objects) because Supabase serialises them in JSON.
+ * The fabric field comes from a PostgREST join.
+ */
+type ShowroomGarment = {
+  id?: string | number | null;
+  garment_id: string | null;
+  piece_stage?: string | null;
+  location?: string | null;
+  garment_type?: string | null;
+  delivery_date?: string | null;
+  fabric_source?: string | null;
+  acceptance_status?: boolean | null;
+  trip_number?: number | null;
+  style?: string | null;
+  color?: string | null;
+  fabric?: { name: string; color?: string | null } | null;
+};
+
+/**
+ * Raw row returned by get_showroom_orders_page.
+ * All date fields arrive as ISO strings (not Date objects).
+ * Mirrors the subset of order + work_order + joins that the RPC returns.
+ */
+type ShowroomRawRow = {
+  id: number;
+  invoice_number?: number | null;
+  checkout_status?: string | null;
+  order_type?: string | null;
+  order_phase?: string | null;
+  order_date?: string | null;
+  delivery_date?: string | null;
+  home_delivery?: boolean | null;
+  advance?: number | string | null;
+  paid?: number | string | null;
+  discount_value?: number | string | null;
+  order_total?: number | string | null;
+  fabric_charge?: number | string | null;
+  stitching_charge?: number | string | null;
+  style_charge?: number | string | null;
+  delivery_charge?: number | string | null;
+  express_charge?: number | string | null;
+  soaking_charge?: number | string | null;
+  shelf_charge?: number | string | null;
+  showroom_label?: string | null;
+  customer?: {
+    id?: number | null;
+    name?: string | null;
+    nick_name?: string | null;
+    country_code?: string | null;
+    phone?: string | null;
+  } | null;
+  garments?: ShowroomGarment[];
+};
 
 /**
  * Calculate delay in days between promised delivery date and today
@@ -21,7 +78,7 @@ export function calculateDelay(promisedDeliveryDate: string): number {
 /**
  * Calculate total order amount from charges
  */
-export function calculateTotal(order: any): number {
+export function calculateTotal(order: ShowroomRawRow): number {
   return (
     (parseFloat(order.fabric_charge?.toString() || "0")) +
     (parseFloat(order.stitching_charge?.toString() || "0")) +
@@ -82,12 +139,12 @@ const EMPTY_STATS: ShowroomStats = {
  * Exported so the customer order history view can reuse the same adapter
  * when it queries orders directly (no RPC) for a single customer.
  */
-export function transformRow(raw: any): OrderRow {
+export function transformRow(raw: ShowroomRawRow): OrderRow {
   const order = raw; // already merged on the server
   const customer = raw.customer;
-  const garments: any[] = raw.garments || [];
+  const garments: ShowroomGarment[] = raw.garments || [];
 
-  const garmentRowsData: GarmentRowData[] = garments.map((garment: any) => {
+  const garmentRowsData: GarmentRowData[] = garments.map((garment) => {
     const styleParts: string[] = [];
     if (garment.fabric?.name) {
       styleParts.push(garment.fabric.name + (garment.color ? ` (${garment.color})` : ""));
@@ -104,19 +161,19 @@ export function transformRow(raw: any): OrderRow {
       pieceStage: garment.piece_stage
         ? PIECE_STAGE_LABELS[garment.piece_stage as keyof typeof PIECE_STAGE_LABELS] || "Unknown"
         : "Unknown",
-      locationKey: garment.location,
-      locationLabel: LOCATION_LABELS[garment.location as keyof typeof LOCATION_LABELS] || garment.location,
+      locationKey: garment.location ?? undefined,
+      locationLabel: (LOCATION_LABELS[garment.location as keyof typeof LOCATION_LABELS] || garment.location) ?? undefined,
       isBrova: garment.garment_type === "brova",
-      deliveryDate: garment.delivery_date || "",
-      delayInDays: calculateDelay(garment.delivery_date || new Date().toISOString()),
+      deliveryDate: garment.delivery_date ?? null,
+      delayInDays: calculateDelay(garment.delivery_date ?? new Date().toISOString()),
       fabricSource: garment.fabric_source || undefined,
       style: styleDesc,
-      garment,
+      garment: garment as unknown as Garment,
     };
   });
 
   const customerName = customer?.name || "Unknown";
-  const customerNickName = customer?.nick_name;
+  const customerNickName = customer?.nick_name ?? undefined;
   const mobileNumber = customer
     ? `${customer.country_code ?? ""} ${customer.phone ?? ""}`.trim()
     : "N/A";
@@ -127,23 +184,23 @@ export function transformRow(raw: any): OrderRow {
 
   // Max trip number — matches prior client logic for alteration cycle display.
   const shopItems = garments.filter(
-    (g: any) =>
+    (g) =>
       g.location === "shop" && g.piece_stage !== "completed" && (g.trip_number ?? 0) > 0,
   );
-  const activeItems = shopItems.filter((g: any) => g.acceptance_status !== true);
+  const activeItems = shopItems.filter((g) => g.acceptance_status !== true);
   const sourceItems = activeItems.length > 0 ? activeItems : shopItems;
   const maxTripNumber =
-    sourceItems.length > 0 ? Math.max(...sourceItems.map((g: any) => g.trip_number ?? 1)) : 1;
+    sourceItems.length > 0 ? Math.max(...sourceItems.map((g) => g.trip_number ?? 1)) : 1;
 
   return {
     orderId: order.id.toString(),
     orderRecordId: order.id.toString(),
-    invoiceNumber: order.invoice_number,
-    fatoura: order.invoice_number,
+    invoiceNumber: order.invoice_number ?? undefined,
+    fatoura: order.invoice_number ?? undefined,
     productionStage: order.order_phase
       ? ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS] || "Unknown"
       : "Unknown",
-    productionStageKey: order.order_phase,
+    productionStageKey: order.order_phase ?? undefined,
     fatouraStage: order.order_phase
       ? ORDER_PHASE_LABELS[order.order_phase as keyof typeof ORDER_PHASE_LABELS] || "Unknown"
       : "Unknown",
@@ -153,15 +210,15 @@ export function transformRow(raw: any): OrderRow {
         : order.checkout_status === "cancelled"
           ? "Cancelled"
           : "Pending",
-    checkoutStatus: order.checkout_status,
-    orderDate: order.order_date,
-    deliveryDate: order.delivery_date,
+    checkoutStatus: order.checkout_status ?? undefined,
+    orderDate: order.order_date ?? null,
+    deliveryDate: order.delivery_date ?? null,
     customerId: customer?.id?.toString() || "0",
     customerName,
     customerNickName,
     mobileNumber,
-    orderType: order.order_type,
-    homeDelivery: order.home_delivery,
+    orderType: (order.order_type as "WORK" | "SALES" | null | undefined) ?? null,
+    homeDelivery: order.home_delivery ?? null,
     totalAmount,
     advance: parseFloat(order.advance?.toString() || "0") || 0,
     balance: totalAmount - (parseFloat(order.paid?.toString() || "0") || 0),
@@ -169,11 +226,11 @@ export function transformRow(raw: any): OrderRow {
     maxTripNumber,
     garments: garmentRowsData,
     showroomStatus: {
-      label: order.showroom_label ?? null,
+      label: (order.showroom_label ?? null) as "alteration_in" | "alteration_out" | "brova_trial" | "needs_action" | "ready_for_pickup" | null,
       hasPhysicalItems: shopItems.length > 0,
     },
-    order: order as any,
-    customer,
+    order: order as unknown as Order,
+    customer: (customer ?? null) as unknown as (Customer | null),
   };
 }
 
@@ -208,7 +265,7 @@ export function useShowroomOrders(args: ShowroomQueryArgs) {
       }
 
       const payload = (data ?? {}) as {
-        data?: any[];
+        data?: ShowroomRawRow[];
         total_count?: number;
         stats?: ShowroomStats;
       };

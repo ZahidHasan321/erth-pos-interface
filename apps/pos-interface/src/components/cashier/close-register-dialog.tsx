@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
@@ -54,7 +54,7 @@ export function CloseRegisterDialog({ open, onOpenChange, session }: CloseRegist
     }, [open]);
 
     const form = useForm<FormValues>({
-        resolver: zodResolver(schema) as any,
+        resolver: zodResolver(schema) as Resolver<FormValues>,
         defaultValues: { counted_cash: undefined as unknown as number, notes: "" },
     });
 

@@ -20,7 +20,7 @@ const PAGE_SIZE = 20;
  * RPC to do this merge server-side, but customer history fetches directly
  * (not through the RPC), so we have to replicate it here.
  */
-function flattenCustomerOrder(raw: any) {
+function flattenCustomerOrder(raw: Record<string, unknown>) {
   const wo = Array.isArray(raw.workOrder) ? raw.workOrder[0] : raw.workOrder;
   return {
     ...raw,
@@ -51,7 +51,7 @@ export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) 
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return (data ?? []).map((row: any) => transformRow(flattenCustomerOrder(row)));
+      return (data ?? []).map((row) => transformRow(flattenCustomerOrder(row as Record<string, unknown>)));
     },
   });
 

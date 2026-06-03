@@ -28,7 +28,7 @@ export const getCustomers = async (): Promise<ApiResponse<Customer[]>> => {
     console.error('Error fetching customers:', error);
     return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Customer[] };
 };
 
 export const getPaginatedCustomers = async (
@@ -56,10 +56,10 @@ export const getPaginatedCustomers = async (
     }
     const fb = await query;
     if (fb.error) return { status: 'error', message: fb.error.message, data: [], count: 0 };
-    return { status: 'success', data: fb.data as any, count: fb.count || 0 };
+    return { status: 'success', data: fb.data as CustomerListItem[], count: fb.count || 0 };
   }
 
-  const result = data as any;
+  const result = data as { data?: CustomerListItem[]; count?: number };
   return { status: 'success', data: result?.data || [], count: result?.count || 0 };
 };
 
@@ -75,7 +75,7 @@ export const searchCustomerByPhone = async (
   if (error) {
     return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Customer[] };
 };
 
 export const fuzzySearchCustomers = async (
@@ -94,10 +94,10 @@ export const fuzzySearchCustomers = async (
       .or(`name.ilike.%${q}%,phone.ilike.%${q}%,arabic_name.ilike.%${q}%,nick_name.ilike.%${q}%`)
       .order('name', { ascending: true }).limit(10);
     if (fb.error) return { status: 'error', message: fb.error.message, data: [] };
-    return { status: 'success', data: fb.data as any };
+    return { status: 'success', data: fb.data as Customer[] };
   }
 
-  return { status: 'success', data: (data || []) as any };
+  return { status: 'success', data: (data || []) as Customer[] };
 };
 
 export const searchPrimaryAccountByPhone = async (
@@ -112,7 +112,7 @@ export const searchPrimaryAccountByPhone = async (
   if (error) {
     return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Customer[] };
 };
 
 export const getCustomerById = async (
@@ -127,18 +127,18 @@ export const getCustomerById = async (
   if (error) {
     return { status: 'error', message: error.message };
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Customer };
 };
 
 export const createCustomer = async (
   customer: Partial<Customer>,
 ): Promise<ApiResponse<Customer>> => {
-  const payload: any = { ...customer };
+  const payload = { ...customer } as Partial<Customer> & Record<string, unknown>;
   const idempotencyKey: string =
     (payload.idempotency_key as string | undefined) ?? crypto.randomUUID();
   payload.idempotency_key = idempotencyKey;
 
-  let data: any = null;
+  let data: Customer | null = null;
   for (let attempt = 1; ; attempt++) {
     const res = await db
       .from(TABLE_NAME)
@@ -147,7 +147,7 @@ export const createCustomer = async (
       .single();
 
     if (!res.error) {
-      data = res.data;
+      data = res.data as Customer;
       break;
     }
 
@@ -158,7 +158,7 @@ export const createCustomer = async (
         .eq('idempotency_key', idempotencyKey)
         .single();
       if (!recovered.error && recovered.data) {
-        data = recovered.data;
+        data = recovered.data as Customer;
         break;
       }
     }
@@ -172,7 +172,7 @@ export const createCustomer = async (
     return { status: 'error', message: res.error.message };
   }
 
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Customer };
 };
 
 export const updateCustomer = async (
@@ -193,7 +193,7 @@ export const updateCustomer = async (
     console.error('Error updating customer:', error);
     return { status: 'error', message: error.message };
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Customer };
 };
 
 /**
@@ -234,10 +234,9 @@ export const upsertCustomer = async (
   return {
     status: 'success',
     data: {
-        records: data as any,
+        records: data as Customer[],
         updatedRecords: [], // Not easily distinguished in Supabase response
         createdRecords: []
     }
   };
 };
-

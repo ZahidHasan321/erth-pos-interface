@@ -1,6 +1,7 @@
 import { Separator } from "@repo/ui/separator";
 import { Tag } from "lucide-react";
 import type { ReactNode } from "react";
+import type { Order } from "@repo/database";
 
 const DISCOUNT_TYPE_LABELS: Record<string, string> = {
     flat: "Flat",
@@ -10,7 +11,7 @@ const DISCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 interface PaymentSummaryProps {
-    order: any;
+    order: Order | null | undefined;
     totalPayments: number;
     totalRefunds: number;
 }

@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import React from "react";
+import type { Style, StylePricingRule } from "@repo/database";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 import {
   Select,
@@ -82,9 +83,9 @@ export const AmountCell = ({
 }: CellContext<GarmentSchema, unknown>) => {
   const { control } = useFormContext();
   const meta = table.options.meta as {
-    styles?: any[];
+    styles?: Style[];
     stitchingPrice?: number;
-    stylePricingRules?: any[];
+    stylePricingRules?: StylePricingRule[];
   };
   const styles = meta?.styles || [];
   const stitchingPrice = meta?.stitchingPrice || 0;
@@ -92,7 +93,7 @@ export const AmountCell = ({
 
   const garment = useWatch({
     control,
-    name: `garments.${row.index}` as any,
+    name: `garments.${row.index}` as `garments.${number}`,
   }) as GarmentSchema;
 
   const stylePrice = React.useMemo(() => {

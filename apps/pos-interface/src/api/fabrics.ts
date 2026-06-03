@@ -10,14 +10,20 @@ export const getFabrics = async (includeArchived = false): Promise<Fabric[]> => 
 };
 
 export const createFabric = async (
-  fabric: Pick<Fabric, "name"> & Partial<Pick<Fabric, "color" | "color_hex" | "price_per_meter" | "shop_stock">>,
+  fabric: Pick<Fabric, "name"> & Partial<Pick<Fabric, "color" | "color_hex" | "price_per_meter" | "shop_stock" | "season">>,
 ): Promise<Fabric> => {
   const { data, error } = await db.from('fabrics').insert(fabric).select().single();
   if (error) throw error;
   return data as Fabric;
 };
 
-export const updateFabric = async (id: number, fabric: Partial<Fabric>): Promise<Fabric> => {
+// Stock columns are intentionally not accepted here. All stock changes go
+// through the stamping RPCs so the stock_movements ledger stays complete
+// (CLAUDE.md §4); a metadata UPDATE must never carry an absolute stock figure.
+export const updateFabric = async (
+  id: number,
+  fabric: Partial<Omit<Fabric, "shop_stock" | "workshop_stock" | "real_stock">>,
+): Promise<Fabric> => {
   const { data, error } = await withWriteRetry(
     () => db
       .from('fabrics')

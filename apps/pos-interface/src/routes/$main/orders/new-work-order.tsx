@@ -52,7 +52,7 @@ import {
 } from "@/components/forms/order-summary-and-payment/order-form.schema";
 import { mapOrderToFormValues } from "@/components/forms/order-summary-and-payment/order-form.mapper";
 import { createWorkOrderStore } from "@/store/current-work-order";
-import type { Customer, Order } from "@repo/database";
+import type { Customer, Order, Garment, OrderShelfItem, Shelf } from "@repo/database";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
@@ -236,7 +236,7 @@ function NewWorkOrder() {
         defaultValues: {
             ...customerMeasurementsDefaults,
             measurement_date: new Date().toISOString(), // Set to today for new measurements
-            measurer_id: user?.id ?? (undefined as any),
+            measurer_id: user?.id ?? (undefined as unknown as string),
         },
     });
 
@@ -253,7 +253,7 @@ function NewWorkOrder() {
         garments: GarmentSchema[];
         signature: string;
     }>({
-        resolver: fabricSelectionResolver as any,
+        resolver: fabricSelectionResolver as Resolver<{ garments: GarmentSchema[]; signature: string }>,
         defaultValues: { garments: [], signature: "" },
     });
 
@@ -263,7 +263,7 @@ function NewWorkOrder() {
     });
 
     const OrderForm = useForm<OrderSchema>({
-        resolver: zodResolver(orderSchema) as any,
+        resolver: zodResolver(orderSchema) as Resolver<OrderSchema>,
         defaultValues: {
             ...orderDefaults,
             stitching_price: stitchingPrice,
@@ -276,7 +276,7 @@ function NewWorkOrder() {
         measurementsForm.reset({
             ...customerMeasurementsDefaults,
             measurement_date: new Date().toISOString(),
-            measurer_id: user?.id ?? (undefined as any),
+            measurer_id: user?.id ?? (undefined as unknown as string),
         });
         fabricSelectionForm.reset({
             garments: [],
@@ -379,7 +379,7 @@ function NewWorkOrder() {
             measurementsForm.reset({
                 ...customerMeasurementsDefaults,
                 measurement_date: new Date().toISOString(),
-                measurer_id: user?.id ?? (undefined as any),
+                measurer_id: user?.id ?? (undefined as unknown as string),
             });
             fabricSelectionForm.reset();
             shelfForm.reset();
@@ -387,7 +387,7 @@ function NewWorkOrder() {
 
             // Link appointment to this order if started from an appointment
             if (id && linkedAppointment) {
-                updateAppointment(linkedAppointment.id, { order_id: id } as any);
+                updateAppointment(linkedAppointment.id, { order_id: id });
             }
 
             // Move to next step (Measurements)
@@ -399,7 +399,7 @@ function NewWorkOrder() {
                 handleProceed(0);
             } else if (action === "updated") {
                 if (data) {
-                    const updatedOrderSchema = mapOrderToSchema(data);
+                    const updatedOrderSchema = mapOrderToSchema(data as Order);
                     setOrder(updatedOrderSchema);
                     OrderForm.reset(updatedOrderSchema);
                 }
@@ -492,7 +492,7 @@ function NewWorkOrder() {
 
                 // 2. Load Garments
                 if (orderData.garments && orderData.garments.length > 0) {
-                    const mappedGarments: GarmentSchema[] = orderData.garments.map((g: any) => mapGarmentToFormValues(g));
+                    const mappedGarments: GarmentSchema[] = orderData.garments.map((g: Garment) => mapGarmentToFormValues(g));
                     fabricSelectionForm.setValue("garments", mappedGarments);
                     setFabricSelections(mappedGarments);
 
@@ -513,12 +513,12 @@ function NewWorkOrder() {
 
                 // 3. Load Shelf Items
                 if (orderData.shelf_items && orderData.shelf_items.length > 0) {
-                    const mappedShelfProducts = orderData.shelf_items.map((si: any) => ({
+                    const mappedShelfProducts = orderData.shelf_items.map((si: OrderShelfItem & { shelf?: Shelf | null }) => ({
                         id: si.shelf_id.toString(),
-                        serial_number: si.shelf?.serial_number || "",
+                        serial_number: si.shelf?.sku || "",
                         product_type: si.shelf?.type || "",
                         brand: si.shelf?.brand || "",
-                        quantity: si.quantity,
+                        quantity: si.quantity ?? 0,
                         stock: si.shelf?.shop_stock || 0,
                         unit_price: Number(si.unit_price),
                     }));
@@ -603,9 +603,9 @@ function NewWorkOrder() {
                             )}) were found for this order. Restore them?`,
                             () => {
                                 if (mDiffers && mEnv)
-                                    measurementsForm.reset(mEnv.values as any);
+                                    measurementsForm.reset(mEnv.values as z.infer<typeof customerMeasurementsSchema>);
                                 if (gDiffers && gEnv)
-                                    fabricSelectionForm.reset(gEnv.values as any);
+                                    fabricSelectionForm.reset(gEnv.values as { garments: GarmentSchema[]; signature: string });
                                 closeDialog();
                             },
                         );

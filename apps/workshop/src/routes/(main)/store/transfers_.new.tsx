@@ -301,11 +301,11 @@ function NewTransferPage() {
         toast.success(`Requested ${cart.length} ${itemWord} from ${sourceLabel}`);
         backToList();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Batch is atomic — failure means nothing was written. Cart stays
       // populated and the localStorage draft is preserved so the user can
       // retry without re-typing.
-      const msg = err?.message ?? String(err);
+      const msg = err instanceof Error ? err.message : String(err);
       toast.error(mode === "send" ? `Could not send: ${msg}` : `Could not create transfer: ${msg}`);
     }
   }
@@ -375,7 +375,7 @@ function NewTransferPage() {
                         <span className={`h-2 w-2 rounded-full ${TYPE_COLORS[t].dot}`} />
                         {ITEM_TYPE_LABELS[t]}
                         {cartTypeCounts[t] > 0 && (
-                          <span className={`text-[10px] tabular-nums ${itemType === t ? "opacity-80" : "opacity-60"}`}>
+                          <span className={`text-[11px] tabular-nums ${itemType === t ? "opacity-80" : "opacity-60"}`}>
                             ({cartTypeCounts[t]})
                           </span>
                         )}
@@ -383,7 +383,7 @@ function NewTransferPage() {
                     ))}
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Mixing types creates one request per type — each is approved separately.
+                    Mixing types creates one request per type — each is sent separately.
                   </p>
                 </div>
               </CardContent>
@@ -436,9 +436,13 @@ function NewTransferPage() {
                         >
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium truncate">{o.label}</p>
-                            <p className={`text-[11px] mt-0.5 ${outOfStock ? "text-[var(--status-bad)]" : "text-muted-foreground"}`}>
-                              {sourceLabel} stock: <span className="tabular-nums font-medium">{o.sourceStock}</span> {unitLabel(o.unit)}
-                            </p>
+                            {/* Source stock is hidden in request mode — the requester
+                                can't see the other side's count (CLAUDE.md §4). */}
+                            {mode === "send" && (
+                              <p className={`text-[11px] mt-0.5 ${outOfStock ? "text-[var(--status-bad)]" : "text-muted-foreground"}`}>
+                                {sourceLabel} stock: <span className="tabular-nums font-medium">{o.sourceStock}</span> {unitLabel(o.unit)}
+                              </p>
+                            )}
                           </div>
                           {inCart ? (
                             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary shrink-0">
@@ -469,7 +473,7 @@ function NewTransferPage() {
                     active={mode === "request"}
                     icon={<MessageSquarePlus className="h-4 w-4" />}
                     title="Request"
-                    body="Ask the other side for items. They approve and ship."
+                    body="Ask the other side for items. They send what they have."
                     onClick={() => setMode("request")}
                   />
                   <ModeTile
@@ -518,21 +522,21 @@ function NewTransferPage() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <p className="text-sm font-medium truncate">{line.name}</p>
-                                {overStock && (
+                                {/* Over-stock warning is send-mode only — in request mode
+                                    the requester can't see the source's stock (§4). */}
+                                {overStock && mode === "send" && (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <button
                                         type="button"
                                         aria-label="Stock warning"
-                                        className={`shrink-0 rounded-full ${mode === "send" ? "text-[var(--status-bad)]" : "text-[var(--status-warn)]"} hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                                        className="shrink-0 rounded-full text-[var(--status-bad)] hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                       >
                                         <AlertCircle className="h-3.5 w-3.5" />
                                       </button>
                                     </TooltipTrigger>
                                     <TooltipContent side="top" className="max-w-[240px] text-sm leading-snug px-3 py-2 font-medium">
-                                      {mode === "send"
-                                        ? `Only ${line.sourceStock} ${unitLabel(line.unit)} available right now`
-                                        : `${sourceLabel} doesn't have enough yet — they can restock before sending`}
+                                      Only {line.sourceStock} {unitLabel(line.unit)} available right now
                                     </TooltipContent>
                                   </Tooltip>
                                 )}
@@ -541,10 +545,14 @@ function NewTransferPage() {
                                 <span className={`font-medium ${TYPE_COLORS[line.itemType].text}`}>
                                   {ITEM_TYPE_LABELS[line.itemType]}
                                 </span>
-                                <span className="text-muted-foreground/50">·</span>
-                                <span>
-                                  {sourceLabel} stock: <span className="tabular-nums">{line.sourceStock}</span> {unitLabel(line.unit)}
-                                </span>
+                                {mode === "send" && (
+                                  <>
+                                    <span className="text-muted-foreground/50">·</span>
+                                    <span>
+                                      {sourceLabel} stock: <span className="tabular-nums">{line.sourceStock}</span> {unitLabel(line.unit)}
+                                    </span>
+                                  </>
+                                )}
                               </p>
                             </div>
                             <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-[var(--status-bad)]" onClick={() => removeFromCart(line.itemType, line.itemId)}>

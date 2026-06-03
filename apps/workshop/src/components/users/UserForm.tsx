@@ -13,6 +13,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@repo/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 import { toast } from "sonner";
 import { useUnits, useCreateUnit } from "@/hooks/useUnits";
+import { JOB_FUNCTION_TO_STAGE, TEAM_ASSIGNABLE_STAGES, STAGE_TEAM_LABELS } from "@/lib/job-functions";
 import { ROLE_LABELS, DEPARTMENT_LABELS, JOB_FUNCTION_LABELS } from "@/lib/rbac";
 import { getSortedCountries } from "@/lib/countries";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,7 @@ import {
   Factory, ShoppingBag, Info, Plus,
 } from "lucide-react";
 import { format } from "date-fns";
-import type { Role, Department, JobFunction } from "@repo/database";
+import type { Role, Department, JobFunction, ProductionStage } from "@repo/database";
 
 const SORTED_COUNTRIES = getSortedCountries();
 const PHONE_CODE_OPTIONS = SORTED_COUNTRIES.map((c) => ({
@@ -73,9 +74,10 @@ export type UserFormState = {
   nationality: string;
   hire_date: string;
   notes: string;
-  // Sewers belong to a specific sewing unit (manager picks at create/edit).
-  // Other terminal roles auto-assign to the lowest-id unit for their stage.
-  sewing_unit_id: string | null;
+  // Explicit team (unit) assignment per operational station this worker runs,
+  // keyed by production_stage (Q4 / §6). The manager picks each one — never a
+  // silent default. Soaking is excluded (auto-assigned); see TEAM_ASSIGNABLE_STAGES.
+  unit_ids: Partial<Record<ProductionStage, string | null>>;
 };
 
 export const EMPTY_USER_FORM: UserFormState = {
@@ -94,7 +96,7 @@ export const EMPTY_USER_FORM: UserFormState = {
   nationality: "",
   hire_date: "",
   notes: "",
-  sewing_unit_id: null,
+  unit_ids: {},
 };
 
 // ── Section card ─────────────────────────────────────────────────────────────
@@ -370,14 +372,18 @@ export function UserForm({
                       key={j}
                       active={selected}
                       onClick={() =>
-                        setForm((p) => ({
-                          ...p,
-                          job_functions: selected
-                            ? p.job_functions.filter((x) => x !== j)
-                            : [...p.job_functions, j],
-                          // Drop unit selection if sewer is being deselected
-                          sewing_unit_id: selected && j === "sewer" ? null : p.sewing_unit_id,
-                        }))
+                        setForm((p) => {
+                          // Deselecting a station drops its team assignment too.
+                          const nextUnitIds = { ...p.unit_ids };
+                          if (selected) delete nextUnitIds[JOB_FUNCTION_TO_STAGE[j]];
+                          return {
+                            ...p,
+                            job_functions: selected
+                              ? p.job_functions.filter((x) => x !== j)
+                              : [...p.job_functions, j],
+                            unit_ids: nextUnitIds,
+                          };
+                        })
                       }
                     >
                       {JOB_FUNCTION_LABELS[j]}
@@ -388,12 +394,23 @@ export function UserForm({
               {form.job_functions.length === 0 && (
                 <p className="text-xs text-muted-foreground pt-1">No stations — office staff.</p>
               )}
-              {form.job_functions.includes("sewer") && (
-                <SewingUnitPicker
-                  value={form.sewing_unit_id}
-                  onChange={(id) => setForm((p) => ({ ...p, sewing_unit_id: id }))}
-                />
-              )}
+              {/* One explicit, required team picker per selected operational
+                  station (Q4 / §6). Soaking has no picker (auto-assigned). */}
+              {form.job_functions
+                .filter((j) => TEAM_ASSIGNABLE_STAGES.includes(JOB_FUNCTION_TO_STAGE[j]))
+                .map((j) => {
+                  const stage = JOB_FUNCTION_TO_STAGE[j];
+                  return (
+                    <UnitPicker
+                      key={stage}
+                      stage={stage}
+                      value={form.unit_ids[stage] ?? null}
+                      onChange={(id) =>
+                        setForm((p) => ({ ...p, unit_ids: { ...p.unit_ids, [stage]: id } }))
+                      }
+                    />
+                  );
+                })}
             </div>
           )}
 
@@ -471,43 +488,44 @@ export function isUserFormValid(form: UserFormState, mode: "add" | "edit"): bool
   if (!form.role || !form.department) return false;
   if (form.department === "shop" && form.brands.length === 0) return false;
   if (mode === "add" && (!form.pin || form.pin.length !== 4)) return false;
-  // Sewers must be assigned to a sewing unit.
-  if (
-    form.role === "staff" &&
-    form.department === "workshop" &&
-    form.job_functions.includes("sewer") &&
-    !form.sewing_unit_id
-  ) {
-    return false;
+  // Every operational station the worker runs needs an explicit team (Q4 / §6).
+  if (form.role === "staff" && form.department === "workshop") {
+    for (const job of form.job_functions) {
+      const stage = JOB_FUNCTION_TO_STAGE[job];
+      if (TEAM_ASSIGNABLE_STAGES.includes(stage) && !form.unit_ids[stage]) return false;
+    }
   }
   return true;
 }
 
-// ── Sewing unit picker ───────────────────────────────────────────────────────
+// ── Team (unit) picker — one per operational station (Q4 / §6) ────────────────
 
-function SewingUnitPicker({
+function UnitPicker({
+  stage,
   value,
   onChange,
 }: {
+  stage: ProductionStage;
   value: string | null;
   onChange: (id: string | null) => void;
 }) {
   const { data: units = [] } = useUnits();
-  const sewingUnits = units.filter((u) => u.stage === "sewing");
+  const stageUnits = units.filter((u) => u.stage === stage);
   const [createOpen, setCreateOpen] = useState(false);
+  const label = STAGE_TEAM_LABELS[stage];
 
   return (
     <div className="space-y-1.5 pt-3 mt-2 border-t border-border">
       <div className="flex items-center gap-1.5">
-        <FieldLabel required>Sewing team</FieldLabel>
+        <FieldLabel required>{label}</FieldLabel>
         <Tooltip>
           <TooltipTrigger asChild>
-            <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground" aria-label="About sewing team">
+            <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground" aria-label={`About ${label}`}>
               <Info className="w-3 h-3" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" className="max-w-xs">
-            Which sewing unit this sewer belongs to. Other stations auto-assign to their default unit.
+            Which team this worker belongs to for this station. Pick it explicitly — it is never defaulted, so editing the worker won't silently move them to another team.
           </TooltipContent>
         </Tooltip>
       </div>
@@ -518,10 +536,10 @@ function SewingUnitPicker({
             onValueChange={(v) => onChange(v || null)}
           >
             <SelectTrigger>
-              <SelectValue placeholder={sewingUnits.length === 0 ? "No sewing units — create one" : "Select sewing team"} />
+              <SelectValue placeholder={stageUnits.length === 0 ? "No teams — create one" : "Select team"} />
             </SelectTrigger>
             <SelectContent>
-              {sewingUnits.map((u) => (
+              {stageUnits.map((u) => (
                 <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
               ))}
             </SelectContent>
@@ -538,7 +556,8 @@ function SewingUnitPicker({
           New
         </Button>
       </div>
-      <CreateSewingUnitDialog
+      <CreateUnitDialog
+        stage={stage}
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={(id) => {
@@ -550,28 +569,31 @@ function SewingUnitPicker({
   );
 }
 
-function CreateSewingUnitDialog({
+function CreateUnitDialog({
+  stage,
   open,
   onOpenChange,
   onCreated,
 }: {
+  stage: ProductionStage;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onCreated: (id: string) => void;
 }) {
   const [name, setName] = useState("");
   const createMut = useCreateUnit();
+  const label = STAGE_TEAM_LABELS[stage];
 
   const submit = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
     try {
-      const created = await createMut.mutateAsync({ stage: "sewing", name: trimmed });
-      toast.success(`Created sewing team "${created.name}"`);
+      const created = await createMut.mutateAsync({ stage, name: trimmed });
+      toast.success(`Created ${label.toLowerCase()} "${created.name}"`);
       setName("");
       onCreated(created.id);
     } catch (err) {
-      toast.error(`Could not create sewing team: ${err instanceof Error ? err.message : String(err)}`);
+      toast.error(`Could not create ${label.toLowerCase()}: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -579,7 +601,7 @@ function CreateSewingUnitDialog({
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setName(""); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>New sewing team</DialogTitle>
+          <DialogTitle>New {label.toLowerCase()}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">

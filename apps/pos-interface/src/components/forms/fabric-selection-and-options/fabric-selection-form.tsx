@@ -321,7 +321,7 @@ export function FabricSelectionForm({
                 return mapFormValuesToGarment({
                     ...garment,
                     piece_stage: pieceStage,
-                    location: location as any,
+                    location: location,
                     trip_number: tripNumber
                 }, orderId, {
                     stitching_price_snapshot: stitchingSnapshot,
@@ -350,7 +350,7 @@ export function FabricSelectionForm({
             if (orderId) {
                 const detailsRes = await getOrderDetails(orderId, true);
                 if (detailsRes.status === "success" && detailsRes.data?.garments) {
-                    const updatedGarments = detailsRes.data.garments.map((g: any) => mapGarmentToFormValues(g));
+                    const updatedGarments = detailsRes.data.garments.map((g) => mapGarmentToFormValues(g));
                     form.setValue("garments", updatedGarments);
                 }
             }
@@ -508,7 +508,7 @@ export function FabricSelectionForm({
         appendGarment({
             ...garmentDefaults,
             garment_id: currentOrderId + "-" + (index + 1),
-            measurement_id: latestMeasurement?.id ?? null as any,
+            measurement_id: latestMeasurement?.id ?? (null as unknown as string),
             delivery_date: deliveryDate || garmentDefaults.delivery_date,
         });
     };
@@ -529,7 +529,7 @@ export function FabricSelectionForm({
 
     function syncRows(
         desiredCount: number,
-        fields: any[],
+        fields: unknown[],
         handlers: {
             addRow: (index: number, orderId?: string | number) => void;
             removeRow: (rowIndex: number) => void;
@@ -567,7 +567,7 @@ export function FabricSelectionForm({
         for (let i = 1; i < garments.length; i++) {
             for (const field of fieldsToCopy) {
                 form.setValue(
-                    `garments.${i}.${field}` as any,
+                    `garments.${i}.${field}` as `garments.${number}.${typeof field}`,
                     firstRow[field],
                     { shouldDirty: true, shouldValidate: false },
                 );
@@ -594,7 +594,7 @@ export function FabricSelectionForm({
         for (let i = 1; i < garments.length; i++) {
             for (const field of fieldsToCopy) {
                 form.setValue(
-                    `garments.${i}.${field}` as any,
+                    `garments.${i}.${field}` as `garments.${number}.${typeof field}`,
                     firstRow[field],
                     { shouldDirty: true, shouldValidate: false },
                 );
@@ -798,8 +798,8 @@ export function FabricSelectionForm({
                                 measurementOptions={measurementOptions}
                                 updateData={(rowIndex, columnId, value) =>
                                     form.setValue(
-                                        `garments.${rowIndex}.${columnId}` as any,
-                                        value,
+                                        `garments.${rowIndex}.${columnId}` as Parameters<typeof form.setValue>[0],
+                                        value as never,
                                     )
                                 }
                                 isFormDisabled={isFormDisabled}
@@ -886,8 +886,8 @@ export function FabricSelectionForm({
                             removeRow={removeGarmentRow}
                             updateData={(rowIndex, columnId, value) =>
                                 form.setValue(
-                                    `garments.${rowIndex}.${columnId}` as any,
-                                    value,
+                                    `garments.${rowIndex}.${columnId}` as Parameters<typeof form.setValue>[0],
+                                    value as never,
                                 )
                             }
                             isFormDisabled={isFormDisabled}

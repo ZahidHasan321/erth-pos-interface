@@ -268,7 +268,7 @@ export function StyleSection({
   /** When rendered inside an already-bordered wrapper, drop the local card chrome. */
   embedded?: boolean;
 }) {
-  const g = garment as any;
+  const g = garment as unknown as Record<string, unknown>;
   const specs = STYLE_FIELDS.filter((f) => {
     const val = g[f.key];
     if (f.type === "boolean") return val === true;
@@ -314,7 +314,8 @@ export function StyleSection({
           if (field.key === "jabzour_2" && g.jabzour_1 !== "ZIPPER") return null;
           const mapped = field.type === "text" ? STYLE_IMAGE_MAP[lookupKey] : null;
           const thickness = field.thicknessKey ? g[field.thicknessKey] : null;
-          const thicknessLabel = thickness ? THICKNESS_LABELS[thickness] ?? thickness : null;
+          const thicknessStr = typeof thickness === "string" ? thickness : null;
+          const thicknessLabel = thicknessStr ? THICKNESS_LABELS[thicknessStr] ?? thicknessStr : null;
           const isBool = field.type === "boolean";
           const boolIcon = isBool && field.key === "wallet_pocket" ? ACCESSORY_ICONS.wallet
             : isBool && field.key === "pen_holder" ? ACCESSORY_ICONS.pen
@@ -387,10 +388,10 @@ export function WorkerHistorySection({
 
   let stages: string[] = [...PRODUCTION_STAGES];
   if (isReturn && reentryStage) {
-    const reentryIdx = stages.indexOf(reentryStage as any);
+    const reentryIdx = stages.indexOf(reentryStage);
     if (reentryIdx > 0) stages = stages.slice(reentryIdx);
   }
-  const currentIdx = stages.indexOf(currentStage as any);
+  const currentIdx = stages.indexOf(currentStage);
 
   return (
     <div className="bg-card border border-border rounded-md p-4">
@@ -409,8 +410,8 @@ export function WorkerHistorySection({
       <div>
         {stages.map((stage, i) => {
           const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
-          const planned = (plan as any)?.[historyKey] ?? null;
-          const actual = (history as any)?.[historyKey] ?? null;
+          const planned = (plan as Record<string, string | undefined> | null)?.[historyKey] ?? null;
+          const actual = (history as Record<string, string | undefined> | null)?.[historyKey] ?? null;
           const isDone = i < currentIdx;
           const isCurrent = i === currentIdx;
           const isPending = i > currentIdx;
@@ -543,7 +544,7 @@ export function CustomerFeedbackPanel({
   const photoRaw = parseJson<unknown>(fb.photo_urls);
   const voiceRaw = parseJson<unknown>(fb.voice_note_urls);
   const photos = Array.isArray(photoRaw)
-    ? (photoRaw as any[]).map((p) => (typeof p === "string" ? p : p?.url)).filter(Boolean) as string[]
+    ? (photoRaw as Array<string | { url?: string }>).map((p) => (typeof p === "string" ? p : p?.url)).filter((p): p is string => typeof p === "string")
     : [];
   const voices = Array.isArray(voiceRaw)
     ? (voiceRaw as unknown[]).filter((v): v is string => typeof v === "string")

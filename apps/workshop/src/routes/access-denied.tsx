@@ -36,7 +36,7 @@ function AccessDeniedPage() {
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-foreground">Access Denied</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Access Denied</h1>
 
         <p className="text-lg text-muted-foreground">
           You don't have permission to access{" "}

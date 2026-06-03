@@ -212,8 +212,7 @@ function TransfersList({
 
 function ActionLabel({ action }: { action: ReturnType<typeof primaryActionFor> }) {
   switch (action) {
-    case "approve": return <>Review</>;
-    case "dispatch": return <>Dispatch</>;
+    case "dispatch": return <>Send</>;
     case "receive": return <>Receive</>;
     default: return null;
   }
@@ -270,7 +269,7 @@ function TransferRowDesktop({
       </TableCell>
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
         {action ? (
-          <Button size="sm" variant={action === "approve" ? "default" : "outline"} onClick={() => onSelect(t)}>
+          <Button size="sm" variant={action === "dispatch" ? "default" : "outline"} onClick={() => onSelect(t)}>
             <ActionLabel action={action} />
           </Button>
         ) : (
@@ -307,7 +306,7 @@ function TransferCardMobile({
         <div className="flex items-center justify-between gap-2">
           <p className={`text-xs ${action ? "text-amber-700 font-medium" : "text-muted-foreground"}`}>{personalAwaitingLabel(user, t)}</p>
           {action ? (
-            <Button size="sm" variant={action === "approve" ? "default" : "outline"} onClick={(e) => { e.stopPropagation(); onSelect(t); }}>
+            <Button size="sm" variant={action === "dispatch" ? "default" : "outline"} onClick={(e) => { e.stopPropagation(); onSelect(t); }}>
               <ActionLabel action={action} />
             </Button>
           ) : null}
@@ -319,9 +318,9 @@ function TransferCardMobile({
 
 function EmptyState({ kind, mainParam }: { kind: "inbox" | "open" | "done"; mainParam: string }) {
   const messages = {
-    inbox: { title: "You're all caught up", body: "Anything that needs your approval, dispatch, or receipt will land here." },
+    inbox: { title: "You're all caught up", body: "Anything that needs you to send or receive will land here." },
     open: { title: "Nothing in motion", body: "Active transfers — waiting on someone — will show up here." },
-    done: { title: "No history yet", body: "Completed and rejected transfers will be archived here." },
+    done: { title: "No history yet", body: "Completed transfers will be archived here." },
   };
   const m = messages[kind];
   return (

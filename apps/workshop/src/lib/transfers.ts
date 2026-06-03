@@ -1,5 +1,6 @@
 import type { TransferRequestWithItems } from "@/api/transfers";
 import type { AuthUser } from "@/lib/rbac";
+import type { TransferItemType } from "@repo/database";
 import { getPermission } from "@/lib/rbac";
 
 export type Side = "shop" | "workshop";
@@ -13,7 +14,7 @@ export function destinationSideOf(direction: string): Side {
 
 const SIDE_LABEL: Record<Side, string> = { shop: "shop", workshop: "workshop" };
 
-export type TransferActionKind = "approve" | "reject" | "dispatch" | "receive" | "cancel" | null;
+export type TransferActionKind = "dispatch" | "receive" | "cancel" | null;
 
 export function primaryActionFor(user: AuthUser | null, transfer: TransferRequestWithItems): TransferActionKind {
   if (!user) return null;
@@ -22,11 +23,8 @@ export function primaryActionFor(user: AuthUser | null, transfer: TransferReques
 
   switch (transfer.status) {
     case "requested": {
-      if (getPermission(user, "transfers:approve") !== "full") return null;
-      const approverSide = sourceSideOf(transfer.direction);
-      return isAdmin || userSide === approverSide ? "approve" : null;
-    }
-    case "approved": {
+      // No approval gate (CLAUDE.md §4): the source side sends the requested
+      // transfer directly (full / partial / none).
       if (getPermission(user, "transfers:dispatch") !== "full") return null;
       const dispatcherSide = sourceSideOf(transfer.direction);
       return isAdmin || userSide === dispatcherSide ? "dispatch" : null;
@@ -44,8 +42,7 @@ export function primaryActionFor(user: AuthUser | null, transfer: TransferReques
 
 export function awaitingLabel(transfer: TransferRequestWithItems): string {
   switch (transfer.status) {
-    case "requested": return `Awaiting ${sourceSideOf(transfer.direction)} approval`;
-    case "approved": return `Awaiting ${sourceSideOf(transfer.direction)} dispatch`;
+    case "requested": return `Awaiting ${sourceSideOf(transfer.direction)} dispatch`;
     case "dispatched":
     case "partially_received": return `Awaiting ${destinationSideOf(transfer.direction)} receipt`;
     default: return "";
@@ -54,28 +51,26 @@ export function awaitingLabel(transfer: TransferRequestWithItems): string {
 
 export function personalAwaitingLabel(user: AuthUser | null, t: TransferRequestWithItems): string {
   if (t.status === "received") return "Completed";
-  if (t.status === "rejected") return "Rejected";
 
   const action = primaryActionFor(user, t);
   if (action) {
-    if (action === "approve") return "Waiting on you to approve";
-    if (action === "dispatch") return "Waiting on you to dispatch";
+    if (action === "dispatch") return "Waiting on you to send";
     if (action === "receive") return "Waiting on you to receive";
   }
 
-  const verb = t.status === "requested" ? "approval" : t.status === "approved" ? "dispatch" : "receipt";
-  const side = (t.status === "requested" || t.status === "approved")
+  const verb = t.status === "requested" ? "dispatch" : "receipt";
+  const side = t.status === "requested"
     ? sourceSideOf(t.direction)
     : destinationSideOf(t.direction);
   return `Waiting on ${SIDE_LABEL[side]} ${verb}`;
 }
 
-export function itemTypeOf(t: TransferRequestWithItems): "fabric" | "shelf" | "accessory" {
-  return (t.item_type as any) ?? "fabric";
+export function itemTypeOf(t: TransferRequestWithItems): TransferItemType {
+  return (t.item_type as TransferItemType) ?? "fabric";
 }
 
 export function lastEventAt(t: TransferRequestWithItems): Date | string | null {
-  return (t.received_at ?? t.dispatched_at ?? t.approved_at ?? t.created_at) ?? null;
+  return (t.received_at ?? t.dispatched_at ?? t.created_at) ?? null;
 }
 
 export function staleDays(t: TransferRequestWithItems): number {
@@ -99,8 +94,8 @@ export function itemNamesPreview(t: TransferRequestWithItems, max = 2): string {
 export function sourceStockOf(t: TransferRequestWithItems, it: TransferRequestWithItems["items"][number]): number | null {
   const src = sourceSideOf(t.direction);
   const key = src === "shop" ? "shop_stock" : "workshop_stock";
-  if (it.fabric) return Number((it.fabric as any)[key] ?? 0);
-  if (it.shelf_item) return Number((it.shelf_item as any)[key] ?? 0);
-  if (it.accessory) return Number((it.accessory as any)[key] ?? 0);
+  if (it.fabric) return Number((it.fabric as Record<string, unknown>)[key] ?? 0);
+  if (it.shelf_item) return Number((it.shelf_item as Record<string, unknown>)[key] ?? 0);
+  if (it.accessory) return Number((it.accessory as Record<string, unknown>)[key] ?? 0);
   return null;
 }

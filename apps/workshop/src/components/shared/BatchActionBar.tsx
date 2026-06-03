@@ -14,14 +14,14 @@ export function BatchActionBar({ count, onClear, children }: BatchActionBarProps
     <div
       className={cn(
         "fixed bottom-6 left-1/2 -translate-x-1/2 z-50",
-        "flex items-center gap-3 px-5 py-3 rounded-2xl",
-        "bg-zinc-900 text-zinc-50",
-        "shadow-[0_8px_30px_rgb(0,0,0,0.15)] border border-white/10",
+        "flex items-center gap-3 px-5 py-3 rounded-md",
+        "bg-foreground text-background",
+        "shadow-lg border border-white/10",
         "animate-slide-up motion-reduce:animate-none backdrop-blur-sm",
       )}
     >
-      <span className="text-sm font-bold tabular-nums">{count} selected</span>
-      <div className="w-px h-5 bg-zinc-50/20" />
+      <span className="text-sm font-medium tabular-nums">{count} selected</span>
+      <div className="w-px h-5 bg-background/20" />
       {children}
       <button
         onClick={onClear}

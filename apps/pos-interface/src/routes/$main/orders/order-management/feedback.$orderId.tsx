@@ -57,7 +57,7 @@ import { updateGarment, bulkRepointMeasurement, bulkUpdateStyleFields } from "@/
 import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip } from "@/api/feedback";
 import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
 import { buildFinalGarmentPayload } from "@/lib/feedback-payload";
-import type { Measurement, Order, Garment, Customer, GarmentFeedback } from "@repo/database";
+import type { Measurement, Order, Garment, Customer, GarmentFeedback, BrovaFeedback } from "@repo/database";
 import { evaluateBrovaFeedback, getAlterationNumber } from "@repo/database";
 
 // Assets & Constants
@@ -630,8 +630,10 @@ function UnifiedFeedbackInterface() {
           try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; }
         };
         const photoEntries = parseJsonArray(fb.photo_urls)
-          .map((p: any) => (typeof p === "string" ? { type: "photo" as const, url: p } : p))
-          .filter((p: any) => p && typeof p.url === "string");
+          .map((p: unknown) => (typeof p === "string" ? { type: "photo" as const, url: p } : p))
+          .filter((p): p is { type: "photo" | "video"; url: string } => {
+            return !!p && typeof p === "object" && "url" in p && typeof (p as { url: unknown }).url === "string";
+          });
         const voiceEntries = parseJsonArray(fb.voice_note_urls).filter(
           (v): v is string => typeof v === "string",
         );
@@ -640,12 +642,14 @@ function UnifiedFeedbackInterface() {
         const feedbackMeasurements: Record<string, number | ""> = {};
         const measurementNotes: Record<string, string> = {};
         for (const row of parseJsonArray(fb.measurement_diffs)) {
-          const d = row as any;
-          if (!d || typeof d !== "object" || !d.field) continue;
-          if (d.actual_value !== null && d.actual_value !== undefined) {
-            feedbackMeasurements[d.field] = d.actual_value;
+          if (!row || typeof row !== "object") continue;
+          const d = row as Record<string, unknown>;
+          if (!d["field"]) continue;
+          const field = String(d["field"]);
+          if (d["actual_value"] !== null && d["actual_value"] !== undefined) {
+            feedbackMeasurements[field] = d["actual_value"] as number | "";
           }
-          if (d.notes) measurementNotes[d.field] = d.notes;
+          if (d["notes"]) measurementNotes[field] = String(d["notes"]);
         }
 
         // Rebuild option state from options_checklist JSON
@@ -654,15 +658,18 @@ function UnifiedFeedbackInterface() {
         const hashwaChanges: Record<string, string> = {};
         const optionNotes: Record<string, string> = {};
         for (const row of parseJsonArray(fb.options_checklist)) {
-          const o = row as any;
-          if (!o || typeof o !== "object" || !o.option_name) continue;
-          if (o.actual_correct === true) optionChecks[`${o.option_name}-main`] = true;
-          else if (o.rejected === true) optionChecks[`${o.option_name}-main`] = false;
-          if (o.hashwa_correct === true) optionChecks[`${o.option_name}-hashwa`] = true;
-          else if (o.hashwa_rejected === true) optionChecks[`${o.option_name}-hashwa`] = false;
-          if (o.new_value) styleChanges[o.option_name] = o.new_value;
-          if (o.hashwa_new_value) hashwaChanges[o.option_name] = o.hashwa_new_value;
-          if (o.notes) optionNotes[o.option_name] = o.notes;
+          if (!row || typeof row !== "object") continue;
+          const o = row as Record<string, unknown>;
+          const optName = o["option_name"];
+          if (!optName) continue;
+          const key = String(optName);
+          if (o["actual_correct"] === true) optionChecks[`${key}-main`] = true;
+          else if (o["rejected"] === true) optionChecks[`${key}-main`] = false;
+          if (o["hashwa_correct"] === true) optionChecks[`${key}-hashwa`] = true;
+          else if (o["hashwa_rejected"] === true) optionChecks[`${key}-hashwa`] = false;
+          if (o["new_value"]) styleChanges[key] = String(o["new_value"]);
+          if (o["hashwa_new_value"]) hashwaChanges[key] = String(o["hashwa_new_value"]);
+          if (o["notes"]) optionNotes[key] = String(o["notes"]);
         }
 
         // difference_reasons stored as plain {field: reason} object
@@ -684,7 +691,7 @@ function UnifiedFeedbackInterface() {
           satisfaction: satLevel?.value || null,
           notes: fb.notes || "",
           customerSignature: fb.customer_signature || null,
-          sharedPhotos: photoEntries as any,
+          sharedPhotos: photoEntries,
           sharedVoiceNotes: voiceEntries,
           feedbackMeasurements,
           measurementNotes,
@@ -998,7 +1005,7 @@ function UnifiedFeedbackInterface() {
     for (const g of activeOrder.garments || []) {
       preSaveSnapshot[g.id] = {
         measurement_id: g.measurement_id ?? null,
-        style: Object.fromEntries(SIBLING_TRACKED_FIELDS.map(k => [k, (g as any)[k]])),
+        style: Object.fromEntries(SIBLING_TRACKED_FIELDS.map(k => [k, g[k]])),
       };
     }
 
@@ -1008,8 +1015,8 @@ function UnifiedFeedbackInterface() {
         if (activeGarment.garment_type === "brova") {
             const allBrovas = activeOrder.garments?.filter(g => g.garment_type === "brova") || [];
             const result = evaluateBrovaFeedback(
-                state.feedbackAction as any,
-                allBrovas.map(b => ({ id: b.id, piece_stage: b.piece_stage as any, acceptance_status: (b as any).acceptance_status, feedback_status: (b as any).feedback_status })),
+                state.feedbackAction as BrovaFeedback,
+                allBrovas.map(b => ({ id: b.id, piece_stage: b.piece_stage, acceptance_status: b.acceptance_status, feedback_status: b.feedback_status })),
                 activeGarment.id
             );
 
@@ -1025,8 +1032,8 @@ function UnifiedFeedbackInterface() {
         } else {
             const isAlterationGarment = activeGarment.garment_type === "alteration";
             const isHomeDelivery = isAlterationGarment
-                ? !!(activeGarment as any).home_delivery
-                : (activeOrder as any).home_delivery;
+                ? !!activeGarment.home_delivery
+                : !!activeOrder.home_delivery;
 
             const updatePayload = buildFinalGarmentPayload({
                 feedbackAction: state.feedbackAction,
@@ -1071,14 +1078,15 @@ function UnifiedFeedbackInterface() {
         });
 
         if (customerReqRows.length > 0 && measurement && activeOrder.customer?.id) {
-          const base: Partial<Measurement> = { ...(measurement as any) };
-          delete (base as any).id;
-          delete (base as any).created_at;
-          delete (base as any).updated_at;
-          (base as any).measurement_date = new Date().toISOString();
+          const baseRecord: Record<string, unknown> = { ...measurement };
+          delete baseRecord["id"];
+          delete baseRecord["created_at"];
+          delete baseRecord["updated_at"];
+          baseRecord["measurement_date"] = new Date().toISOString();
           for (const row of customerReqRows) {
-            (base as any)[row.key] = state.feedbackMeasurements[row.key];
+            baseRecord[row.key] = state.feedbackMeasurements[row.key];
           }
+          const base = baseRecord as Partial<Measurement>;
           const created = await createMeasurement(base);
           if (created.status === "success" && created.data) {
             newMeasurementId = created.data.id;
@@ -1337,7 +1345,7 @@ function UnifiedFeedbackInterface() {
             if (!snap) continue;
             const measChanged = snap.measurement_id !== (g.measurement_id ?? null);
             const styleChanged = SIBLING_TRACKED_FIELDS.some(
-              k => snap.style[k] !== (g as any)[k],
+              k => snap.style[k] !== g[k],
             );
             if (measChanged || styleChanged) {
               affectedIds.add(g.id);
@@ -1428,7 +1436,7 @@ function UnifiedFeedbackInterface() {
   const getBoolCurrent = (id: string): boolean => {
     if (!activeGarment) return false;
     const field = BOOL_OPT_FIELDS[id];
-    return !!(field && (activeGarment as any)[field]);
+    return !!(field && activeGarment[field]);
   };
 
   const findDisplayText = (list: BaseOption[], val: string | undefined | null) => {
@@ -1630,7 +1638,7 @@ function UnifiedFeedbackInterface() {
       {/* Header — compact one-row context strip */}
       {(() => {
         const balance = (activeOrder.order_total || 0) - (activeOrder.paid || 0);
-        const isHomeDelivery = !!(activeOrder as any).home_delivery;
+        const isHomeDelivery = !!activeOrder.home_delivery;
         return (
           <div className="flex items-center gap-3 flex-wrap border-b border-border pb-3">
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={() => router.history.back()}>

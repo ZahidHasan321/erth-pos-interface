@@ -31,10 +31,10 @@ export function WorkshopLayout({ onLogout }: WorkshopLayoutProps) {
             <div className="flex items-center gap-3">
               <SidebarTrigger className="size-8" />
               <div className="flex items-center gap-2 xl:hidden">
-                <div className="w-6 h-6 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs">
+                <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center text-primary-foreground font-semibold text-xs">
                   W
                 </div>
-                <span className="font-bold text-sm uppercase tracking-wider">Workshop</span>
+                <span className="font-medium text-sm">Workshop</span>
               </div>
             </div>
             <div className="flex items-center gap-1">

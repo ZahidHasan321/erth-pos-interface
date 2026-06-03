@@ -479,7 +479,7 @@ function InTransitOrderRow({ order }: { order: OrderWithDetails }) {
             <span className="font-medium text-sm">{order.id}</span>
           </div>
         </td>
-        <td className="py-2.5 px-4 text-sm text-muted-foreground">{(order as any).invoice_number ?? '—'}</td>
+        <td className="py-2.5 px-4 text-sm text-muted-foreground">{order.invoice_number ?? '—'}</td>
         <td className="py-2.5 px-4">
           <div className="font-medium text-sm">{order.customer?.name ?? 'Unknown'}</div>
           {order.customer?.phone && <div className="text-sm text-muted-foreground">{order.customer.phone}</div>}
@@ -558,10 +558,10 @@ function InTransitOrderRow({ order }: { order: OrderWithDetails }) {
                           <span>{tripLabel(g.trip_number, g.garment_type)}</span>
                           <span>·</span>
                           <span>{PIECE_STAGE_LABELS[g.piece_stage as keyof typeof PIECE_STAGE_LABELS] ?? g.piece_stage}</span>
-                          {(g as any).fabric?.name && (
+                          {g.fabric?.name && (
                             <>
                               <span>·</span>
-                              <span className="truncate">{(g as any).fabric.name}</span>
+                              <span className="truncate">{g.fabric.name}</span>
                             </>
                           )}
                         </div>
@@ -1055,7 +1055,7 @@ export default function DispatchOrderPage() {
     .filter((o) => (o.garments?.length ?? 0) > 0);
 
   // Count for return tab badge
-  const { data: redispatchResponse } = useQuery<ApiResponse<any[]>>({
+  const { data: redispatchResponse } = useQuery<ApiResponse<RedispatchGarment[]>>({
     queryKey: ["redispatchGarments", getBrand()],
     queryFn: () => getGarmentsForRedispatch(),
     staleTime: 1000 * 60 * 5,

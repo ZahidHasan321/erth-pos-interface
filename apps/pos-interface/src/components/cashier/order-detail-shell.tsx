@@ -17,9 +17,14 @@ import { PaymentMode } from "@/components/cashier/payment-mode";
 import { HandoverMode } from "@/components/cashier/handover-mode";
 import { RefundMode } from "@/components/cashier/refund-mode";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
+import type { Order, Garment, OrderShelfItem } from "@repo/database";
 import "./cashier-keyframes";
 
+type GarmentWithFabric = Garment & { fabric?: { id: number; name: string } | null };
+type ShelfItemWithShelf = OrderShelfItem & { shelf?: { type: string; brand: string } | null };
+
 type Mode = "payment" | "handover" | "refund";
+
 
 const shortDateFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
 
@@ -36,18 +41,18 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
     const discountValue = Number(order?.discount_value) || 0;
 
     const totalPayments = useMemo(() => transactions
-        .filter((tx: any) => tx.transaction_type === "payment")
-        .reduce((sum: number, tx: any) => sum + Math.abs(Number(tx.amount) || 0), 0), [transactions]);
+        .filter((tx) => tx.transaction_type === "payment")
+        .reduce((sum: number, tx) => sum + Math.abs(Number(tx.amount) || 0), 0), [transactions]);
     const totalRefunds = useMemo(() => transactions
-        .filter((tx: any) => tx.transaction_type === "refund")
-        .reduce((sum: number, tx: any) => sum + Math.abs(Number(tx.amount) || 0), 0), [transactions]);
+        .filter((tx) => tx.transaction_type === "refund")
+        .reduce((sum: number, tx) => sum + Math.abs(Number(tx.amount) || 0), 0), [transactions]);
 
     const isCancelled = order?.checkout_status === "cancelled";
     const isOrderCompleted = order?.order_phase === "completed";
     const cancelledWithPayments = isCancelled && totalPaid > 0;
     const isSalesOrder = order?.order_type === "SALES";
-    const isHomeDelivery = !!(order as any)?.home_delivery;
-    const serverDeliveryCharge = Number((order as any)?.delivery_charge) || 0;
+    const isHomeDelivery = !!order?.home_delivery;
+    const serverDeliveryCharge = Number(order?.delivery_charge) || 0;
 
     const remainingBalance = orderTotal - totalPaid;
     const isFullyPaid = remainingBalance <= 0;
@@ -57,20 +62,20 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
 
     const advance = useMemo(() => {
         if (!order) return 0;
-        const stitching = Number((order as any)?.stitching_charge) || 0;
-        const fabric = Number((order as any)?.fabric_charge) || 0;
-        const style = Number((order as any)?.style_charge) || 0;
-        const express = Number((order as any)?.express_charge) || 0;
-        const soaking = Number((order as any)?.soaking_charge) || 0;
-        const shelf = Number((order as any)?.shelf_charge) || 0;
+        const stitching = Number(order?.stitching_charge) || 0;
+        const fabric = Number(order?.fabric_charge) || 0;
+        const style = Number(order?.style_charge) || 0;
+        const express = Number(order?.express_charge) || 0;
+        const soaking = Number(order?.soaking_charge) || 0;
+        const shelf = Number(order?.shelf_charge) || 0;
         return parseFloat(((stitching * 0.5) + fabric + style + serverDeliveryCharge + express + soaking + shelf).toFixed(3));
     }, [order, serverDeliveryCharge]);
 
     // Eligible-for-handover garments (shop + ready stages)
     const eligibleGarments = useMemo(() => isSalesOrder
         ? []
-        : garments.filter((g: any) =>
-            g.location === "shop" && ["ready_for_pickup", "brova_trialed", "awaiting_trial"].includes(g.piece_stage)
+        : (garments as GarmentWithFabric[]).filter((g) =>
+            g.location === "shop" && ["ready_for_pickup", "brova_trialed", "awaiting_trial"].includes(g.piece_stage ?? "")
           ),
         [garments, isSalesOrder]);
 
@@ -210,7 +215,7 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
                             orderTotal={orderTotal}
                             totalPaid={totalPaid}
                             discountValue={discountValue}
-                            garments={garments.map((g: any) => ({
+                            garments={(garments as GarmentWithFabric[]).map((g) => ({
                                 garment_type: g.garment_type, style: g.style,
                                 collar_type: g.collar_type, collar_button: g.collar_button, collar_position: g.collar_position, cuffs_type: g.cuffs_type,
                                 jabzour_1: g.jabzour_1, jabzour_thickness: g.jabzour_thickness,
@@ -220,11 +225,11 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
                                 fabric_price_snapshot: Number(g.fabric_price_snapshot) || 0,
                                 stitching_price_snapshot: Number(g.stitching_price_snapshot) || 0,
                                 style_price_snapshot: Number(g.style_price_snapshot) || 0,
-                            }))}
-                            shelfItems={shelfItems.map((i: any) => ({
+                            })) as Parameters<typeof PaymentHistory>[0]["garments"]}
+                            shelfItems={(shelfItems as ShelfItemWithShelf[]).map((i) => ({
                                 name: i.shelf?.type || `Item #${i.shelf_id}`,
                                 brand: i.shelf?.brand, quantity: i.quantity, unit_price: i.unit_price,
-                            }))}
+                            })) as Parameters<typeof PaymentHistory>[0]["shelfItems"]}
                         />
                     </div>
                 </SheetContent>
@@ -233,7 +238,7 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
     );
 }
 
-function CustomerHeaderInline({ order, isCancelled }: { order: any; isCancelled: boolean }) {
+function CustomerHeaderInline({ order, isCancelled }: { order: Order; isCancelled: boolean }) {
     const phone = order.customer?.phone;
     const countryCode = order.customer?.country_code || "+965";
     const phaseLabel = order.order_phase
@@ -262,7 +267,7 @@ function CustomerHeaderInline({ order, isCancelled }: { order: any; isCancelled:
             )}
             {order.delivery_date && (
                 <span className="text-[11px] tabular-nums shrink-0 flex items-center gap-0.5 font-semibold text-foreground">
-                    <CalendarDays className="h-3 w-3" />Due {shortDateFmt.format(new Date(order.delivery_date))}
+                    <CalendarDays className="h-3 w-3" />Due {shortDateFmt.format(new Date(order.delivery_date.toString()))}
                 </span>
             )}
             <Popover>

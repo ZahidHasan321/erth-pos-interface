@@ -67,10 +67,11 @@ export const ADJUSTMENT_REASONS_ADD = [
   { value: "other_add", label: "Other (specify)" },
 ] as const;
 
+// Adjust is for count corrections only. Damaged / lost stock goes through the
+// dedicated Damage/Waste action (WASTE_REASONS below) which records cost impact
+// + fault category — see CLAUDE.md §4.
 export const ADJUSTMENT_REASONS_REMOVE = [
   { value: "recount_down", label: "Recount — short" },
-  { value: "damaged", label: "Damaged / unusable" },
-  { value: "lost", label: "Lost / missing" },
   { value: "expired", label: "Expired" },
   { value: "returned_to_supplier", label: "Returned to supplier" },
   { value: "other_remove", label: "Other (specify)" },
@@ -86,6 +87,29 @@ export function getReasonLabel(value: string): string {
     value
   );
 }
+
+// ─── Damage / Waste ─────────────────────────────────────────────────────
+// Dedicated action distinct from Adjust: removes stock as a `waste` movement
+// with a fault category, optional photo, and recorded cost impact.
+export const WASTE_REASONS = [
+  { value: "supplier_defect", label: "Supplier defect" },
+  { value: "staff_mistake", label: "Staff mistake" },
+  { value: "customer_damage", label: "Customer damage" },
+  { value: "lost", label: "Lost / missing" },
+  { value: "mis_cut", label: "Mis-cut" },
+  { value: "other", label: "Other (specify)" },
+] as const;
+
+export type WasteReasonValue = (typeof WASTE_REASONS)[number]["value"];
+
+export function getWasteReasonLabel(value: string): string {
+  return WASTE_REASONS.find((r) => r.value === value)?.label ?? value;
+}
+
+// Cost at/above which a Damage/Waste record requires a manager. Mirror of
+// v_threshold in record_waste (triggers.sql). Below it, any waste-permitted
+// user records directly; at/above, only a manager/admin (enforced server-side).
+export const WASTE_APPROVAL_THRESHOLD = 25;
 
 // ─── Unit handling ────────────────────────────────────────────────────
 // Fabric is always meters. Shelf is always whole pieces. Accessories carry a

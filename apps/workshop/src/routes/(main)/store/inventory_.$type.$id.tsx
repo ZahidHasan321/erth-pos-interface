@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Pencil, Loader2, AlertCircle, Settings2, Hammer, Store, Plus, ScanBarcode, Package } from "lucide-react";
+import { ArrowLeft, Pencil, Loader2, AlertCircle, AlertTriangle, Settings2, Hammer, Plus, ScanBarcode, Package, Image as ImageIcon } from "lucide-react";
 
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { getPermission } from "@/lib/rbac";
 import {
-  isLowStock, formatQty,
+  isLowStock, formatQty, getWasteReasonLabel,
   MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_COLORS,
 } from "@/lib/inventory";
 import { getFabricById, createFabric, updateFabric } from "@/api/fabrics";
@@ -29,6 +29,7 @@ import { ImageUpload } from "@/components/inventory/ImageUpload";
 import { CategoryCombobox } from "@/components/inventory/CategoryCombobox";
 import { RestockDialog } from "@/components/inventory/RestockDialog";
 import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
+import { DamageWasteDialog } from "@/components/inventory/DamageWasteDialog";
 import { BarcodeScannerDialog } from "@/components/inventory/BarcodeScannerDialog";
 import { getAccessories } from "@/api/accessories";
 import { PageHeader, SectionCard, EmptyState } from "@/components/shared/PageShell";
@@ -174,6 +175,7 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
   ) === "full";
   const canRestock = getPermission(user, "inventory:restock") === "full";
   const canAdjust = getPermission(user, "inventory:adjust") === "full";
+  const canWaste = getPermission(user, "inventory:waste") === "full";
 
   // Load existing item (skip if creating)
   const itemQ = useQuery({
@@ -229,6 +231,7 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
   const [restockLocation, setRestockLocation] = useState<StockLocation>("workshop");
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustLocation, setAdjustLocation] = useState<StockLocation>("workshop");
+  const [wasteOpen, setWasteOpen] = useState(false);
 
   // New supplier dialog
   const [newSupplierOpen, setNewSupplierOpen] = useState(false);
@@ -305,8 +308,13 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
 
   const item = itemQ.data as Fabric | Shelf | Accessory | null | undefined;
   const workshopStock = item ? Number(item.workshop_stock ?? 0) : 0;
-  const shopStock = item ? Number(item.shop_stock ?? 0) : 0;
   const unit: UnitOfMeasure | null = type === "accessory" && item ? (item as Accessory).unit_of_measure ?? null : null;
+  // Cost basis for the waste action: item price (per-meter for fabric).
+  const unitCost: number | null = item
+    ? type === "fabric"
+      ? (item as Fabric).price_per_meter != null ? Number((item as Fabric).price_per_meter) : null
+      : (item as Shelf | Accessory).price != null ? Number((item as Shelf | Accessory).price) : null
+    : null;
 
   const headingPrefix = type === "fabric" ? "Fabric" : type === "shelf" ? "Shelf item" : "Accessory";
   const heading = isNew ? `New ${headingPrefix.toLowerCase()}` : (item ? (type === "shelf" ? (item as Shelf).type : (item as Fabric | Accessory).name) ?? "" : "");
@@ -394,12 +402,13 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
               type={stockType}
               unit={unit}
               workshopStock={workshopStock}
-              shopStock={shopStock}
               threshold={form.low_stock_threshold ? Number(form.low_stock_threshold) : null}
               canRestock={canRestock}
               canAdjust={canAdjust}
+              canWaste={canWaste}
               onRestock={(loc) => { setRestockLocation(loc); setRestockOpen(true); }}
               onAdjust={(loc) => { setAdjustLocation(loc); setAdjustOpen(true); }}
+              onWaste={() => setWasteOpen(true)}
             />
             <MovementsPanel itemType={stockType} itemId={id} unit={unit} />
           </div>
@@ -416,7 +425,7 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
             itemId={id}
             itemName={heading}
             defaultLocation={restockLocation}
-            currentStock={restockLocation === "shop" ? shopStock : workshopStock}
+            currentStock={workshopStock}
             unit={unit}
           />
           <AdjustStockDialog
@@ -426,8 +435,19 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
             itemId={id}
             itemName={heading}
             defaultLocation={adjustLocation}
-            currentStock={adjustLocation === "shop" ? shopStock : workshopStock}
+            currentStock={workshopStock}
             unit={unit}
+          />
+          <DamageWasteDialog
+            open={wasteOpen}
+            onClose={() => setWasteOpen(false)}
+            itemType={stockType}
+            itemId={id}
+            itemName={heading}
+            location="workshop"
+            currentStock={workshopStock}
+            unit={unit}
+            unitCost={unitCost}
           />
         </>
       )}
@@ -700,46 +720,42 @@ function Value({ children, className }: { children: React.ReactNode; className?:
 // ─────────────────────────────────────────────────────────────────────
 
 function StockPanel({
-  type, unit, workshopStock, shopStock, threshold, canRestock, canAdjust, onRestock, onAdjust,
+  type, unit, workshopStock, threshold, canRestock, canAdjust, canWaste, onRestock, onAdjust, onWaste,
 }: {
   type: StockItemType;
   unit: UnitOfMeasure | null;
   workshopStock: number;
-  shopStock: number;
   threshold: number | null;
   canRestock: boolean;
   canAdjust: boolean;
+  canWaste: boolean;
   onRestock: (loc: StockLocation) => void;
   onAdjust: (loc: StockLocation) => void;
+  onWaste: () => void;
 }) {
-  const lowWorkshop = isLowStock(type, workshopStock, threshold);
-  const lowShop = isLowStock(type, shopStock, threshold);
-  const total = workshopStock + shopStock;
+  // Workshop sees only its own stock — shop stock is never shown here (§4 two-stocks invisibility).
+  const low = isLowStock(type, workshopStock, threshold);
+  const showWaste = canWaste && workshopStock > 0;
 
   return (
     <SectionCard title="Stock" bodyClassName="p-4 space-y-3">
-      <StockRow label="Workshop" qty={workshopStock} type={type} unit={unit} low={lowWorkshop} />
-      <StockRow label="Shop" qty={shopStock} type={type} unit={unit} low={lowShop} />
-      <div className="pt-2 border-t flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Total</span>
-        <span className="text-base font-semibold tabular-nums">{formatQty(type, total, unit)}</span>
-      </div>
+      <StockRow label="At workshop" qty={workshopStock} type={type} unit={unit} low={low} />
 
-      {(canRestock || canAdjust) && (
+      {(canRestock || canAdjust || showWaste) && (
         <div className="flex flex-col gap-1.5 pt-2">
           {canRestock && (
-            <>
-              <Button size="sm" variant="default" onClick={() => onRestock("workshop")}>
-                <Hammer className="h-3.5 w-3.5 mr-1.5" /> Restock workshop
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => onRestock("shop")}>
-                <Store className="h-3.5 w-3.5 mr-1.5" /> Restock shop
-              </Button>
-            </>
+            <Button size="sm" variant="default" onClick={() => onRestock("workshop")}>
+              <Hammer className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> Restock
+            </Button>
           )}
           {canAdjust && (
-            <Button size="sm" variant="ghost" onClick={() => onAdjust(workshopStock >= shopStock ? "workshop" : "shop")}>
-              <Settings2 className="h-3.5 w-3.5 mr-1.5" /> Adjust stock
+            <Button size="sm" variant="ghost" onClick={() => onAdjust("workshop")}>
+              <Settings2 className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> Adjust stock
+            </Button>
+          )}
+          {showWaste && (
+            <Button size="sm" variant="ghost" className="text-[var(--status-bad)] hover:text-[var(--status-bad)] hover:bg-[var(--status-bad-bg)]" onClick={onWaste}>
+              <AlertTriangle className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> Damage / waste
             </Button>
           )}
         </div>
@@ -789,11 +805,28 @@ function MovementsPanel({ itemType, itemId, unit }: { itemType: StockItemType; i
                     {Number(m.qty_delta) >= 0 ? "+" : ""}{formatQty(itemType, Number(m.qty_delta), unit)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-0.5 truncate">
-                  <span className="truncate">
-                    {[m.supplier?.name, m.reason, m.notes].filter(Boolean).join(" · ") || m.location}
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground mt-0.5">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">
+                      {[
+                        m.supplier?.name,
+                        m.movement_type === "waste" ? getWasteReasonLabel(m.reason ?? "") : m.reason,
+                        m.notes,
+                      ].filter(Boolean).join(" · ") || m.location}
+                    </span>
+                    {m.image_url && (
+                      <a
+                        href={m.image_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 inline-flex items-center gap-0.5 text-primary underline"
+                        aria-label="View damage photo"
+                      >
+                        <ImageIcon className="h-3 w-3" aria-hidden="true" /> Photo
+                      </a>
+                    )}
                   </span>
-                  <span className="shrink-0 ml-2">{new Date(m.created_at).toLocaleDateString()}</span>
+                  <span className="shrink-0">{new Date(m.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
             ))}

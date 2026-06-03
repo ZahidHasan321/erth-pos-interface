@@ -248,7 +248,7 @@ describe("refund edges (CLAUDE.md §Cancellation / Refund codified edge rules)",
   });
 
   // ── Scenario 3 ────────────────────────────────────────────────────────────
-  it("CLAUDE.md §Cancellation 'Orphaned-finals rule' (EXPECTED RED): refund-discarding the only brova ⇒ brova discarded, NO replacement, parked finals RELEASED waiting_for_acceptance→waiting_cut", async () => {
+  it("CLAUDE.md §Cancellation 'Orphaned-finals rule': refund-discarding the only brova ⇒ brova discarded, NO replacement, parked finals RELEASED waiting_for_acceptance→waiting_cut", async () => {
     await inRolledBackTx(async (tx) => {
       const { orderId, garments } = await wf.createWorkOrder(
         tx,
@@ -295,12 +295,10 @@ describe("refund edges (CLAUDE.md §Cancellation / Refund codified edge rules)",
       const all = await wf.getGarments(tx, orderId);
       expect(all).toHaveLength(3); // brova + 2 finals, no clone
 
-      // SPEC: CLAUDE.md §Cancellation "Orphaned-finals rule" (INTENDED;
-      // EXPECTED RED until the code is fixed) — "refund-discarding the last
-      // remaining brova on an order must release its parked finals
+      // SPEC: CLAUDE.md §Cancellation "Orphaned-finals rule" — "refund-discarding
+      // the last remaining brova on an order must release its parked finals
       // (waiting_for_acceptance → waiting_cut) so they are not permanently
-      // orphaned." The only brova is gone; the finals MUST be freed. This red
-      // is the deliverable — do not weaken or skip it.
+      // orphaned." The only brova is gone; the finals MUST be freed.
       const finalStages = (
         await Promise.all(finalIds.map((fId) => pick(tx, fId)))
       ).map((g) => g.piece_stage);

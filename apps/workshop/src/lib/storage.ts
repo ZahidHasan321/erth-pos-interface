@@ -33,6 +33,17 @@ export async function uploadInventoryImage(
   return uploadFile(file, path);
 }
 
+/** Upload a Damage/Waste evidence photo. */
+export async function uploadWastePhoto(
+  file: File | Blob,
+  itemType: "fabric" | "shelf" | "accessory",
+  itemId: number | string,
+): Promise<UploadResult> {
+  const ext = file instanceof File ? (file.name.split(".").pop() || "jpg") : "jpg";
+  const path = `waste/${itemType}/${itemId}/photo-${Date.now()}.${ext}`;
+  return uploadFile(file, path);
+}
+
 export async function deleteInventoryImageByUrl(url: string): Promise<void> {
   const marker = `/${MEDIA_BUCKET}/`;
   const idx = url.indexOf(marker);

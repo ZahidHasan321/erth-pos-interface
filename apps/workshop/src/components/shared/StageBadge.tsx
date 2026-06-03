@@ -121,7 +121,7 @@ export function StageBadge({
     }
   }
 
-  const color = STAGE_COLOR[stage] ?? "bg-zinc-200 text-zinc-800";
+  const color = STAGE_COLOR[stage] ?? "bg-muted text-foreground";
   const label =
     PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
   return (

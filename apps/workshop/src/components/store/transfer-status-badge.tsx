@@ -12,7 +12,7 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
 
 export function TransferStatusBadge({ status, size = "sm" }: { status: string; size?: "sm" | "xs" }) {
   const Icon = STATUS_ICONS[status];
-  const padding = size === "xs" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs";
+  const padding = size === "xs" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-xs";
   return (
     <span className={`inline-flex items-center gap-1 rounded-md font-medium ${padding} ${TRANSFER_STATUS_COLORS[status] ?? "bg-muted text-muted-foreground"}`}>
       {Icon && <Icon className={size === "xs" ? "h-3 w-3" : "h-3.5 w-3.5"} />}

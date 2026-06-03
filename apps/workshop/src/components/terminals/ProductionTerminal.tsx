@@ -11,7 +11,8 @@ import {
 } from "@/components/shared/PageShell";
 import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
-import { Input } from "@repo/ui/input";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { matchesGarmentSearch } from "@/lib/garment-search";
 import {
   Table,
   TableBody,
@@ -20,7 +21,7 @@ import {
   TableHeader,
   TableRow,
   TableContainer,
-} from "@repo/ui/table";
+} from "@/components/shared/table";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { PIECE_STAGE_LABELS, getNextPlanStage } from "@/lib/constants";
 import { cn, clickableProps, TIMEZONE } from "@/lib/utils";
@@ -44,7 +45,6 @@ import {
   Package,
   Wrench,
   PlayCircle,
-  Search,
   Timer,
   Clock,
   Play,
@@ -238,8 +238,7 @@ function InlineActions({
   if (!working) {
     return (
       <Button
-        size="sm"
-        className="h-8"
+        size="sm-touch"
         onClick={onStart}
         disabled={startMut.isPending}
       >
@@ -256,8 +255,7 @@ function InlineActions({
   return (
     <div className="flex items-center gap-1.5">
       <Button
-        size="sm"
-        className="h-8"
+        size="sm-touch"
         onClick={onDone}
         disabled={completeMut.isPending}
       >
@@ -269,9 +267,8 @@ function InlineActions({
         Done
       </Button>
       <Button
-        size="sm"
+        size="sm-touch"
         variant="outline"
-        className="h-8"
         onClick={onCancel}
         disabled={cancelMut.isPending}
       >
@@ -606,18 +603,9 @@ export function ProductionTerminal({
     terminalStage;
 
   const searchFilter = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     if (!q) return null;
-    return (g: WorkshopGarment) =>
-      (g.customer_name ?? "").toLowerCase().includes(q) ||
-      String(g.order_id).includes(q) ||
-      (g.invoice_number != null && String(g.invoice_number).includes(q)) ||
-      (g.customer_mobile ?? "")
-        .replace(/\s+/g, "")
-        .includes(q.replace(/\s+/g, "")) ||
-      (g.garment_id ?? "").toLowerCase().includes(q) ||
-      (g.fabric_name ?? "").toLowerCase().includes(q) ||
-      (g.style_name ?? "").toLowerCase().includes(q);
+    return (g: WorkshopGarment) => matchesGarmentSearch(g, q, { includeFabricStyle: true });
   }, [search]);
 
   const sections = useMemo(() => {
@@ -683,15 +671,12 @@ export function ProductionTerminal({
         </div>
       </PageHeader>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        <Input
-          placeholder="Garment, customer, order, fabric, style…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Garment, customer, order, fabric, style…"
+        className="max-w-sm"
+      />
 
       {isLoading ? (
         <LoadingSkeleton />

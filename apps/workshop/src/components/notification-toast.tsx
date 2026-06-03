@@ -41,7 +41,7 @@ export function showNotificationToast({
           <Icon className={`h-4 w-4 ${config.iconColor}`} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className={urgent ? 'text-sm font-black uppercase tracking-wide leading-tight' : 'text-sm font-semibold leading-tight'}>{title}</p>
+          <p className={urgent ? 'text-sm font-medium uppercase tracking-wide leading-tight' : 'text-sm font-medium leading-tight'}>{title}</p>
           {body && (
             <p className={urgent ? 'mt-1 text-xs text-red-800 dark:text-red-200 line-clamp-3' : 'mt-1 text-xs text-muted-foreground line-clamp-2'}>{body}</p>
           )}
@@ -49,7 +49,7 @@ export function showNotificationToast({
             <button
               type="button"
               onClick={() => toast.dismiss(id)}
-              className="mt-3 w-full rounded-md bg-red-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-red-700 transition-colors"
+              className="mt-3 w-full rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium uppercase tracking-wider text-white hover:bg-red-700 transition-colors"
             >
               Acknowledge
             </button>

@@ -170,7 +170,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
         const isKuwaiti = sel.style === "kuwaiti";
         const model = isKuwaiti ? "كلاسيك" : "ديزاين";
         const collarBase = collarMap[sel.collar_type || ""] || "عادي";
-        const collarPos = (sel as any).collar_position === "up" ? " (أعلى)" : (sel as any).collar_position === "down" ? " (أسفل)" : "";
+        const collarPos = sel.collar_position === "up" ? " (أعلى)" : sel.collar_position === "down" ? " (أسفل)" : "";
         const collar = `${collarBase}${collarPos}`;
         const buttons = sel.collar_button === "COL_TABBAGI" ? "تبقي" : sel.collar_button === "COL_ARAVI_ZARRAR" ? "زرار عربي" : "زرارات";
         const jabzour = jabzourMap[sel.jabzour_1 || ""] || "بدون";

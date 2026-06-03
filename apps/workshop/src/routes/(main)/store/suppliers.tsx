@@ -3,16 +3,17 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertCircle, ArrowLeft, Archive, ArchiveRestore, Loader2, Mail, Pencil, Phone, Plus, Search, Users,
+  AlertCircle, ArrowLeft, Archive, ArchiveRestore, Loader2, Mail, Pencil, Phone, Plus, Users,
 } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
 import { Input } from "@repo/ui/input";
+import { SearchInput } from "@/components/shared/SearchInput";
 import { Label } from "@repo/ui/label";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Switch } from "@repo/ui/switch";
 import { Textarea } from "@repo/ui/textarea";
-import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
+import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shared/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 
@@ -62,7 +63,7 @@ function SuppliersPage() {
       setDialogOpen(false);
       toast.success("Supplier added");
     },
-    onError: (err: any) => toast.error(`Could not add supplier: ${err?.message ?? String(err)}`),
+    onError: (err: unknown) => toast.error(`Could not add supplier: ${err instanceof Error ? err.message : String(err)}`),
   });
 
   const updateMut = useMutation({
@@ -73,18 +74,18 @@ function SuppliersPage() {
       setEditing(null);
       toast.success("Supplier updated");
     },
-    onError: (err: any) => toast.error(`Could not update supplier: ${err?.message ?? String(err)}`),
+    onError: (err: unknown) => toast.error(`Could not update supplier: ${err instanceof Error ? err.message : String(err)}`),
   });
 
   const archiveMut = useMutation({
     mutationFn: ({ id, restore }: { id: number; restore: boolean }) =>
-      restore ? updateSupplier(id, { is_archived: false }) : archiveSupplier(id).then(() => undefined as any),
+      restore ? updateSupplier(id, { is_archived: false }) : archiveSupplier(id).then(() => undefined),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["suppliers"] });
       setArchiveTarget(null);
       toast.success(vars.restore ? "Supplier restored" : "Supplier archived");
     },
-    onError: (err: any) => toast.error(`Could not update supplier: ${err?.message ?? String(err)}`),
+    onError: (err: unknown) => toast.error(`Could not update supplier: ${err instanceof Error ? err.message : String(err)}`),
   });
 
   function openCreate() {
@@ -123,7 +124,7 @@ function SuppliersPage() {
           </Link>
         </Button>
       </div>
-      <PageHeader icon={Users} title="Suppliers" subtitle="People you restock inventory from">
+      <PageHeader icon={Users} title="Suppliers">
         {canManage && (
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" /> Add Supplier
@@ -132,10 +133,12 @@ function SuppliersPage() {
       </PageHeader>
 
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="relative flex-1 min-w-[240px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search by name, phone, email…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search by name, phone, email…"
+          className="flex-1 min-w-[240px] max-w-md"
+        />
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
           <Switch checked={showArchived} onCheckedChange={setShowArchived} />
           Show archived

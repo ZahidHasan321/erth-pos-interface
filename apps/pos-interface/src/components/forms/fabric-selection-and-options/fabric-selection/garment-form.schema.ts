@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Fabric } from '@repo/database';
 
 export const garmentSchema = z.object({
   id: z.string().uuid().optional(),
@@ -111,7 +112,7 @@ export const garmentDefaults: GarmentSchema = {
   fabric_id: null,
   style_id: null,
   style: 'kuwaiti',
-  measurement_id: null as any,
+  measurement_id: null as unknown as string,
   fabric_source: 'IN',
   color: '',
   shop_name: '',
@@ -159,7 +160,7 @@ export const garmentDefaults: GarmentSchema = {
  * effective_available = shop_stock + savedUsage  (i.e. validate delta only)
  */
 export const createFabricSelectionFormSchema = (
-  fabrics: any[] = [],
+  fabrics: Fabric[] = [],
   savedUsage: Map<number, number> = new Map(),
 ) => {
   return z.object({

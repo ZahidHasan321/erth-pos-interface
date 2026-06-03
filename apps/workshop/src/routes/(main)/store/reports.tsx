@@ -4,10 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart, ArrowDownToLine, Send, AlertTriangle, Settings2, Package } from "lucide-react";
 import { Card, CardContent } from "@repo/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
-import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
+import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shared/table";
 import { cn } from "@/lib/utils";
 import { getMovements, getMovementAggregates, getTopItemsByMovement } from "@/api/stockMovements";
-import { MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_COLORS } from "@/lib/inventory";
+import { MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_COLORS, getWasteReasonLabel } from "@/lib/inventory";
 import { PageHeader, SectionCard, EmptyState } from "@/components/shared/PageShell";
 import type { StockMovementType } from "@repo/database";
 
@@ -69,6 +69,29 @@ function ReportsPage() {
     queryFn: () => getMovements({ movementType: "adjustment", fromDate: from, toDate: to, limit: 20 }),
     staleTime: 60_000,
   });
+  const { data: wasteMovements = [] } = useQuery({
+    queryKey: ["waste_movements", from, to],
+    queryFn: () => getMovements({ movementType: "waste", fromDate: from, toDate: to, limit: 500 }),
+    staleTime: 60_000,
+  });
+
+  // Damage/Waste grouped by fault category (with cost impact) for the period.
+  const wasteByReason = useMemo(() => {
+    const map = new Map<string, { qty: number; cost: number }>();
+    for (const m of wasteMovements) {
+      const key = m.reason ?? "unspecified";
+      const qty = Math.abs(Number(m.qty_delta));
+      const cost = qty * Number(m.unit_cost ?? 0);
+      const cur = map.get(key) ?? { qty: 0, cost: 0 };
+      cur.qty += qty;
+      cur.cost += cost;
+      map.set(key, cur);
+    }
+    return Array.from(map.entries())
+      .map(([reason, v]) => ({ reason, ...v }))
+      .sort((a, b) => b.cost - a.cost || b.qty - a.qty);
+  }, [wasteMovements]);
+  const totalWasteCost = useMemo(() => wasteByReason.reduce((n, w) => n + w.cost, 0), [wasteByReason]);
 
   const totals = agg?.totals ?? {};
   const restocked = totals.restock ?? 0;
@@ -78,7 +101,7 @@ function ReportsPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10">
-      <PageHeader icon={BarChart} title="Inventory reports" subtitle="Stock movement aggregates from the ledger.">
+      <PageHeader icon={BarChart} title="Inventory reports">
         <Select value={range} onValueChange={(v) => setRange(v as Range)}>
           <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -121,6 +144,33 @@ function ReportsPage() {
             );
           })}
         </div>
+      </SectionCard>
+
+      {/* Waste by reason */}
+      <SectionCard
+        title="Waste by reason"
+        action={<span className="text-xs text-muted-foreground tabular-nums">{lost.toFixed(1)} units · cost {totalWasteCost.toFixed(2)}</span>}
+        className="mb-6"
+      >
+        {wasteByReason.length === 0 ? (
+          <EmptyState icon={AlertTriangle} message="No waste recorded in this period" />
+        ) : (
+          <div className="space-y-1.5">
+            {wasteByReason.map((w) => {
+              const pct = totalWasteCost > 0 ? (w.cost / totalWasteCost) * 100 : 0;
+              return (
+                <div key={w.reason} className="flex items-center gap-3 text-sm">
+                  <span className="w-40 truncate min-w-0">{getWasteReasonLabel(w.reason)}</span>
+                  <div className="flex-1 bg-muted rounded-md h-2 overflow-hidden" aria-hidden="true">
+                    <div className="h-full bg-[var(--status-bad)]" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="tabular-nums text-muted-foreground w-24 text-right">{w.qty.toFixed(1)} units</span>
+                  <span className="tabular-nums font-medium w-24 text-right">cost {w.cost.toFixed(2)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </SectionCard>
 
       {/* Top items */}
@@ -210,7 +260,7 @@ function KpiTile({ label, value, icon, color, trend, loading, showSign, dimOnZer
         <p className={cn("text-xs text-muted-foreground", isDimmed && "text-muted-foreground/60")}>{label}</p>
       </div>
       <p className={cn("text-xl font-semibold tabular-nums leading-tight mt-1", isDimmed ? "text-muted-foreground/60" : "text-foreground")}>{displayValue}</p>
-      <p className="text-[10px] text-muted-foreground/70 mt-0.5">{trend}</p>
+      <p className="text-[11px] text-muted-foreground/70 mt-0.5">{trend}</p>
     </div>
   );
 }

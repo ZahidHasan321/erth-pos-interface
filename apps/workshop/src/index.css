@@ -146,6 +146,12 @@
    Mono meta         font-mono text-sm text-muted-foreground          INV-####, phone numbers
    Pill / chip       text-xs font-medium                              status pills, badges
    Button label      text-sm font-medium                              buttons, links
+   Micro             text-[11px]                                      dense sub-caption: count
+                                                                      badges, pipeline-rail labels,
+                                                                      compact-card footnotes. Use
+                                                                      ONLY where text-xs is too
+                                                                      large for a dense rail/badge;
+                                                                      never for primary body text.
 
    WEIGHT RULES
    ──────────────────────────────────────────────────────────────────────────

@@ -45,12 +45,12 @@ export function SupplierCombobox({ value, onChange, placeholder = "Choose suppli
       onChange(real.id);
       toast.success(`Supplier "${real.name}" added`);
     },
-    onError: (err: any, _name, ctx) => {
+    onError: (err: unknown, _name, ctx) => {
       if (ctx) {
         qc.setQueryData(["suppliers"], ctx.prev);
         onChange(null);
       }
-      toast.error(`Could not add supplier: ${err?.message ?? String(err)}`);
+      toast.error(`Could not add supplier: ${err instanceof Error ? err.message : String(err)}`);
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["suppliers"] });

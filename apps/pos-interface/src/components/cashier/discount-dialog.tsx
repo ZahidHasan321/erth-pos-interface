@@ -1,10 +1,11 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 import { DiscountControls } from "@/components/cashier/discount-controls";
+import type { Order } from "@repo/database";
 
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    order: any;
+    order: Order;
     orderTotal: number;
     totalPaid: number;
 };

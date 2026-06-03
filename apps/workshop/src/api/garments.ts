@@ -1,7 +1,7 @@
 import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
 import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry } from '@repo/database';
-import type { PieceStage } from '@repo/database';
+import type { PieceStage, RootCause, RedoPriority, Location } from '@repo/database';
 import {
   QC_OPTIONS,
   evaluateQc,
@@ -94,6 +94,45 @@ function discardOpenStageSession(timings: StageTimings, stage: string): StageTim
 // Silence lint on unused type import alias; StageTimingEntry is re-exported for callers.
 export type { StageTimingEntry };
 
+/** Shape of the `order` join returned by WORKSHOP_QUERY / WORKSHOP_QUERY_LIGHT.
+ *  Supabase may return a single object or a one-element array depending on
+ *  the FK relationship direction; the flatten helpers normalise it. */
+interface RawWorkOrder {
+  invoice_number?: number | null;
+  delivery_date?: string | null;
+  order_phase?: string | null;
+  home_delivery?: boolean | null;
+}
+interface RawAlterationOrder {
+  invoice_number?: number | null;
+  received_date?: string | null;
+  order_phase?: string | null;
+}
+interface RawCustomer {
+  name?: string | null;
+  phone?: string | null;
+  country_code?: string | null;
+}
+interface RawOrderJoin {
+  id?: number;
+  brand?: string | null;
+  checkout_status?: string | null;
+  order_date?: string | null;
+  order_type?: string | null;
+  workOrder?: RawWorkOrder | RawWorkOrder[] | null;
+  alterationOrder?: RawAlterationOrder | RawAlterationOrder[] | null;
+  customer?: RawCustomer | RawCustomer[] | null;
+}
+/** Raw row shape returned by WORKSHOP_QUERY / WORKSHOP_QUERY_LIGHT. */
+interface RawGarmentRow {
+  order?: RawOrderJoin | RawOrderJoin[] | null;
+  measurement?: unknown;
+  full_measurement_set?: unknown;
+  original_garment?: { measurement?: unknown } | null;
+  fabric_ref?: { name?: string | null; color?: string | null } | null;
+  [key: string]: unknown;
+}
+
 const WORKSHOP_QUERY = `
   *,
   order:orders!order_id(
@@ -125,14 +164,16 @@ const WORKSHOP_QUERY_LIGHT = `
   fabric_ref:fabrics!fabric_id(name, color)
 `;
 
-function flattenGarment(raw: any): WorkshopGarment {
-  const { order, measurement, fabric_ref, ...garment } = raw;
+function flattenGarment(raw: RawGarmentRow): WorkshopGarment {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { order: orderRaw, measurement, fabric_ref, original_garment: _og, full_measurement_set: _fms, ...garment } = raw;
+  const order = Array.isArray(orderRaw) ? orderRaw[0] : orderRaw;
   const wo = Array.isArray(order?.workOrder) ? order.workOrder[0] : order?.workOrder;
   const cust = Array.isArray(order?.customer) ? order.customer[0] : order?.customer;
 
   return {
     ...garment,
-    order_brand: order?.brand,
+    order_brand: order?.brand ?? undefined,
     order_date: order?.order_date ?? undefined,
     invoice_number: wo?.invoice_number ?? undefined,
     delivery_date_order: wo?.delivery_date ?? undefined,
@@ -140,27 +181,29 @@ function flattenGarment(raw: any): WorkshopGarment {
     order_phase: wo?.order_phase ?? undefined,
     customer_name: cust?.name ?? undefined,
     customer_mobile: [cust?.country_code, cust?.phone].filter(Boolean).join(' ') || undefined,
-    measurement: measurement ?? null,
+    measurement: (measurement ?? null) as WorkshopGarment['measurement'],
     production_plan: garment.production_plan ?? null,
     worker_history: garment.worker_history ?? null,
     quality_check_ratings: garment.quality_check_ratings ?? null,
-    style_name: garment.style ?? undefined,
+    style_name: (garment.style as string | undefined) ?? undefined,
     style_image_url: undefined,
     fabric_name: fabric_ref?.name ?? undefined,
-    fabric_color: fabric_ref?.color ?? garment.color ?? undefined,
-  };
+    fabric_color: (fabric_ref?.color ?? garment.color ?? undefined) as string | undefined,
+  } as WorkshopGarment;
 }
 
 /** Flatten helper for WORKSHOP_QUERY_LIGHT rows. Same as flattenGarment but
  *  with no measurement field (the RPC shape never includes it). */
-function flattenLightGarment(raw: any): WorkshopGarment {
-  const { order, fabric_ref, ...garment } = raw;
+function flattenLightGarment(raw: RawGarmentRow): WorkshopGarment {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { order: orderRaw, fabric_ref, original_garment: _og, full_measurement_set: _fms, measurement: _m, ...garment } = raw;
+  const order = Array.isArray(orderRaw) ? orderRaw[0] : orderRaw;
   const wo = Array.isArray(order?.workOrder) ? order.workOrder[0] : order?.workOrder;
   const cust = Array.isArray(order?.customer) ? order.customer[0] : order?.customer;
 
   return {
     ...garment,
-    order_brand: order?.brand,
+    order_brand: order?.brand ?? undefined,
     order_date: order?.order_date ?? undefined,
     invoice_number: wo?.invoice_number ?? undefined,
     delivery_date_order: wo?.delivery_date ?? undefined,
@@ -172,11 +215,11 @@ function flattenLightGarment(raw: any): WorkshopGarment {
     production_plan: garment.production_plan ?? null,
     worker_history: garment.worker_history ?? null,
     quality_check_ratings: garment.quality_check_ratings ?? null,
-    style_name: garment.style ?? undefined,
+    style_name: (garment.style as string | undefined) ?? undefined,
     style_image_url: undefined,
     fabric_name: fabric_ref?.name ?? undefined,
-    fabric_color: fabric_ref?.color ?? garment.color ?? undefined,
-  };
+    fabric_color: (fabric_ref?.color ?? garment.color ?? undefined) as string | undefined,
+  } as WorkshopGarment;
 }
 
 /**
@@ -198,7 +241,7 @@ export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
   if (error) {
     throw new Error(`getWorkshopGarments: failed to fetch workshop garments: ${error.message}`);
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenGarment);
+  return (data ?? []).filter((g: RawGarmentRow) => g.order !== null).map(flattenGarment);
 };
 
 /**
@@ -221,7 +264,7 @@ export const getSchedulerGarments = async (): Promise<WorkshopGarment[]> => {
   if (error) {
     throw new Error(`getSchedulerGarments: failed to fetch schedulable garments: ${error.message}`);
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+  return (data ?? []).filter((g: RawGarmentRow) => g.order !== null).map(flattenLightGarment);
 };
 
 /**
@@ -255,7 +298,7 @@ export const getTerminalStageGarments = async (stage: string): Promise<WorkshopG
   if (error) {
     throw new Error(`getTerminalStageGarments: failed to fetch stage '${stage}': ${error.message}`);
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+  return (data ?? []).filter((g: RawGarmentRow) => g.order !== null).map(flattenLightGarment);
 };
 
 /**
@@ -284,7 +327,7 @@ export const getSoakingQueue = async (): Promise<WorkshopGarment[]> => {
   if (error) {
     throw new Error(`getSoakingQueue: failed to fetch soak queue: ${error.message}`);
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+  return (data ?? []).filter((g: RawGarmentRow) => g.order !== null).map(flattenLightGarment);
 };
 
 /**
@@ -325,7 +368,7 @@ export const getHistoryGarments = async (
   if (error) {
     throw new Error(`getHistoryGarments: failed to fetch '${stage}' history for ${dateStr}: ${error.message}`);
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+  return (data ?? []).filter((g: RawGarmentRow) => g.order !== null).map(flattenLightGarment);
 };
 
 /**
@@ -400,7 +443,7 @@ export const getBoardGarments = async (dateStr: string | null): Promise<Workshop
   if (error) {
     throw new Error(`getBoardGarments: failed to fetch board (${dateStr ?? 'live'}): ${error.message}`);
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+  return (data ?? []).filter((g: RawGarmentRow) => g.order !== null).map(flattenLightGarment);
 };
 
 /** Shape returned by getWorkshopWorkload. Only the fields PlanDialog (for
@@ -481,7 +524,7 @@ export const getCompletedTodayGarments = async (): Promise<WorkshopGarment[]> =>
   if (error) {
     throw new Error(`getCompletedTodayGarments: failed to fetch completed today: ${error.message}`);
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenLightGarment);
+  return (data ?? []).filter((g: RawGarmentRow) => g.order !== null).map(flattenLightGarment);
 };
 
 /**
@@ -515,7 +558,8 @@ export const getRedoReplacementsPending = async (): Promise<RedoPendingRow[]> =>
 // renders.
 
 export type AssignedTab = 'all' | 'production' | 'ready' | 'attention';
-export type AssignedChip = 'express' | 'delivery' | 'soaking';
+export type AssignedChip = 'express' | 'delivery' | 'soaking' | 'overdue' | 'brova';
+export type AssignedSort = 'asc' | 'desc';
 
 export interface AssignedOverviewStats {
   overdue: number;
@@ -645,10 +689,16 @@ export interface AssignedOrderRow {
 export interface AssignedPage {
   rows: AssignedOrderRow[];
   totalCount: number;
+  /** Count of the full in-production set, ignoring chips/brand/search. */
+  totalUnfiltered: number;
   chipCounts: {
     express: number;
     delivery: number;
     soaking: number;
+    overdue: number;
+    brova: number;
+    /** Per-brand totals computed over the full (pre-narrowing) set. */
+    brands: Record<string, number>;
   };
 }
 
@@ -673,18 +723,27 @@ export const getAssignedOverview = async (): Promise<AssignedOverview> => {
   };
 };
 
-/** Fetch a paginated + filtered order page for one of the list tabs. */
+/** Fetch a paginated + filtered order page for one of the list tabs.
+ *  Filtering/sorting/counting is server-side: chips (express/overdue/brova/
+ *  delivery/soaking), search, brand narrowing, and delivery-date sort all run
+ *  in the RPC. chip_counts are computed over the full pre-narrowing set. */
 export const getAssignedOrdersPage = async (args: {
   tab: AssignedTab;
   chips: AssignedChip[];
   page: number;
   pageSize: number;
+  search?: string;
+  sort?: AssignedSort;
+  brands?: string[];
 }): Promise<AssignedPage> => {
   const { data, error } = await db.rpc('get_assigned_orders_page', {
     p_tab: args.tab,
     p_chips: args.chips.length > 0 ? args.chips : null,
     p_page: args.page,
     p_page_size: args.pageSize,
+    p_search: args.search && args.search.trim() ? args.search.trim() : null,
+    p_sort: args.sort ?? null,
+    p_brands: args.brands && args.brands.length > 0 ? args.brands : null,
   });
 
   if (error) {
@@ -694,16 +753,28 @@ export const getAssignedOrdersPage = async (args: {
   const payload = (data ?? {}) as {
     data?: AssignedOrderRow[];
     total_count?: number;
-    chip_counts?: { express?: number; delivery?: number; soaking?: number };
+    total_unfiltered?: number;
+    chip_counts?: {
+      express?: number;
+      delivery?: number;
+      soaking?: number;
+      overdue?: number;
+      brova?: number;
+      brands?: Record<string, number>;
+    };
   };
 
   return {
     rows: payload.data ?? [],
     totalCount: payload.total_count ?? 0,
+    totalUnfiltered: payload.total_unfiltered ?? 0,
     chipCounts: {
       express: payload.chip_counts?.express ?? 0,
       delivery: payload.chip_counts?.delivery ?? 0,
       soaking: payload.chip_counts?.soaking ?? 0,
+      overdue: payload.chip_counts?.overdue ?? 0,
+      brova: payload.chip_counts?.brova ?? 0,
+      brands: payload.chip_counts?.brands ?? {},
     },
   };
 };
@@ -742,7 +813,7 @@ export const getOrderGarments = async (orderId: number): Promise<WorkshopGarment
     console.error('getOrderGarments error:', error);
     return [];
   }
-  return (data ?? []).filter((g: any) => g.order !== null).map(flattenDetailGarment);
+  return (data ?? []).filter((g: RawGarmentRow) => g.order !== null).map(flattenDetailGarment);
 };
 
 /**
@@ -790,8 +861,9 @@ export const getGarmentById = async (id: string): Promise<WorkshopGarment | null
 /** Flatten helper for GARMENT_DETAIL_QUERY rows. Mirrors flattenGarment but
  *  also pulls alteration-context fields (full_measurement_set, original
  *  garment's measurement, alteration_orders invoice/dates). */
-function flattenDetailGarment(raw: any): WorkshopGarment {
-  const { order, measurement, full_measurement_set, original_garment, fabric_ref, ...garment } = raw;
+function flattenDetailGarment(raw: RawGarmentRow): WorkshopGarment {
+  const { order: orderRaw, measurement, full_measurement_set, original_garment, fabric_ref, ...garment } = raw;
+  const order = Array.isArray(orderRaw) ? orderRaw[0] : orderRaw;
   const wo = Array.isArray(order?.workOrder) ? order.workOrder[0] : order?.workOrder;
   const ao = Array.isArray(order?.alterationOrder) ? order.alterationOrder[0] : order?.alterationOrder;
   const cust = Array.isArray(order?.customer) ? order.customer[0] : order?.customer;
@@ -801,7 +873,7 @@ function flattenDetailGarment(raw: any): WorkshopGarment {
 
   return {
     ...garment,
-    order_brand: order?.brand,
+    order_brand: order?.brand ?? undefined,
     order_date: order?.order_date ?? undefined,
     invoice_number: wo?.invoice_number ?? ao?.invoice_number ?? undefined,
     delivery_date_order: wo?.delivery_date ?? undefined,
@@ -809,17 +881,17 @@ function flattenDetailGarment(raw: any): WorkshopGarment {
     order_phase: wo?.order_phase ?? ao?.order_phase ?? undefined,
     customer_name: cust?.name ?? undefined,
     customer_mobile: [cust?.country_code, cust?.phone].filter(Boolean).join(' ') || undefined,
-    measurement: measurement ?? null,
-    full_measurement_set: full_measurement_set ?? null,
-    original_garment_measurement: origMeas,
+    measurement: (measurement ?? null) as WorkshopGarment['measurement'],
+    full_measurement_set: (full_measurement_set ?? null) as WorkshopGarment['full_measurement_set'],
+    original_garment_measurement: origMeas as WorkshopGarment['original_garment_measurement'],
     production_plan: garment.production_plan ?? null,
     worker_history: garment.worker_history ?? null,
     quality_check_ratings: garment.quality_check_ratings ?? null,
-    style_name: garment.style ?? undefined,
+    style_name: (garment.style as string | undefined) ?? undefined,
     style_image_url: undefined,
     fabric_name: fabric_ref?.name ?? undefined,
-    fabric_color: fabric_ref?.color ?? garment.color ?? undefined,
-  };
+    fabric_color: (fabric_ref?.color ?? garment.color ?? undefined) as string | undefined,
+  } as WorkshopGarment;
 }
 
 /**
@@ -867,11 +939,13 @@ export interface CompletedOrdersPage {
 export const getCompletedOrdersPage = async (
   page: number,
   pageSize: number,
+  search?: string,
 ): Promise<CompletedOrdersPage> => {
   const { data, error } = await db.rpc('get_completed_orders_page', {
     p_page: page,
     p_page_size: pageSize,
     p_days_back: null,
+    p_search: search && search.trim() ? search.trim() : null,
   });
 
   if (error) {
@@ -938,7 +1012,7 @@ export const sendReturnToProduction = async (id: string, _reentryStage: PieceSta
       .from('garments')
       .update({
         in_production: true,
-        location: 'workshop' as any,
+        location: 'workshop' as Location,
         production_plan: null,
         piece_stage: 'waiting_cut' as PieceStage,
       })
@@ -978,7 +1052,7 @@ export const scheduleGarments = async (
     .in('id', ids);
 
   if (garments?.length) {
-    await Promise.all(garments.map((g: any) => {
+    await Promise.all(garments.map((g: { id: string; trip_number: number | null; trip_history: unknown }) => {
       const history = parseTripHistory(g.trip_history);
       history.push(buildScheduleTripHistoryEntry({
         tripNumber: g.trip_number ?? 1,
@@ -997,7 +1071,7 @@ export const scheduleGarments = async (
       .select('order_id')
       .in('id', ids);
     if (scheduled?.length) {
-      const orderIds = [...new Set(scheduled.map((g: any) => g.order_id))];
+      const orderIds = [...new Set(scheduled.map((g: { order_id: number }) => g.order_id))];
       await withWriteRetry(
         () => db
           .from('garments')
@@ -1136,10 +1210,10 @@ export const submitQc = async (
 
   if (fetchErr) throw new Error(`submitQc: failed to fetch garment for QC: ${fetchErr.message}`);
 
-  const existing = existingData as any;
+  const existing = existingData as unknown as Record<string, unknown>;
   const expectedMeasurements = (existing?.measurement ?? {}) as Record<string, unknown>;
   const expectedOptions: Record<string, unknown> = {};
-  for (const o of QC_OPTIONS) expectedOptions[o.key] = (existing as any)?.[o.key];
+  for (const o of QC_OPTIONS) expectedOptions[o.key] = existing?.[o.key];
   const j = normalizeExpectedJabzour(expectedOptions.jabzour_1, expectedOptions.jabzour_2);
   expectedOptions.jabzour_1 = j.jabzour_1;
   expectedOptions.jabzour_2 = j.jabzour_2;
@@ -1152,7 +1226,7 @@ export const submitQc = async (
 
   const now = new Date().toISOString();
   const tripHistory = parseTripHistory(existing?.trip_history);
-  const currentTrip = existing?.trip_number ?? 1;
+  const currentTrip = (existing?.trip_number as number | null | undefined) ?? 1;
   let tripEntry = tripHistory.find((t) => t.trip === currentTrip);
   if (!tripEntry) {
     tripEntry = {
@@ -1294,7 +1368,16 @@ export const getDispatchHistory = async (
     return [];
   }
 
-  return (data ?? []).map((r: any) => {
+  type DispatchLogRaw = {
+    id: number;
+    dispatched_at: string;
+    trip_number: number | null;
+    garment_id: string;
+    order_id: number;
+    garments: { garment_id: string | null; garment_type: string | null } | { garment_id: string | null; garment_type: string | null }[] | null;
+    orders: { brand: string | null; work_orders: { invoice_number: number | null } | { invoice_number: number | null }[] | null; customers: { name: string | null; phone: string | null } | { name: string | null; phone: string | null }[] | null } | { brand: string | null; work_orders: { invoice_number: number | null } | { invoice_number: number | null }[] | null; customers: { name: string | null; phone: string | null } | { name: string | null; phone: string | null }[] | null }[] | null;
+  };
+  return (data ?? []).map((r: DispatchLogRaw) => {
     const g = Array.isArray(r.garments) ? r.garments[0] : r.garments;
     const o = Array.isArray(r.orders) ? r.orders[0] : r.orders;
     const wo = o ? (Array.isArray(o.work_orders) ? o.work_orders[0] : o.work_orders) : null;
@@ -1604,7 +1687,7 @@ export const markLostInTransit = async (ids: string[]): Promise<void> => {
   const { error } = await withWriteRetry(
     () => db
       .from('garments')
-      .update({ location: 'lost_in_transit' as any, in_production: false })
+      .update({ location: 'lost_in_transit' as Location, in_production: false })
       .in('id', ids),
     (r) => isTransientNetworkError(r.error),
   );
@@ -1784,22 +1867,104 @@ export const createGarmentForOrder = async (
 };
 
 /**
- * Create a replacement garment by cloning the original server-side via RPC.
- * Used for the Reject-Redo path where the original garment row is discarded
- * and the server creates a new row inheriting the original's specs + linking
- * the replaced_by_garment_id FK on the original.
+ * Create a replacement garment by cloning the original server-side via RPC
+ * (CLAUDE.md §2.5/§4). The RPC discards' fabric accounting lives here: it
+ * auto-consumes the replacement's fresh fabric, records the scrapped original's
+ * length as a net-zero material-waste annotation classified by `rootCause`, and
+ * parks the replacement when shop fabric is short (`waiting_material`) or the
+ * cloth is customer-brought OUT (`customer_decision`). The original row is
+ * discarded with its `replaced_by_garment_id` FK pointing at the new row; the
+ * new row starts fresh at trip 1 / waiting_cut.
  *
- * CLAUDE.md: "Workshop manually creates a new garment row (createGarmentForOrder
- * with replaces_garment_id FK link); it inherits specs, starts fresh at
- * trip 1 / waiting_cut."
+ * Idempotent on `idempotencyKey` — a lost-response replay creates exactly one
+ * replacement, one consume, one annotation.
  */
+export interface CreateReplacementResult {
+  id: string;
+  garment_id: string;
+  parked: boolean;
+  parked_reason: 'waiting_material' | 'customer_decision' | null;
+}
 export const createReplacementGarment = async (
   replacesGarmentId: string,
-): Promise<{ id: string; garment_id: string }> => {
+  args: { rootCause: RootCause; redoPriority: RedoPriority; userId: string | null; idempotencyKey: string },
+): Promise<CreateReplacementResult> => {
   const { data, error } = await withWriteRetry(
-    () => db.rpc('create_replacement_garment', { p_replaces_garment_id: replacesGarmentId }),
+    () => db.rpc('create_replacement_garment', {
+      p_replaces_garment_id: replacesGarmentId,
+      p_root_cause: args.rootCause,
+      p_redo_priority: args.redoPriority,
+      p_user_id: args.userId,
+      p_idempotency_key: args.idempotencyKey,
+    }),
     (r) => isTransientNetworkError(r.error),
   );
-  if (error) throw new Error(`createReplacementGarment: failed to create replacement garment: ${error.message}`);
-  return data as { id: string; garment_id: string };
+  if (error) throw new Error(`createReplacementGarment: failed to create replacement for original ${replacesGarmentId}: ${error.message}`);
+  return data as CreateReplacementResult;
+};
+
+/**
+ * Resume a parked redo replacement (CLAUDE.md §6). Un-parks the row once the
+ * material shortage or customer-fabric decision clears: re-runs the fabric
+ * consume (company fabric) or just clears the park (OUT cloth), sets the new
+ * priority, and flips in_production so it becomes schedulable. Idempotent.
+ * Still-short fabric → the RPC raises and the row stays parked.
+ */
+export interface ResumeParkedRedoResult {
+  resumed: boolean;
+  consumed: number;
+  already_active?: boolean;
+}
+export const resumeParkedRedo = async (
+  garmentId: string,
+  args: { priority: RedoPriority; userId: string | null; idempotencyKey: string },
+): Promise<ResumeParkedRedoResult> => {
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('resume_parked_redo', {
+      p_garment_id: garmentId,
+      p_priority: args.priority,
+      p_user_id: args.userId,
+      p_idempotency_key: args.idempotencyKey,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
+  if (error) throw new Error(`resumeParkedRedo: failed to resume parked redo ${garmentId}: ${error.message}`);
+  return data as ResumeParkedRedoResult;
+};
+
+/**
+ * Parked redo replacements (CLAUDE.md §6). The RPC leaves parked rows at
+ * in_production=false, so they fall outside getSchedulerGarments' filter —
+ * fetched separately here for the scheduler's "Parked redos" section. Light
+ * query (no measurements); the section renders fabric / customer / order +
+ * the redo_parked_reason.
+ */
+export const getParkedRedos = async (): Promise<WorkshopGarment[]> => {
+  const { data, error } = await db
+    .from('garments')
+    .select(WORKSHOP_QUERY_LIGHT)
+    .eq('location', 'workshop')
+    .eq('redo_priority', 'parked')
+    .eq('order.checkout_status', 'confirmed');
+  if (error) throw new Error(`getParkedRedos: failed to fetch parked redos: ${error.message}`);
+  return (data ?? []).filter((g: { order: unknown }) => g.order !== null).map(flattenLightGarment);
+};
+
+/**
+ * Per-order count of finals parked at waiting_for_acceptance while a discarded
+ * brova's in-flight replacement brova exists (CLAUDE.md §2.8). Read-only flag
+ * source for the order-detail status label; the order-detail page computes this
+ * client-side from its already-fetched garments when possible, calling this only
+ * as a fallback.
+ */
+export interface FinalsWaitingRow {
+  order_id: number;
+  finals_waiting: number;
+}
+export const getFinalsWaitingOnReplacementBrova = async (orderId?: number): Promise<FinalsWaitingRow[]> => {
+  const { data, error } = await db.rpc('finals_waiting_on_replacement_brova', {
+    p_order_id: orderId ?? null,
+  });
+  if (error) throw new Error(`getFinalsWaitingOnReplacementBrova: failed to fetch finals-waiting counts: ${error.message}`);
+  return (data ?? []) as FinalsWaitingRow[];
 };

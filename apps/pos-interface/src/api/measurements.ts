@@ -16,7 +16,7 @@ export const getMeasurements = async (): Promise<ApiResponse<Measurement[]>> => 
   if (error) {
     return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Measurement[] };
 };
 
 export const getMeasurementsByCustomerId = async (customerId: number): Promise<ApiResponse<Measurement[]>> => {
@@ -29,7 +29,7 @@ export const getMeasurementsByCustomerId = async (customerId: number): Promise<A
   if (error) {
     return { status: 'error', message: error.message, data: [], count: 0 };
   }
-  return { status: 'success', data: data as any, count: data?.length || 0 };
+  return { status: 'success', data: data as Measurement[], count: data?.length || 0 };
 };
 
 export const getMeasurementById = async (id: string): Promise<ApiResponse<Measurement>> => {
@@ -42,18 +42,18 @@ export const getMeasurementById = async (id: string): Promise<ApiResponse<Measur
   if (error) {
     return { status: 'error', message: error.message };
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Measurement };
 };
 
 export const createMeasurement = async (
   measurement: Partial<Measurement>,
 ): Promise<ApiResponse<Measurement>> => {
-  const payload: any = { ...measurement };
+  const payload: Partial<Measurement> = { ...measurement };
   const idempotencyKey: string =
-    (payload.idempotency_key as string | undefined) ?? crypto.randomUUID();
+    (payload.idempotency_key ?? undefined) ?? crypto.randomUUID();
   payload.idempotency_key = idempotencyKey;
 
-  let data: any = null;
+  let data: Measurement | null = null;
   for (let attempt = 1; ; attempt++) {
     const res = await db
       .from(TABLE_NAME)
@@ -62,7 +62,7 @@ export const createMeasurement = async (
       .single();
 
     if (!res.error) {
-      data = res.data;
+      data = res.data as Measurement;
       break;
     }
 
@@ -73,7 +73,7 @@ export const createMeasurement = async (
         .eq('idempotency_key', idempotencyKey)
         .single();
       if (!recovered.error && recovered.data) {
-        data = recovered.data;
+        data = recovered.data as Measurement;
         break;
       }
     }
@@ -87,7 +87,7 @@ export const createMeasurement = async (
     return { status: 'error', message: res.error.message };
   }
 
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Measurement };
 };
 
 export const updateMeasurement = async (
@@ -108,5 +108,5 @@ export const updateMeasurement = async (
     console.error('updateMeasurement: failed to update measurement:', error);
     return { status: 'error', message: error.message };
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Measurement };
 };

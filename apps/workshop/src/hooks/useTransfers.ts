@@ -3,8 +3,6 @@ import {
   getTransferRequests,
   createTransferRequest,
   createTransferRequestsBatch,
-  approveTransferRequest,
-  rejectTransferRequest,
   reviseTransferRequest,
   dispatchTransfer,
   directSendTransfer,
@@ -53,26 +51,6 @@ export function useCreateTransfersBatch() {
   return useMutation({
     mutationFn: (data: { direction: string; notes?: string; groups: TransferGroup[] }) =>
       createTransferRequestsBatch({ ...data, requested_by: user!.id, brand: 'ERTH' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: TRANSFER_KEY }),
-  });
-}
-
-export function useApproveTransfer() {
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, items }: { id: number; items: { id: number; approved_qty: number }[] }) =>
-      approveTransferRequest(id, items),
-    onSuccess: () => qc.invalidateQueries({ queryKey: TRANSFER_KEY }),
-  });
-}
-
-export function useRejectTransfer() {
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
-      rejectTransferRequest(id, reason),
     onSuccess: () => qc.invalidateQueries({ queryKey: TRANSFER_KEY }),
   });
 }

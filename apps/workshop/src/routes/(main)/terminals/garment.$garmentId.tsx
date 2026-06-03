@@ -113,7 +113,7 @@ function TerminalGarmentPage() {
   const stageLabel =
     PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
   const isQC = stage === "quality_check";
-  const isProductionStage = PRODUCTION_STAGES.includes(stage as any);
+  const isProductionStage = PRODUCTION_STAGES.includes(stage as (typeof PRODUCTION_STAGES)[number]);
 
   // Repair detection — unified: any trip >= 2 is alteration; QC fail this trip is alt_p.
   const tripHistory = garment.trip_history as TripHistoryEntry[] | null;
@@ -344,7 +344,7 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
     garment.qc_rework_stages,
   );
   const historyKey = HISTORY_KEY_MAP[stage] ?? stage;
-  const plannedWorker = (plan as any)?.[historyKey] ?? "";
+  const plannedWorker = (plan as Record<string, string | undefined> | null)?.[historyKey] ?? "";
 
   const [worker, setWorker] = useState(plannedWorker);
   const [workerOverride, setWorkerOverride] = useState(false);
@@ -406,8 +406,8 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
         nextStage,
       });
       router.history.back();
-    } catch (err: any) {
-      toast.error(`Could not advance garment to next stage: ${err?.message ?? (String(err) || "no error message")}`);
+    } catch (err: unknown) {
+      toast.error(`Could not advance garment to next stage: ${err instanceof Error ? err.message : (String(err) || "no error message")}`);
     }
   };
 

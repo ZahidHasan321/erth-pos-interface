@@ -143,45 +143,9 @@ export async function createTransferRequest(request: {
   return transferData as TransferRequest;
 }
 
-// Approve/reject go through status-guarded, idempotent RPCs (not raw PostgREST
-// updates). The guard rejects re-approving an already-dispatched transfer
-// (which would re-enable a second stock decrement); the idem key makes a
-// lost-response retry a safe no-op.
-export async function approveTransferRequest(
-  id: number,
-  items: { id: number; approved_qty: number }[],
-): Promise<{ success: boolean; transfer_id: number }> {
-  const p_idempotency_key = crypto.randomUUID();
-  const { data, error } = await withWriteRetry(
-    () => db.rpc('approve_transfer', {
-      p_transfer_id: id,
-      p_items: items,
-      p_idempotency_key,
-    }),
-    (r) => isTransientNetworkError(r.error),
-  );
-
-  if (error) throw error;
-  return data as { success: boolean; transfer_id: number };
-}
-
-export async function rejectTransferRequest(
-  id: number,
-  rejection_reason: string,
-): Promise<{ success: boolean; transfer_id: number }> {
-  const p_idempotency_key = crypto.randomUUID();
-  const { data, error } = await withWriteRetry(
-    () => db.rpc('reject_transfer', {
-      p_transfer_id: id,
-      p_rejection_reason: rejection_reason,
-      p_idempotency_key,
-    }),
-    (r) => isTransientNetworkError(r.error),
-  );
-
-  if (error) throw error;
-  return data as { success: boolean; transfer_id: number };
-}
+// No approve/reject in the transfer flow (CLAUDE.md §4): a requested transfer is
+// sent directly via dispatchTransfer (full/partial/none), and a still-requested
+// transfer is withdrawn with deleteTransferRequest (transfers:cancel).
 
 export async function reviseTransferRequest(
   originalId: number,
@@ -368,8 +332,8 @@ export async function directSendTransfer(request: {
 
 export async function deleteTransferRequest(id: number): Promise<void> {
   // Hard-delete is only allowed while the request is still in 'requested' status.
-  // Guarding by status here prevents wiping an already-approved row if an approver
-  // races us. transfer_request_items has ON DELETE CASCADE so items clean up automatically.
+  // Guarding by status here prevents wiping an already-sent (dispatched) row if the
+  // source races us. transfer_request_items has ON DELETE CASCADE so items clean up automatically.
   const { error } = await withWriteRetry(
     () => db
       .from('transfer_requests')

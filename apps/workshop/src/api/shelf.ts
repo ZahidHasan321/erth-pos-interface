@@ -29,7 +29,8 @@ export async function createShelfItem(
 
 export async function updateShelfItem(
   id: number,
-  item: Partial<Omit<Shelf, "id">>,
+  // Stock columns are owned by the stamping RPCs / stock_movements ledger — never written here.
+  item: Partial<Omit<Shelf, "id" | "shop_stock" | "workshop_stock" | "stock">>,
 ): Promise<Shelf> {
   const { data, error } = await withWriteRetry(
     () => db

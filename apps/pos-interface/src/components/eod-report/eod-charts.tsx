@@ -7,6 +7,7 @@ import type { EodDailyData, EodCashierData } from "@/api/cashier";
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const fmtK = (n: number): string => `${fmt(n)} KWD`;
+const fmtKSafe = (v: string | number | undefined): string => fmtK(Number(v) || 0);
 const shortDate = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
 
 // Restrained neutral chart palette — collected uses primary tone, refunds use destructive.
@@ -15,12 +16,25 @@ const REFUND_COLOR = "#b91c1c";     // red-700 — matches --destructive intent
 const GRID_COLOR = "#eef0f2";
 const AXIS_COLOR = "#94a3b8";
 
-function ChartTooltip({ active, payload, label, formatter }: any) {
+interface ChartTooltipEntry {
+    color?: string;
+    name?: string | number;
+    value?: string | number;
+}
+
+interface ChartTooltipProps {
+    active?: boolean;
+    payload?: ChartTooltipEntry[];
+    label?: string | number;
+    formatter?: (value: string | number | undefined) => string;
+}
+
+function ChartTooltip({ active, payload, label, formatter }: ChartTooltipProps) {
     if (!active || !payload?.length) return null;
     return (
         <div className="bg-foreground text-background text-xs rounded-md shadow-md px-3 py-2">
             <p className="font-medium mb-1">{label}</p>
-            {payload.map((entry: any, i: number) => (
+            {payload.map((entry, i: number) => (
                 <div key={i} className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
                     <span className="opacity-70">{entry.name}:</span>
@@ -68,7 +82,7 @@ export function RevenueTrendChart({ data }: RevenueTrendChartProps) {
                         tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
                         width={45}
                     />
-                    <Tooltip content={<ChartTooltip formatter={fmtK} />} />
+                    <Tooltip content={<ChartTooltip formatter={fmtKSafe} />} />
                     <Area
                         type="monotone"
                         dataKey="collected"
@@ -124,7 +138,7 @@ export function CollectionsVsRefundsChart({ data }: CollectionsVsRefundsChartPro
                         tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
                         width={45}
                     />
-                    <Tooltip content={<ChartTooltip formatter={fmtK} />} />
+                    <Tooltip content={<ChartTooltip formatter={fmtKSafe} />} />
                     <Bar
                         dataKey="collected"
                         name="Collected"
@@ -191,7 +205,7 @@ export function CashierLeaderboard({ data }: CashierLeaderboardProps) {
                         axisLine={false}
                         width={100}
                     />
-                    <Tooltip content={<ChartTooltip formatter={fmtK} />} />
+                    <Tooltip content={<ChartTooltip formatter={fmtKSafe} />} />
                     <Bar
                         dataKey="collected"
                         name="Collected"

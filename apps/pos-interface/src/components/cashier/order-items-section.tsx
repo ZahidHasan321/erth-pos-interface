@@ -6,13 +6,16 @@ import { RefundItemSelector } from "@/components/cashier/refund-item-selector";
 import { usePricing } from "@/hooks/usePricing";
 import type { FulfillmentMode } from "@/hooks/useGarmentCollection";
 import type { RefundItem } from "@/api/cashier";
+import type { Order, Garment, OrderShelfItem } from "@repo/database";
 
 const fmtK = (n: number): string => `${Number(Number(n).toFixed(3)).toString()} KWD`;
 
+type ShelfItemWithJoin = OrderShelfItem & { shelf?: { type?: string; brand?: string } | null };
+
 type Props = {
-    order: any;
-    garments: any[];
-    shelfItems: any[];
+    order: Order;
+    garments: Garment[];
+    shelfItems: ShelfItemWithJoin[];
     isCancelled: boolean;
     isRefundMode: boolean;
     showRefundUI: boolean;
@@ -47,8 +50,8 @@ export function OrderItemsSection({
                     <Shirt className="h-4 w-4 text-red-600" />Select Items to Refund
                 </h3>
                 <RefundItemSelector
-                    garments={garments as any}
-                    shelfItems={shelfItems as any}
+                    garments={garments as Parameters<typeof RefundItemSelector>[0]["garments"]}
+                    shelfItems={shelfItems as Parameters<typeof RefundItemSelector>[0]["shelfItems"]}
                     expressSurcharge={getPrice("EXPRESS_SURCHARGE") || 2}
                     soaking8hPrice={getPrice("SOAKING_8H_CHARGE") || 0}
                     soaking24hPrice={getPrice("SOAKING_24H_CHARGE") || 0}
@@ -84,7 +87,7 @@ export function OrderItemsSection({
                         <p className="text-sm text-muted-foreground text-center py-3">Cancelled.</p>
                     ) : (
                         <GarmentCollection
-                            garments={garments}
+                            garments={garments as Parameters<typeof GarmentCollection>[0]["garments"]}
                             selectedIds={selectedIds}
                             onToggle={onToggle}
                             onToggleAll={onToggleAll}
@@ -103,7 +106,7 @@ export function OrderItemsSection({
                             {isSalesOrder ? `Items Purchased (${shelfItems.length})` : `Shelf Items (${shelfItems.length})`}
                         </h3>
                         <span className="ml-auto text-sm font-bold tabular-nums text-muted-foreground">
-                            {fmtK(shelfItems.reduce((s, i) => s + (i.unit_price * i.quantity), 0))}
+                            {fmtK(shelfItems.reduce((s, i) => s + (Number(i.unit_price) * (i.quantity ?? 0)), 0))}
                         </span>
                     </div>
                     <div className="space-y-1.5">
@@ -113,7 +116,7 @@ export function OrderItemsSection({
                                     <span className="font-medium">{item.shelf?.type || `Item #${item.shelf_id}`}</span>
                                     <span className="text-muted-foreground ml-2">x{item.quantity}</span>
                                 </div>
-                                <span className="font-semibold">{fmtK(item.unit_price * item.quantity)}</span>
+                                <span className="font-semibold">{fmtK(Number(item.unit_price) * (item.quantity ?? 0))}</span>
                             </div>
                         ))}
                     </div>

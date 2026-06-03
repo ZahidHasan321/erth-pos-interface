@@ -137,6 +137,11 @@ const data = {
           icon: Truck,
         },
         {
+          title: "Stocktake",
+          url: "store/stocktake",
+          icon: ClipboardList,
+        },
+        {
           title: "Suppliers",
           url: "store/suppliers",
           icon: Users,
@@ -154,6 +159,17 @@ const data = {
       ],
     },
   ],
+};
+
+type NavSubItem = {
+  title: string;
+  url: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  cashierBrandOnly?: boolean;
+  allowedBrands?: readonly string[];
+  isCollapsible?: boolean;
+  count?: number;
+  items?: Array<{ title: string; url: string; icon?: React.ComponentType<{ className?: string }>; count?: number }>;
 };
 
 type IsPathActive = (to: string, exact?: boolean) => boolean;
@@ -341,7 +357,7 @@ export function AppSidebar({
   const { data: badgeCounts } = useTransferBadgeCounts(isErth);
 
   // Sum of states that need user action — surfaced on Transfers as a single badge
-  const transfersBadgeCount = (badgeCounts?.activeRequests ?? 0) + (badgeCounts?.receivingDeliveries ?? 0) + (badgeCounts?.approveRequests ?? 0);
+  const transfersBadgeCount = (badgeCounts?.activeRequests ?? 0) + (badgeCounts?.receivingDeliveries ?? 0) + (badgeCounts?.sendRequests ?? 0);
   const storeCounts: Record<string, { count: number; badgeColor: string }> = {
     "store/transfers": { count: transfersBadgeCount, badgeColor: "bg-amber-100 text-amber-700" },
   };
@@ -421,11 +437,11 @@ export function AppSidebar({
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {item.items.filter((subItem: any) => {
+                {(item.items as NavSubItem[]).filter((subItem) => {
                   if (subItem.cashierBrandOnly && !brandUsesCashier(main)) return false;
                   if (subItem.allowedBrands && !subItem.allowedBrands.includes(main)) return false;
                   return true;
-                }).map((subItem: any) => {
+                }).map((subItem) => {
                   if (subItem.isCollapsible && subItem.items) {
                     return (
                       <CollapsibleMenuItem

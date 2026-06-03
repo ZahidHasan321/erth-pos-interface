@@ -36,10 +36,20 @@ import {
 
 import type { Order } from "@repo/database";
 
+type PrimaryDetails = {
+    invoice_number?: number | null;
+    delivery_date?: string | Date | null;
+    order_phase?: string | null;
+    customer?: { name?: string; phone?: string } | Array<{ name?: string; phone?: string }> | null;
+    [key: string]: unknown;
+};
+
+type LinkedOrder = Order & { linkedTo?: PrimaryDetails };
+
 type LinkGroup = {
     primaryId: number;
     children: Order[];
-    primaryDetails?: any;
+    primaryDetails?: PrimaryDetails;
 };
 
 export default function UnlinkOrder() {
@@ -61,7 +71,7 @@ export default function UnlinkOrder() {
     const linkGroups: LinkGroup[] = useMemo(() => {
         const groups: Record<number, LinkGroup> = {};
 
-        linkedOrders.forEach((order: any) => {
+        (linkedOrders as LinkedOrder[]).forEach((order) => {
             const pId = order.linked_order_id;
             if (!pId) return;
             if (!groups[pId]) {
@@ -71,9 +81,6 @@ export default function UnlinkOrder() {
                     primaryDetails: order.linkedTo
                         ? {
                               ...order.linkedTo,
-                              ...(Array.isArray(order.linkedTo.workOrder)
-                                  ? order.linkedTo.workOrder[0]
-                                  : order.linkedTo.workOrder),
                           }
                         : undefined,
                 };
@@ -107,9 +114,9 @@ export default function UnlinkOrder() {
             await updateOrder(
                 {
                     linked_order_id: null,
-                    unlinked_date: new Date().toISOString(),
-                    delivery_date: reviseDate.toISOString(),
-                } as any,
+                    unlinked_date: new Date(),
+                    delivery_date: new Date(reviseDate.toISOString()),
+                } as Partial<Order>,
                 orderToUnlink.id,
             );
             queryClient.invalidateQueries({ queryKey: ["linked-orders"] });
@@ -246,10 +253,10 @@ export default function UnlinkOrder() {
     );
 }
 
-function getCustomer(obj: any): { name?: string; phone?: string } | undefined {
+function getCustomer(obj: PrimaryDetails | Order | undefined): { name?: string; phone?: string } | undefined {
     if (!obj) return undefined;
     const cust = Array.isArray(obj.customer) ? obj.customer[0] : obj.customer;
-    return cust ?? undefined;
+    return (cust as { name?: string; phone?: string } | null | undefined) ?? undefined;
 }
 
 function LinkGroupCard({

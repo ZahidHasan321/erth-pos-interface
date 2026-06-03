@@ -8,7 +8,7 @@ import { ArrowLeft, UserPlus, Factory, Info } from "lucide-react";
 import { PageHeader, StatusBanner } from "@/components/shared/PageShell";
 import { UserForm, EMPTY_USER_FORM, isUserFormValid, type UserFormState } from "@/components/users/UserForm";
 import { JOB_FUNCTION_LABELS } from "@/lib/rbac";
-import { JOB_FUNCTION_TO_STAGE } from "@/lib/job-functions";
+import { JOB_FUNCTION_TO_STAGE, TEAM_ASSIGNABLE_STAGES } from "@/lib/job-functions";
 import type { JobFunction, ProductionStage } from "@repo/database";
 
 type NewUserSearch = {
@@ -60,17 +60,20 @@ function NewUserPage() {
     role: presetJobFunction ? "staff" : EMPTY_USER_FORM.role,
     department: presetJobFunction ? "workshop" : EMPTY_USER_FORM.department,
     job_functions: presetJobFunction ? [presetJobFunction] : [],
-    // If the manager came in from the sewing-team page with a preset unit,
-    // pre-fill the sewing unit picker.
-    sewing_unit_id:
-      presetStage === "sewing" && presetUnitId ? presetUnitId : null,
+    // If the manager came in from a team page with a preset unit, pre-fill that
+    // station's team picker.
+    unit_ids:
+      presetStage && presetUnitId && TEAM_ASSIGNABLE_STAGES.includes(presetStage)
+        ? { [presetStage]: presetUnitId }
+        : {},
   }));
 
-  // Default unit per non-sewer stage = lowest-id unit (stable, deterministic).
-  // Sewing has its own picker via form.sewing_unit_id.
+  // Fallback unit (lowest-id, stable) for non-team-assignable stages only —
+  // i.e. soaking, which has no picker. Operational stations use the manager's
+  // explicit form.unit_ids pick (Q4 / §6), never this default.
   const defaultUnitByStage = new Map<string, string>();
   for (const u of units) {
-    if (u.stage === "sewing") continue;
+    if (TEAM_ASSIGNABLE_STAGES.includes(u.stage)) continue;
     if (!defaultUnitByStage.has(u.stage)) defaultUnitByStage.set(u.stage, u.id);
   }
 
@@ -83,17 +86,16 @@ function NewUserPage() {
 
     // Terminal workers also need one `resources` row per assigned job. Hand
     // them to the Edge Function so user + auth + pin + resources land
-    // atomically (rollback if any step fails — no orphan accounts). Sewer
-    // gets the unit the manager picked; every other stage auto-assigns to
-    // that stage's default unit (lowest id) since those stations don't have
-    // a unit concept operationally yet.
+    // atomically (rollback if any step fails — no orphan accounts). Every
+    // operational station uses the team the manager explicitly picked (Q4 / §6);
+    // soaking (the only non-team-assignable station here) auto-assigns to its
+    // default unit.
     const resources = isTerminalWorker
       ? form.job_functions.map((job) => {
           const stage = JOB_FUNCTION_TO_STAGE[job];
-          const unit_id =
-            stage === "sewing"
-              ? form.sewing_unit_id
-              : defaultUnitByStage.get(stage) ?? null;
+          const unit_id = TEAM_ASSIGNABLE_STAGES.includes(stage)
+            ? form.unit_ids[stage] ?? null
+            : defaultUnitByStage.get(stage) ?? null;
           return {
             resource_name: form.name,
             responsibility: stage,

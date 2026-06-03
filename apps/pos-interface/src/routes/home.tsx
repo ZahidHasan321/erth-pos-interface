@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import ErthLogoDark from "../assets/erth-dark.svg";
 import SakkbaLogo from "../assets/Sakkba.png";
@@ -71,8 +71,8 @@ function BrandCard({
 
   return (
     <Link
-      to={to as any}
-      params={params as any}
+      to={to as LinkProps["to"]}
+      params={params as LinkProps["params"]}
       style={{
         pointerEvents: disabled ? "none" : "auto",
         display: "block",

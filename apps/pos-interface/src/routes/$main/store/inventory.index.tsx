@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Package, Search, AlertCircle, RefreshCw, AlertTriangle, Scissors, ArrowRight, Users, ArrowDownToLine, Settings2, Trash2, ArchiveRestore } from "lucide-react";
+import { Loader2, Plus, Pencil, Package, Search, AlertCircle, RefreshCw, AlertTriangle, Scissors, ArrowRight, Users, ArrowDownToLine, Settings2, Trash2, ArchiveRestore, ChevronDown } from "lucide-react";
 import { IconStack2 } from "@tabler/icons-react";
 
 import { Button } from "@repo/ui/button";
@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { getPermission } from "@/lib/rbac";
-import { isLowStock, formatQty } from "@/lib/inventory";
+import { isLowStock, formatQty, getLowStockThreshold } from "@/lib/inventory";
 import { getFabrics, createFabric, updateFabric, deleteFabric, unarchiveFabric } from "@/api/fabrics";
 import { getShelf, createShelfItem, updateShelf, deleteShelfItem, unarchiveShelfItem } from "@/api/shelf";
 import { getAccessories, createAccessory, updateAccessory, deleteAccessory, unarchiveAccessory } from "@/api/accessories";
@@ -27,6 +27,7 @@ import { UNIT_OF_MEASURE_LABELS } from "@/components/store/transfer-constants";
 import { RestockDialog } from "@/components/inventory/RestockDialog";
 import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
 import { CategoryCombobox } from "@/components/inventory/CategoryCombobox";
+import { StocktakeBanner } from "@/components/inventory/StocktakeBanner";
 import type { Fabric, Shelf, Accessory, StockItemType, UnitOfMeasure } from "@repo/database";
 
 export const Route = createFileRoute("/$main/store/inventory/")({
@@ -54,6 +55,7 @@ function InventoryPage() {
   const [sort, setSort] = useState<SortKey>("name");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [showArchived, setShowArchived] = useState(false);
+  const [restockOpen, setRestockOpen] = useState(true);
 
   const { data: fabrics = [], isLoading: fl, isError: fe, refetch: fr } = useQuery({ queryKey: ["fabrics", { archived: showArchived }], queryFn: () => getFabrics(showArchived), staleTime: 60_000 });
   const { data: shelfItems = [], isLoading: sl, isError: se, refetch: sr } = useQuery({ queryKey: ["shelf", { archived: showArchived }], queryFn: () => getShelf(showArchived), staleTime: 60_000 });
@@ -73,6 +75,21 @@ function InventoryPage() {
     for (const s of activeShelf) if (isLowStock("shelf", Number(s.shop_stock ?? 0), s.low_stock_threshold)) count++;
     for (const a of activeAccessories) if (isLowStock("accessory", Number(a.shop_stock ?? 0), a.low_stock_threshold)) count++;
     return count;
+  }, [activeFabrics, activeShelf, activeAccessories]);
+
+  // Itemized "Need to Restock" set: the side's own items below their threshold
+  // (incl. out-of-stock), most-depleted first.
+  const needRestock = useMemo(() => {
+    const out: { itemType: StockItemType; id: number; name: string; qty: number; threshold: number }[] = [];
+    const push = (itemType: StockItemType, id: number, name: string, stock: unknown, override: number | string | null) => {
+      const qty = Number(stock ?? 0);
+      const threshold = getLowStockThreshold(itemType, override);
+      if (qty < threshold) out.push({ itemType, id, name, qty, threshold });
+    };
+    for (const f of activeFabrics) push("fabric", f.id, f.name, f.shop_stock, f.low_stock_threshold);
+    for (const s of activeShelf) push("shelf", s.id, s.type ?? `Shelf #${s.id}`, s.shop_stock, s.low_stock_threshold);
+    for (const a of activeAccessories) push("accessory", a.id, a.name, a.shop_stock, a.low_stock_threshold);
+    return out.sort((a, b) => a.qty / a.threshold - b.qty / b.threshold);
   }, [activeFabrics, activeShelf, activeAccessories]);
 
   const stats = [
@@ -102,37 +119,92 @@ function InventoryPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-          {stats.map((s) => (
-            <Card key={s.label} className={cn("shadow-none rounded-xl border", s.highlight && "border-amber-200")}>
+          {stats.map((s) => {
+            // The Low Stock KPI is the headline number for the same items the
+            // "Need to restock" list breaks down — clicking it reveals that list
+            // so the two read as overview → detail, not two rival counters.
+            const interactive = s.highlight && needRestock.length > 0;
+            const inner = (
               <CardContent className="flex items-center gap-3 p-4">
                 <div className={cn("p-2 rounded-lg shrink-0", s.bg)}>
                   <s.icon className="h-4 w-4" />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{s.label}</p>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground truncate">{s.label}</p>
                   <p className={cn("text-lg font-bold tabular-nums", s.highlight && "text-amber-700")}>{s.value}</p>
                 </div>
               </CardContent>
-            </Card>
-          ))}
+            );
+            return interactive ? (
+              <Card key={s.label} className="shadow-none rounded-xl border border-amber-200 transition-colors motion-reduce:transition-none hover:bg-amber-50/50 focus-within:ring-2 focus-within:ring-amber-400">
+                <button
+                  type="button"
+                  onClick={() => setRestockOpen(true)}
+                  aria-label={`${s.value} items low on stock — show the restock list`}
+                  className="w-full text-left focus:outline-none"
+                >
+                  {inner}
+                </button>
+              </Card>
+            ) : (
+              <Card key={s.label} className={cn("shadow-none rounded-xl border", s.highlight && "border-amber-200")}>
+                {inner}
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      {!isLoading && lowStockCount > 0 && (
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-5">
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-            <p className="text-sm font-medium text-amber-900">
-              <span className="font-bold tabular-nums">{lowStockCount}</span> item{lowStockCount !== 1 ? "s" : ""} running low
-            </p>
+      <StocktakeBanner main={main} />
+
+      {!isLoading && needRestock.length > 0 && (
+        <section
+          aria-label="Items that need restocking"
+          className="rounded-xl border border-amber-200 bg-amber-50/30 mb-5 overflow-hidden"
+        >
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+            <button
+              type="button"
+              onClick={() => setRestockOpen((o) => !o)}
+              aria-expanded={restockOpen}
+              className="flex items-center gap-2 min-w-0 text-left text-sm font-semibold text-amber-900 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            >
+              <ChevronDown className={cn("h-4 w-4 text-amber-600 shrink-0 transition-transform motion-reduce:transition-none", !restockOpen && "-rotate-90")} />
+              Need to restock
+              <span className="tabular-nums font-medium text-amber-700">({needRestock.length})</span>
+            </button>
+            <Button size="sm" variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-100 shrink-0" asChild>
+              <Link to="/$main/store/transfers" params={{ main }}>
+                Request transfer
+                <ArrowRight className="h-3.5 w-3.5 ml-1" />
+              </Link>
+            </Button>
           </div>
-          <Button size="sm" variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-100 shrink-0" asChild>
-            <Link to="/$main/store/transfers" params={{ main }}>
-              Request transfer
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
+          {restockOpen && (
+            <ul className="divide-y divide-amber-100 border-t border-amber-200 max-h-60 overflow-y-auto">
+              {needRestock.map((r) => (
+                <li key={`${r.itemType}-${r.id}`}>
+                  <Link
+                    to="/$main/store/inventory/$itemType/$itemId"
+                    params={{ main, itemType: r.itemType, itemId: String(r.id) }}
+                    className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-amber-100/50 transition-colors motion-reduce:transition-none"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="truncate text-sm font-medium">{r.name}</span>
+                      <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{r.itemType}</span>
+                    </span>
+                    <span className="shrink-0 text-xs tabular-nums">
+                      <span className={cn("font-semibold", r.qty <= 0 ? "text-red-700" : "text-amber-700")}>
+                        {formatQty(r.itemType, r.qty)}
+                      </span>
+                      <span className="text-muted-foreground"> / {formatQty(r.itemType, r.threshold)} min</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
 
       {isError && !isLoading && (
@@ -218,6 +290,17 @@ function OutBadge() {
   );
 }
 
+function SeasonBadge({ season }: { season: "summer" | "winter" }) {
+  return (
+    <span className={cn(
+      "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium capitalize",
+      season === "summer" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700",
+    )}>
+      {season}
+    </span>
+  );
+}
+
 function TableSkeleton({ cols }: { cols: number }) {
   return (
     <Card>
@@ -275,7 +358,7 @@ function applyStatus(
   return qty > 0 && !isLowStock(type, qty, threshold);
 }
 
-function applySort<T extends { name?: string | null; type?: string | null; shop_stock?: any }>(items: T[], sort: SortKey, nameKey: "name" | "type"): T[] {
+function applySort<T extends { name?: string | null; type?: string | null; shop_stock?: string | number | null }>(items: T[], sort: SortKey, nameKey: "name" | "type"): T[] {
   const copy = [...items];
   if (sort === "name") return copy.sort((a, b) => (a[nameKey] ?? "").localeCompare(b[nameKey] ?? ""));
   if (sort === "stock_asc") return copy.sort((a, b) => Number(a.shop_stock ?? 0) - Number(b.shop_stock ?? 0));
@@ -298,7 +381,7 @@ function RowActions({
     return (
       <div className="flex justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
         {canDelete && (
-          <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-blue-50 hover:text-blue-700" onClick={onUnarchive} title="Unarchive">
+          <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-blue-50 hover:text-blue-700" onClick={onUnarchive} title="Unarchive" aria-label="Unarchive">
             <ArchiveRestore className="h-3.5 w-3.5" />
           </Button>
         )}
@@ -308,22 +391,22 @@ function RowActions({
   return (
     <div className="flex justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
       {canRestock && (
-        <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-green-50 hover:text-green-700" onClick={onRestock} title="Restock">
+        <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-green-50 hover:text-green-700" onClick={onRestock} title="Restock" aria-label="Restock">
           <ArrowDownToLine className="h-3.5 w-3.5" />
         </Button>
       )}
       {canAdjust && (
-        <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-amber-50 hover:text-amber-700" onClick={onAdjust} title="Adjust stock">
+        <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-amber-50 hover:text-amber-700" onClick={onAdjust} title="Adjust stock" aria-label="Adjust stock">
           <Settings2 className="h-3.5 w-3.5" />
         </Button>
       )}
       {canEdit && (
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit} title="Edit metadata">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit} title="Edit metadata" aria-label="Edit metadata">
           <Pencil className="h-3.5 w-3.5" />
         </Button>
       )}
       {canDelete && (
-        <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-red-50 hover:text-red-700" onClick={onDelete} title="Delete or archive">
+        <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-red-50 hover:text-red-700" onClick={onDelete} title="Delete or archive" aria-label="Delete or archive">
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       )}
@@ -393,6 +476,10 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
   const [restockTarget, setRestockTarget] = useState<Fabric | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<Fabric | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Fabric | null>(null);
+  const [formSeason, setFormSeason] = useState<"summer" | "winter" | "none">("none");
+
+  function openCreate() { setEditing(null); setFormSeason("none"); setDialogOpen(true); }
+  function openEdit(f: Fabric) { setEditing(f); setFormSeason(f.season ?? "none"); setDialogOpen(true); }
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -407,13 +494,13 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
   const createMut = useMutation({
     mutationFn: createFabric,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fabrics"] }); setDialogOpen(false); toast.success("Fabric created"); },
-    onError: (err: any) => toast.error(`Could not create fabric: ${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`Could not create fabric: ${err?.message ?? String(err)}`),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, ...data }: { id: number } & Partial<Fabric>) => updateFabric(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fabrics"] }); setDialogOpen(false); setEditing(null); toast.success("Fabric updated"); },
-    onError: (err: any) => toast.error(`Could not update fabric: ${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`Could not update fabric: ${err?.message ?? String(err)}`),
   });
 
   const deleteMut = useMutation({
@@ -424,13 +511,13 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
       setDeleteTarget(null);
       toast.success(res.mode === "deleted" ? `${name} deleted` : `${name} archived (it's been used in orders)`);
     },
-    onError: (err: any) => toast.error(`${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`${err?.message ?? String(err)}`),
   });
 
   const unarchiveMut = useMutation({
     mutationFn: (id: number) => unarchiveFabric(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fabrics"] }); toast.success("Fabric restored"); },
-    onError: (err: any) => toast.error(`${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`${err?.message ?? String(err)}`),
   });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -440,16 +527,17 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
     const color = (fd.get("color") as string).trim() || undefined;
     const color_hex = (fd.get("color_hex") as string).trim() || undefined;
     const price_per_meter = fd.get("price_per_meter") ? Number(fd.get("price_per_meter")) : undefined;
+    const season = formSeason === "none" ? null : formSeason;
     if (!name) { toast.error("Name is required"); return; }
     if (editing) {
-      updateMut.mutate({ id: editing.id, name, color: color ?? null, color_hex: color_hex ?? null, price_per_meter: price_per_meter ?? null });
+      updateMut.mutate({ id: editing.id, name, color: color ?? null, color_hex: color_hex ?? null, price_per_meter: price_per_meter ?? null, season });
     } else {
-      createMut.mutate({ name, color, color_hex, price_per_meter });
+      createMut.mutate({ name, color, color_hex, price_per_meter, season: season ?? undefined });
     }
   };
 
   const isPending = createMut.isPending || updateMut.isPending;
-  if (isLoading) return <TableSkeleton cols={6} />;
+  if (isLoading) return <TableSkeleton cols={5} />;
   if (isError) return <QueryErrorState onRetry={refetch} />;
 
   return (
@@ -462,7 +550,7 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
               {!canEdit && <span className="ml-2 text-xs text-muted-foreground/60">(read only)</span>}
             </p>
             {canEdit && (
-              <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
+              <Button size="sm" onClick={openCreate}>
                 <Plus className="h-4 w-4 mr-1" /> Add Fabric
               </Button>
             )}
@@ -475,15 +563,13 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
                   <TableHead>Name</TableHead>
                   <TableHead>Color Code</TableHead>
                   <TableHead className="text-right">Price/m</TableHead>
-                  <TableHead className="text-right">Shop</TableHead>
-                  <TableHead className="text-right">Workshop</TableHead>
+                  <TableHead className="text-right">Stock</TableHead>
                   <TableHead className="w-[140px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((f) => {
                   const ws = Number(f.shop_stock ?? 0);
-                  const wsh = Number(f.workshop_stock ?? 0);
                   const low = isLowStock("fabric", ws, f.low_stock_threshold);
                   const out = ws <= 0;
                   const archived = !!f.is_archived;
@@ -493,13 +579,13 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
                         <div className="flex items-center gap-2">
                           {f.color_hex && <span className="w-4 h-4 rounded-full border shrink-0" style={{ backgroundColor: f.color_hex }} />}
                           {f.name}
+                          {f.season && <SeasonBadge season={f.season} />}
                           {archived ? <ArchivedBadge /> : out ? <OutBadge /> : low && <LowStockBadge />}
                         </div>
                       </TableCell>
                       <TableCell>{f.color ?? "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{f.price_per_meter ?? "—"}</TableCell>
                       <TableCell className={cn("text-right tabular-nums", low && !archived && "text-red-600 font-semibold")}>{formatQty("fabric", ws)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatQty("fabric", wsh)}</TableCell>
                       <TableCell>
                         <RowActions
                           canEdit={canEdit}
@@ -507,7 +593,7 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
                           canAdjust={canAdjust}
                           canDelete={canDelete}
                           isArchived={archived}
-                          onEdit={() => { setEditing(f); setDialogOpen(true); }}
+                          onEdit={() => openEdit(f)}
                           onRestock={() => setRestockTarget(f)}
                           onAdjust={() => setAdjustTarget(f)}
                           onDelete={() => setDeleteTarget(f)}
@@ -518,7 +604,7 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
                   );
                 })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">No fabrics match the current filters</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">No fabrics match the current filters</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -561,6 +647,17 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
                     </div>
                   </div>
                 </div>
+              </FormSection>
+
+              <FormSection title="Season" hint="Optional">
+                <Select value={formSeason} onValueChange={(v) => setFormSeason(v as "summer" | "winter" | "none")}>
+                  <SelectTrigger id="fab-season"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No season</SelectItem>
+                    <SelectItem value="summer">Summer</SelectItem>
+                    <SelectItem value="winter">Winter</SelectItem>
+                  </SelectContent>
+                </Select>
               </FormSection>
 
               <FormSection title="Pricing">
@@ -643,12 +740,12 @@ function ShelfTab({ search, sort, status, canEdit, canRestock, canAdjust, canDel
   const createMut = useMutation({
     mutationFn: createShelfItem,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); toast.success("Shelf item created"); },
-    onError: (err: any) => toast.error(`Could not create shelf item: ${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`Could not create shelf item: ${err?.message ?? String(err)}`),
   });
   const updateMut = useMutation({
     mutationFn: ({ id, ...data }: { id: number } & Partial<Shelf>) => updateShelf(String(id), data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); setDialogOpen(false); setEditing(null); toast.success("Shelf item updated"); },
-    onError: (err: any) => toast.error(`Could not update shelf item: ${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`Could not update shelf item: ${err?.message ?? String(err)}`),
   });
 
   const deleteMut = useMutation({
@@ -659,13 +756,13 @@ function ShelfTab({ search, sort, status, canEdit, canRestock, canAdjust, canDel
       setDeleteTarget(null);
       toast.success(res.mode === "deleted" ? `${name} deleted` : `${name} archived (it's been used in orders)`);
     },
-    onError: (err: any) => toast.error(`${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`${err?.message ?? String(err)}`),
   });
 
   const unarchiveMut = useMutation({
     mutationFn: (id: number) => unarchiveShelfItem(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["shelf"] }); toast.success("Shelf item restored"); },
-    onError: (err: any) => toast.error(`${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`${err?.message ?? String(err)}`),
   });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -676,11 +773,11 @@ function ShelfTab({ search, sort, status, canEdit, canRestock, canAdjust, canDel
     const price = fd.get("price") ? Number(fd.get("price")) : undefined;
     if (!type) { toast.error("Type is required"); return; }
     if (editing) updateMut.mutate({ id: editing.id, type, brand: brand ?? null, price: price ?? null });
-    else createMut.mutate({ type, brand, price } as any);
+    else createMut.mutate({ type, brand: brand ?? null, price: price ?? null });
   };
 
   const isPending = createMut.isPending || updateMut.isPending;
-  if (isLoading) return <TableSkeleton cols={6} />;
+  if (isLoading) return <TableSkeleton cols={5} />;
   if (isError) return <QueryErrorState onRetry={refetch} />;
 
   return (
@@ -701,15 +798,13 @@ function ShelfTab({ search, sort, status, canEdit, canRestock, canAdjust, canDel
                   <TableHead>Type</TableHead>
                   <TableHead>Brand</TableHead>
                   <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Shop</TableHead>
-                  <TableHead className="text-right">Workshop</TableHead>
+                  <TableHead className="text-right">Stock</TableHead>
                   <TableHead className="w-[140px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((s) => {
                   const ws = Number(s.shop_stock ?? 0);
-                  const wsh = Number(s.workshop_stock ?? 0);
                   const low = isLowStock("shelf", ws, s.low_stock_threshold);
                   const out = ws <= 0;
                   const archived = !!s.is_archived;
@@ -721,7 +816,6 @@ function ShelfTab({ search, sort, status, canEdit, canRestock, canAdjust, canDel
                       <TableCell>{s.brand ?? "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{s.price ?? "—"}</TableCell>
                       <TableCell className={cn("text-right tabular-nums", low && !archived && "text-red-600 font-semibold")}>{formatQty("shelf", ws)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatQty("shelf", wsh)}</TableCell>
                       <TableCell>
                         <RowActions
                           canEdit={canEdit}
@@ -740,7 +834,7 @@ function ShelfTab({ search, sort, status, canEdit, canRestock, canAdjust, canDel
                   );
                 })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">No shelf items match the current filters</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">No shelf items match the current filters</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -851,12 +945,12 @@ function AccessoriesTab({ search, sort, status, canEdit, canRestock, canAdjust, 
   const createMut = useMutation({
     mutationFn: createAccessory,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); toast.success("Accessory created"); },
-    onError: (err: any) => toast.error(`Could not create accessory: ${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`Could not create accessory: ${err?.message ?? String(err)}`),
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Partial<Accessory>) => updateAccessory(id, data),
+    mutationFn: ({ id, ...data }: { id: number } & Partial<Omit<Accessory, "shop_stock" | "workshop_stock">>) => updateAccessory(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); setDialogOpen(false); setEditing(null); toast.success("Accessory updated"); },
-    onError: (err: any) => toast.error(`Could not update accessory: ${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`Could not update accessory: ${err?.message ?? String(err)}`),
   });
 
   const deleteMut = useMutation({
@@ -867,13 +961,13 @@ function AccessoriesTab({ search, sort, status, canEdit, canRestock, canAdjust, 
       setDeleteTarget(null);
       toast.success(res.mode === "deleted" ? `${name} deleted` : `${name} archived (it's been used in orders)`);
     },
-    onError: (err: any) => toast.error(`${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`${err?.message ?? String(err)}`),
   });
 
   const unarchiveMut = useMutation({
     mutationFn: (id: number) => unarchiveAccessory(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["accessories"] }); toast.success("Accessory restored"); },
-    onError: (err: any) => toast.error(`${err?.message ?? String(err)}`),
+    onError: (err: Error) => toast.error(`${err?.message ?? String(err)}`),
   });
 
   function openCreate() {
@@ -900,12 +994,12 @@ function AccessoriesTab({ search, sort, status, canEdit, canRestock, canAdjust, 
     if (editing) {
       updateMut.mutate({ id: editing.id, name, category, unit_of_measure: formUnit, price: price ?? null });
     } else {
-      createMut.mutate({ name, category, unit_of_measure: formUnit, price } as any);
+      createMut.mutate({ name, category, unit_of_measure: formUnit, price } as Parameters<typeof createAccessory>[0]);
     }
   };
 
   const isPending = createMut.isPending || updateMut.isPending;
-  if (isLoading) return <TableSkeleton cols={7} />;
+  if (isLoading) return <TableSkeleton cols={6} />;
   if (isError) return <QueryErrorState onRetry={refetch} />;
 
   return (
@@ -936,15 +1030,13 @@ function AccessoriesTab({ search, sort, status, canEdit, canRestock, canAdjust, 
                   <TableHead>Category</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Shop</TableHead>
-                  <TableHead className="text-right">Workshop</TableHead>
+                  <TableHead className="text-right">Stock</TableHead>
                   <TableHead className="w-[140px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((a) => {
                   const ws = Number(a.shop_stock ?? 0);
-                  const wsh = Number(a.workshop_stock ?? 0);
                   const low = isLowStock("accessory", ws, a.low_stock_threshold);
                   const out = ws <= 0;
                   const archived = !!a.is_archived;
@@ -957,7 +1049,6 @@ function AccessoriesTab({ search, sort, status, canEdit, canRestock, canAdjust, 
                       <TableCell>{UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure}</TableCell>
                       <TableCell className="text-right tabular-nums">{a.price ?? "—"}</TableCell>
                       <TableCell className={cn("text-right tabular-nums", low && !archived && "text-red-600 font-semibold")}>{formatQty("accessory", ws, a.unit_of_measure)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatQty("accessory", wsh, a.unit_of_measure)}</TableCell>
                       <TableCell>
                         <RowActions
                           canEdit={canEdit}
@@ -976,7 +1067,7 @@ function AccessoriesTab({ search, sort, status, canEdit, canRestock, canAdjust, 
                   );
                 })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">No accessories match the current filters</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">No accessories match the current filters</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

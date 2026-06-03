@@ -36,6 +36,7 @@ import {
 } from "@repo/ui/tooltip";
 
 import { updateOrder } from "@/api/orders";
+import type { Order } from "@repo/database";
 import { cn, getLocalDateStr } from "@/lib/utils";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { 
@@ -55,10 +56,10 @@ function useOrderUpdate() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Record<string, any> }) => {
+    mutationFn: ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
        // id is string but API expects number
        const numericId = parseInt(id);
-       return updateOrder(updates, numericId);
+       return updateOrder(updates as Partial<Order>, numericId);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['showroom-orders'] });
@@ -101,7 +102,7 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
   const handleSave = async () => {
     if (!editDate) return;
     const dateStr = getLocalDateStr(editDate);
-    let updates: Record<string, any> = {};
+    let updates: Record<string, unknown> = {};
 
     if (type === "Escalation") {
       updates = {

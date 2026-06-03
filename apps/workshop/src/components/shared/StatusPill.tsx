@@ -4,9 +4,12 @@ import { cn } from "@/lib/utils";
 // The one pill primitive used across operations pages for status labels,
 // location, trip indicators, feedback, and urgency signals.
 //
-// Design: rounded-full + optional dot/icon prefix + bg-{color}-100 / text-{color}-800.
-// Type scale matches StageBadge (text-xs uppercase tracking-wide font-semibold)
-// so it reads as consistent weight with everything else on a workshop page.
+// Design: rounded-md + optional dot/icon prefix. Every legacy hue name maps
+// onto one of the four semantic --status-* buckets (ok / warn / bad / info)
+// plus a neutral; color encodes meaning, never decoration. Never reach for a
+// raw bg-{color}-100 / text-{color}-800 pair — add a hue alias here instead.
+// Type scale (text-xs font-medium) matches StageBadge so weight reads
+// consistent across a workshop page.
 
 export type PillColor =
   | "green"

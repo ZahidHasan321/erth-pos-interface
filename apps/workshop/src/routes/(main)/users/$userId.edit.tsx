@@ -5,14 +5,14 @@ import { useUsers, useUpdateUser } from "@/hooks/useUsers";
 import { useUnits } from "@/hooks/useUnits";
 import { setUserPin } from "@/api/users";
 import { getResources } from "@/api/resources";
-import { JOB_FUNCTION_TO_STAGE } from "@/lib/job-functions";
+import { JOB_FUNCTION_TO_STAGE, TEAM_ASSIGNABLE_STAGES } from "@/lib/job-functions";
 import { Button } from "@repo/ui/button";
 import { Skeleton } from "@repo/ui/skeleton";
 import { toast } from "sonner";
 import { ArrowLeft, Pencil, Save } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageShell";
 import { UserForm, EMPTY_USER_FORM, isUserFormValid, type UserFormState } from "@/components/users/UserForm";
-import type { Role, Department, JobFunction } from "@repo/database";
+import type { Role, Department, JobFunction, ProductionStage } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/users/$userId/edit")({
   component: EditUserPage,
@@ -30,7 +30,7 @@ function EditUserPage() {
   const { data: units = [] } = useUnits();
   // Pull resources directly (rather than the joined hook) so we get the raw
   // unit_id field cheaply on edit.
-  const { data: allResources = [] } = useQuery({
+  const { data: allResources = [], isLoading: resourcesLoading } = useQuery({
     queryKey: ["resources"],
     queryFn: getResources,
     staleTime: 60_000,
@@ -47,9 +47,17 @@ function EditUserPage() {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    if (initialized || !user) return;
+    // Wait for resources too — initializing before they load would leave the
+    // (now required) team pickers empty and force a needless re-pick (Q4 / §6).
+    if (initialized || !user || resourcesLoading) return;
     const jobs = (user as unknown as { job_functions: JobFunction[] | null }).job_functions;
-    const sewingResource = userResources.find((r) => r.responsibility === "sewing");
+    // Pre-fill each station's team from the worker's ACTUAL current resource row
+    // (never recomputed) so saving an unrelated field can't silently re-pin them
+    // to another team (Q4 / §6).
+    const unitIds: Partial<Record<ProductionStage, string | null>> = {};
+    for (const r of userResources) {
+      if (r.responsibility) unitIds[r.responsibility as ProductionStage] = r.unit_id ?? null;
+    }
     setForm({
       username: user.username ?? "",
       name: user.name,
@@ -66,19 +74,19 @@ function EditUserPage() {
       nationality: user.nationality ?? "",
       hire_date: user.hire_date ?? "",
       notes: user.notes ?? "",
-      sewing_unit_id: sewingResource?.unit_id ?? null,
+      unit_ids: unitIds,
     });
     setInitialized(true);
-  }, [user, userResources, initialized]);
+  }, [user, userResources, resourcesLoading, initialized]);
 
   const willBeTerminalWorker = isTerminalWorker(form);
 
-  // Default unit per non-sewer stage = lowest-id unit (mirrors create flow).
-  // Sewing pulls from form.sewing_unit_id.
+  // Fallback unit for non-team-assignable stages only (soaking) — mirrors the
+  // create flow. Operational stations use the manager's explicit form.unit_ids.
   const defaultUnitByStage = useMemo(() => {
     const map = new Map<string, string>();
     for (const u of units) {
-      if (u.stage === "sewing") continue;
+      if (TEAM_ASSIGNABLE_STAGES.includes(u.stage)) continue;
       if (!map.has(u.stage)) map.set(u.stage, u.id);
     }
     return map;
@@ -96,10 +104,9 @@ function EditUserPage() {
       const resources = willBeTerminalWorker
         ? form.job_functions.map((job) => {
             const stage = JOB_FUNCTION_TO_STAGE[job];
-            const unit_id =
-              stage === "sewing"
-                ? form.sewing_unit_id
-                : defaultUnitByStage.get(stage) ?? null;
+            const unit_id = TEAM_ASSIGNABLE_STAGES.includes(stage)
+              ? form.unit_ids[stage] ?? null
+              : defaultUnitByStage.get(stage) ?? null;
             return { responsibility: stage, unit_id };
           })
         : [];
@@ -136,7 +143,7 @@ function EditUserPage() {
     }
   };
 
-  if (isLoading || !initialized) {
+  if (isLoading || resourcesLoading || !initialized) {
     return (
       <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
         <Skeleton className="h-6 w-32 mb-6" />

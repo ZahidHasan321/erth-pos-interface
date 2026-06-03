@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowRight, Hammer, Loader2, Minus, Plus, Settings2, Store } from "lucide-react";
+import { ArrowRight, Hammer, Loader2, Minus, Plus, Settings2, Store, type LucideIcon } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
@@ -79,7 +79,7 @@ export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, d
       qc.invalidateQueries({ queryKey: ["stock_movements"] });
       onClose();
     },
-    onError: (err: any) => toast.error(`Adjustment failed: ${err?.message ?? String(err)}`),
+    onError: (err: unknown) => toast.error(`Adjustment failed: ${err instanceof Error ? err.message : String(err)}`),
   });
 
   function bumpDelta(direction: 1 | -1) {
@@ -256,7 +256,7 @@ function Section({ label, hint, children }: { label: string; hint?: string; chil
   );
 }
 
-function LocationOption({ icon: Icon, label, active, onClick }: { icon: any; label: string; active: boolean; onClick: () => void }) {
+function LocationOption({ icon: Icon, label, active, onClick }: { icon: LucideIcon; label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"

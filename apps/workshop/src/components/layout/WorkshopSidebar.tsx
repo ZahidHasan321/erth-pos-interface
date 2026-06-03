@@ -38,6 +38,7 @@ import {
   UserCog,
   Package,
   Building2,
+  ClipboardCheck,
 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconSparkles /*, IconStack2 */ } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
@@ -47,7 +48,8 @@ import { isAdmin, isManager } from "@/lib/rbac";
 export function WorkshopSidebar() {
   const { data: counts } = useSidebarCounts();
   const { data: receivingDeliveries = [] } = useTransferRequests({ status: "dispatched", direction: "shop_to_workshop" });
-  const { data: approveRequests = [] } = useTransferRequests({ status: ["requested"], direction: "workshop_to_shop" });
+  // Requests the shop made that the workshop must send (no approve step — §4).
+  const { data: sendRequests = [] } = useTransferRequests({ status: ["requested"], direction: "workshop_to_shop" });
   const { isMobile, setOpenMobile, state } = useSidebar();
   const routerState = useRouterState({ select: (s) => s.location.pathname });
   const { user: authUser } = useAuth();
@@ -88,11 +90,12 @@ export function WorkshopSidebar() {
   ];
 
   // Combined "needs my action" count for the Transfers tab — warrants warn tone
-  const transfersBadge = receivingDeliveries.length + approveRequests.length;
+  const transfersBadge = receivingDeliveries.length + sendRequests.length;
 
   const storeItems = [
     { label: "Inventory", icon: Package,        href: "/store/inventory" },
     { label: "Transfers", icon: ArrowRightLeft, href: "/store/transfers", count: transfersBadge, badgeTone: "warn" as const },
+    { label: "Stocktake", icon: ClipboardCheck, href: "/store/stocktake" },
     { label: "Suppliers", icon: Building2,      href: "/store/suppliers" },
     { label: "Reports",   icon: BarChart,       href: "/store/reports" },
   ];
@@ -298,7 +301,7 @@ export function WorkshopSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t px-3 py-2 group-data-[collapsible=icon]:hidden">
-        <p className="text-[10px] text-muted-foreground/50 text-center">
+        <p className="text-[11px] text-muted-foreground/50 text-center">
           &copy; {new Date().getFullYear()} Alpaca. All rights reserved.
         </p>
       </SidebarFooter>

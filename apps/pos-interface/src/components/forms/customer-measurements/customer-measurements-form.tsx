@@ -100,8 +100,7 @@ const JABZOUR_SIDEPOCKET_OPTIONS = [1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875,
 // Type definitions
 // ---------------------------------------
 interface CustomerMeasurementsFormProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  form: UseFormReturn<CustomerMeasurementsSchema, any, any>;
+  form: UseFormReturn<CustomerMeasurementsSchema, object, CustomerMeasurementsSchema>;
   customerId: number | null;
   onProceed?: () => void;
   isOrderClosed: boolean;
@@ -111,7 +110,7 @@ interface CustomerMeasurementsFormProps {
 // ---------------------------------------
 // Custom hook for auto provision updates
 // ---------------------------------------
-function useAutoProvision(form: UseFormReturn<CustomerMeasurementsSchema>) {
+function useAutoProvision(form: UseFormReturn<CustomerMeasurementsSchema, object, CustomerMeasurementsSchema>) {
   // Full Chest Provision
   const [chest_full, chest_front, chest_provision] = useWatch({
     control: form.control,
@@ -403,7 +402,7 @@ export function CustomerMeasurementsForm({
 
     if (isCreatingNew) {
       // Remove the DB id for new measurements — let the server generate it
-      delete (data as any).id;
+      delete (data as Record<string, unknown>).id;
       createMeasurementMutation(data);
     } else {
       if (!selectedMeasurementId) {
@@ -446,7 +445,7 @@ export function CustomerMeasurementsForm({
     // Take a snapshot of the current form values as the base for the copy
     const baseMeasurement = { ...form.getValues() };
     // Clear the DB id so it's treated as new, set the new display ID
-    delete (baseMeasurement as any).id;
+    delete (baseMeasurement as Record<string, unknown>).id;
     baseMeasurement.measurement_id = newId;
     baseMeasurement.measurement_date = new Date().toISOString();
     // Seed the historical jabzour_width default for a fresh measurement
@@ -742,6 +741,7 @@ export function CustomerMeasurementsForm({
                     rows={5}
                     placeholder="Special requests or notes"
                     {...field}
+                    value={field.value ?? ""}
                     disabled={!isEditing}
                     className="bg-background border-border/60"
                   />

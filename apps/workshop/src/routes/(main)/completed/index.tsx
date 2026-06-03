@@ -2,9 +2,10 @@ import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCompletedOrders } from "@/hooks/useWorkshopGarments";
 import { Pagination } from "@/components/shared/Pagination";
+import { SearchInput } from "@/components/shared/SearchInput";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { PageHeader, MetadataChip, LoadingSkeleton, GarmentTypeBadgeCompact, EmptyState } from "@/components/shared/PageShell";
-import { Table, TableContainer, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@repo/ui/table";
+import { Table, TableContainer, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/shared/table";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn, clickableProps, formatDate } from "@/lib/utils";
 import type { CompletedOrderGroup } from "@/api/garments";
@@ -16,9 +17,15 @@ import {
   Home,
 } from "lucide-react";
 
+// URL holds the search text so a filtered view is bookmarkable. Empty = bare URL.
+type CompletedSearch = { q?: string };
+
 export const Route = createFileRoute("/(main)/completed/")({
   component: CompletedOrdersPage,
   head: () => ({ meta: [{ title: "Completed Orders" }] }),
+  validateSearch: (raw: Record<string, unknown>): CompletedSearch => ({
+    q: typeof raw.q === "string" && raw.q ? raw.q : undefined,
+  }),
 });
 
 const PAGE_SIZE = 20;
@@ -175,7 +182,16 @@ function CompletedOrderTable({
 
 function CompletedOrdersPage() {
   const [page, setPage] = useState(1);
-  const { data, isLoading } = useCompletedOrders(page, PAGE_SIZE);
+  const search = Route.useSearch().q ?? "";
+  const routeNavigate = Route.useNavigate();
+  // A new search must restart pagination — the server-side narrowed set has its
+  // own page boundaries. Reset here at the source rather than via an effect.
+  const setSearch = (value: string) => {
+    setPage(1);
+    routeNavigate({ search: { q: value || undefined }, replace: true });
+  };
+
+  const { data, isLoading } = useCompletedOrders(page, PAGE_SIZE, search);
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
@@ -195,10 +211,22 @@ function CompletedOrdersPage() {
         subtitle={`${totalCount} order${totalCount !== 1 ? "s" : ""} fully completed`}
       />
 
+      <div className="mb-4">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Customer, invoice, phone…"
+          className="w-full md:w-80"
+        />
+      </div>
+
       {isLoading && rows.length === 0 ? (
         <LoadingSkeleton />
       ) : totalCount === 0 ? (
-        <EmptyState icon={CheckCircle2} message="No completed orders yet" />
+        <EmptyState
+          icon={CheckCircle2}
+          message={search ? "No completed orders match your search" : "No completed orders yet"}
+        />
       ) : (
         <>
           {isMobile ? (

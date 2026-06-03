@@ -13,5 +13,5 @@ export const getCampaigns = async (): Promise<ApiResponse<Campaign[]>> => {
   if (error) {
     return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as any };
+  return { status: 'success', data: data as Campaign[] };
 };

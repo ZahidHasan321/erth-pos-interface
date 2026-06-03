@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
   TableContainer,
-} from "@repo/ui/table";
+} from "@/components/shared/table";
 import { BrandBadge } from "@/components/shared/StageBadge";
 import { TIMEZONE } from "@/lib/utils";
 import { toast } from "sonner";
@@ -74,8 +74,8 @@ function SoakTerminal() {
       const ra = readinessRank(a, now);
       const rb = readinessRank(b, now);
       if (ra !== rb) return ra - rb;
-      const ea = now - new Date(a.soaking_started_at as any).getTime();
-      const eb = now - new Date(b.soaking_started_at as any).getTime();
+      const ea = now - new Date(a.soaking_started_at as Date).getTime();
+      const eb = now - new Date(b.soaking_started_at as Date).getTime();
       return eb - ea;
     });
   }, [filtered, now]);
@@ -402,7 +402,7 @@ function SoakSection({
                   )}
                   <TableCell className="px-3 py-3 text-right">
                     <Button
-                      size="sm"
+                      size="sm-touch"
                       variant={mode === "pending" ? "outline" : "default"}
                       onClick={() => onRowAction(g.id)}
                       disabled={actingId === g.id}
@@ -431,7 +431,7 @@ function SoakSection({
 function readinessRank(g: WorkshopGarment, now: number): number {
   if (!g.soaking_started_at) return 3;
   if (g.soaking_hours == null) return 3;
-  const elapsedHrs = (now - new Date(g.soaking_started_at as any).getTime()) / 3_600_000;
+  const elapsedHrs = (now - new Date(g.soaking_started_at as Date).getTime()) / 3_600_000;
   if (elapsedHrs >= g.soaking_hours + 0.5) return 0;
   if (elapsedHrs >= g.soaking_hours) return 1;
   return 2;

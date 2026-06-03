@@ -8,6 +8,7 @@ import { useWatch, useFieldArray, type UseFormReturn } from 'react-hook-form'
 import { DataTable } from './data-table'
 import type { ShelfProduct, ShelfFormValues } from './shelf-form.schema'
 import { getShelf } from '@/api/shelf'
+import type { Shelf } from '@repo/database'
 import { columns } from './shelf-columns'
 import { toast } from 'sonner'
 import { Package, Loader2, AlertCircle, Search, Check, ScanBarcode } from 'lucide-react'
@@ -59,8 +60,8 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
     const q = search.trim().toLowerCase()
     const list = serverProducts || []
     if (!q) return list
-    return list.filter((p: any) =>
-      [p.type, p.brand, p.sku].filter(Boolean).some((f: string) => f.toLowerCase().includes(q))
+    return list.filter((p: Shelf) =>
+      [p.type, p.brand, p.sku].filter(Boolean).some((f) => (f as string).toLowerCase().includes(q))
     )
   }, [serverProducts, search])
 
@@ -72,7 +73,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
   const hiddenCount = filteredProducts.length - visibleProducts.length
 
   // Add a product to the cart, or bump its quantity if already there.
-  const addProduct = (product: any) => {
+  const addProduct = (product: Shelf) => {
     if (isOrderDisabled) return
 
     const stock = product.shop_stock || 0
@@ -100,7 +101,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
 
     const newRow: ShelfProduct = {
       id,
-      serial_number: product.serial_number || '',
+      serial_number: product.sku || '',
       product_type: product.type || '',
       brand: product.brand || '',
       quantity: 1,
@@ -115,8 +116,8 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
     setScannerOpen(false)
     const code = rawCode.trim().toLowerCase()
     if (!code) return
-    const match = (serverProducts || []).find((p: any) =>
-      [p.sku, p.serial_number].filter(Boolean).some((f: string) => f.trim().toLowerCase() === code)
+    const match = (serverProducts || []).find((p: Shelf) =>
+      [p.sku].filter(Boolean).some((f) => (f as string).trim().toLowerCase() === code)
     )
     if (!match) {
       toast.error('No matching product', {
@@ -133,7 +134,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
   }
 
   // Cart now only edits quantity; product/brand are fixed once added.
-  const updateData = (rowIndex: number, columnId: string, value: any) => {
+  const updateData = (rowIndex: number, columnId: string, value: unknown) => {
     const currentRow = watchedProducts[rowIndex]
     if (!currentRow) return
     update(rowIndex, { ...currentRow, [columnId]: value })
@@ -208,7 +209,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
-              {visibleProducts.map((product: any) => {
+              {visibleProducts.map((product: Shelf) => {
                 const id = product.id.toString()
                 const stock = product.shop_stock || 0
                 const inCart = cartQtyById.get(id) || 0
@@ -240,7 +241,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
                       {product.image_url ? (
                         <img
                           src={product.image_url}
-                          alt={product.type}
+                          alt={product.type ?? ""}
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -326,7 +327,7 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
               removeRow={removeRow}
               serverProducts={serverProducts}
               isOrderDisabled={isOrderDisabled}
-              errors={form.formState.errors.products as any}
+              errors={form.formState.errors.products as unknown as { quantity?: { message?: string } }[]}
             />
           </div>
 

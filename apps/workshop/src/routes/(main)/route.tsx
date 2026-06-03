@@ -33,7 +33,7 @@ export const Route = createFileRoute("/(main)")({
       });
     }
 
-    const user = (context.auth as any).user ?? null;
+    const user = context.auth.user ?? null;
     if (!user) return;
 
     // 2. Access-denied page itself is always reachable (can't trap the user
@@ -52,7 +52,7 @@ export const Route = createFileRoute("/(main)")({
     if (isTerminalUser(user)) {
       const own = getTerminalPath(user);
       if (own && own !== location.pathname) {
-        throw redirect({ to: own as any });
+        throw redirect({ to: own as string });
       }
     }
 

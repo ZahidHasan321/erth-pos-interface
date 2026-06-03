@@ -29,13 +29,14 @@ export const getBrand = (): "ERTH" | "SAKKBA" | "QASS" => _currentBrand;
 /**
  * Helper to flatten joined work_orders into the main order object
  */
-function flattenOrder<T>(data: T[]): Order[];
-function flattenOrder<T>(data: T): Order;
-function flattenOrder(data: any): any {
+function flattenOrder(data: null): null;
+function flattenOrder(data: unknown[]): Order[];
+function flattenOrder(data: unknown): Order;
+function flattenOrder(data: unknown): Order | Order[] | null {
     if (!data) return null;
     if (Array.isArray(data)) return data.map(flattenOrder);
 
-    const { workOrder, alterationOrder, customer, taker, ...core } = data;
+    const { workOrder, alterationOrder, customer, taker, ...core } = data as Record<string, unknown>;
 
     // Flatten relations that might be returned as single-item arrays
     const workData = Array.isArray(workOrder) ? workOrder[0] : workOrder;
@@ -76,7 +77,7 @@ export const getOrders = async (): Promise<ApiResponse<Order[]>> => {
 };
 
 export const searchOrders = async (
-    query: Record<string, any>,
+    query: Record<string, string | number | boolean | undefined>,
 ): Promise<ApiResponse<Order[]>> => {
     let builder = db.from(TABLE_NAME)
         .select('*, workOrder:work_orders!order_id(*)')
@@ -323,7 +324,19 @@ export const getDispatchHistory = async (
         return { status: 'error', message: error.message, data: [], count: 0 };
     }
 
-    const rows: DispatchHistoryRow[] = (data ?? []).map((r: any) => {
+    type DispatchRaw = {
+        id: number; dispatched_at: string; direction: string; trip_number: number | null;
+        garment_id: string; order_id: number;
+        garments?: { garment_id: string | null; garment_type: string | null } | Array<{ garment_id: string | null; garment_type: string | null }> | null;
+        orders?: {
+            work_orders?: { invoice_number: number | null } | Array<{ invoice_number: number | null }> | null;
+            customers?: { name: string | null; phone: string | null } | Array<{ name: string | null; phone: string | null }> | null;
+        } | Array<{
+            work_orders?: { invoice_number: number | null } | Array<{ invoice_number: number | null }> | null;
+            customers?: { name: string | null; phone: string | null } | Array<{ name: string | null; phone: string | null }> | null;
+        }> | null;
+    };
+    const rows: DispatchHistoryRow[] = ((data ?? []) as DispatchRaw[]).map((r) => {
         const g = Array.isArray(r.garments) ? r.garments[0] : r.garments;
         const o = Array.isArray(r.orders) ? r.orders[0] : r.orders;
         const wo = o ? (Array.isArray(o.work_orders) ? o.work_orders[0] : o.work_orders) : null;
@@ -331,7 +344,7 @@ export const getDispatchHistory = async (
         return {
             id: r.id,
             dispatched_at: r.dispatched_at,
-            direction: r.direction,
+            direction: r.direction as 'to_workshop' | 'to_shop',
             trip_number: r.trip_number,
             garment_id: r.garment_id,
             order_id: r.order_id,
@@ -358,8 +371,8 @@ export const createOrder = async (
         'r1_notes', 'r2_notes', 'r3_notes', 'call_notes', 'escalation_notes'
     ];
     
-    const coreFields: any = { ...order, brand: getBrand() };
-    const workFields: any = {};
+    const coreFields: Record<string, unknown> = { ...order, brand: getBrand() };
+    const workFields: Record<string, unknown> = {};
 
     WORK_FIELDS.forEach(f => {
         if (f in coreFields) {
@@ -374,7 +387,7 @@ export const createOrder = async (
     // (useOrderMutations) supplies a stable key; fall back to a per-call one
     // so direct callers still get within-call protection.
     const idempotencyKey: string =
-        coreFields.idempotency_key ?? crypto.randomUUID();
+        (coreFields.idempotency_key as string | undefined) ?? crypto.randomUUID();
     coreFields.idempotency_key = idempotencyKey;
 
     let data: { id: number } | null = null;
@@ -447,8 +460,8 @@ export const updateOrder = async (
         'r1_notes', 'r2_notes', 'r3_notes', 'call_notes', 'escalation_notes'
     ];
     
-    const coreUpdates: any = { ...order };
-    const workUpdates: any = {};
+    const coreUpdates: Record<string, unknown> = { ...order };
+    const workUpdates: Record<string, unknown> = {};
     
     WORK_FIELDS.forEach(f => {
         if (f in coreUpdates) {
@@ -563,7 +576,7 @@ export const getOrderDetails = async (idOrInvoice: string | number, includeRelat
 /**
  * Get filtered list of orders with details.
  */
-export const getOrdersList = async (filters: Record<string, any>): Promise<ApiResponse<Order[]>> => {
+export const getOrdersList = async (filters: Record<string, string | number | boolean | undefined>): Promise<ApiResponse<Order[]>> => {
     const hasWorkOrderFilter = Object.keys(filters).some(key => key in FILTER_MAP);
     
     let builder = db.from(TABLE_NAME).select(`
@@ -692,7 +705,7 @@ export const completeWorkOrder = async (
         console.error('Error completing work order:', error);
         return { status: 'error', message: error.message };
     }
-    return { status: 'success', data: data as any };
+    return { status: 'success', data: data as unknown as Order };
 };
 
 export const completeSalesOrder = async (
@@ -729,7 +742,7 @@ export const completeSalesOrder = async (
         console.error('Error completing sales order:', error);
         return { status: 'error', message: error.message };
     }
-    return { status: 'success', data: data as any };
+    return { status: 'success', data: data as unknown as Order };
 };
 
 export const createCompleteSalesOrder = async (
@@ -768,12 +781,12 @@ export const createCompleteSalesOrder = async (
         console.error('Error creating complete sales order:', error);
         return { status: 'error', message: error.message };
     }
-    return { status: 'success', data: data as any };
+    return { status: 'success', data: data as unknown as Order };
 };
 
 export const saveWorkOrderGarments = async (
     orderId: number,
-    garments: any[],
+    garments: Record<string, unknown>[],
     orderUpdates: {
         num_of_fabrics: number;
         fabric_charge: number;
@@ -783,7 +796,7 @@ export const saveWorkOrderGarments = async (
         delivery_date?: string;
         home_delivery?: boolean;
     }
-): Promise<ApiResponse<any>> => {
+): Promise<ApiResponse<unknown>> => {
     computeStyleGroups(garments);
 
     // save_work_order_garments is idempotent server-side (serializes on the
@@ -855,7 +868,7 @@ export const getLinkedOrders = async (): Promise<ApiResponse<Order[]>> => {
 
         if (primaries) {
             // Attach primary details to each child order
-            flattened.forEach((order: any) => {
+            flattened.forEach((order: Order & { linkedTo?: unknown }) => {
                 const primaryRaw = primaries.find(p => p.id === order.linked_order_id);
                 if (primaryRaw) {
                     // Flatten the primary data correctly
