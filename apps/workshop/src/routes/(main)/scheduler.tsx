@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useSchedulerGarments, useBrovaPlans, useWorkshopWorkload, useParkedRedos } from "@/hooks/useWorkshopGarments";
-import { useScheduleGarments, useResumeParkedRedo } from "@/hooks/useGarmentMutations";
+import { useScheduleGarments } from "@/hooks/useGarmentMutations";
 import { useResources } from "@/hooks/useResources";
 import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
+import { ParkedRedosTable, useResumeRedo } from "@/components/shared/ParkedRedosTable";
 import {
   PageHeader, LoadingSkeleton, GarmentTypeBadge,
 } from "@/components/shared/PageShell";
@@ -23,13 +24,11 @@ import {
   Clock, Package, Home, User, RotateCcw,
   Calendar, BarChart3, Droplets, Zap, Loader2,
   Scissors, Ruler, Shirt, Sparkles, Flame, ShieldCheck,
-  AlertOctagon, ParkingSquare, Play,
+  AlertOctagon, ParkingSquare,
 } from "lucide-react";
-import { toast } from "sonner";
-import { useAuth } from "@/context/auth";
-import { getRedoPriorityLabel, getRedoParkedReasonLabel } from "@/lib/root-causes";
+import { getRedoPriorityLabel } from "@/lib/root-causes";
 import { getAlterationNumber } from "@repo/database";
-import type { WorkshopGarment, TripHistoryEntry, RedoPriority } from "@repo/database";
+import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
 import type { LucideIcon } from "lucide-react";
 
 export const Route = createFileRoute("/(main)/scheduler")({
@@ -264,75 +263,6 @@ function SchedulerSectionTable({
   );
 }
 
-// ── Parked redos table ────────────────────────────────────────────────────────
-// Parked redos can't be scheduled until resumed, so this is a read + Resume
-// table (no selection checkboxes). The Resume action re-runs the RPC's fabric
-// consume; a still-short fabric makes the RPC raise and the row stays parked.
-
-function ParkedRedosTable({
-  garments,
-  resumingId,
-  onResume,
-}: {
-  garments: WorkshopGarment[];
-  resumingId: string | null;
-  onResume: (garmentId: string, priority: RedoPriority) => void;
-}) {
-  return (
-    <TableContainer>
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
-            <TableHead className="w-[120px]">Garment</TableHead>
-            <TableHead className="w-[80px]">Type</TableHead>
-            <TableHead className="w-[170px]">Customer</TableHead>
-            <TableHead className="w-[100px]">Order / Invoice</TableHead>
-            <TableHead>Parked reason</TableHead>
-            <TableHead className="w-[120px] text-right pr-3">Action</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {garments.map((g) => {
-            const busy = resumingId === g.id;
-            return (
-              <TableRow key={g.id} className="opacity-90">
-                <TableCell className="px-3 py-3">
-                  <span className="font-mono text-base">{g.garment_id ?? g.id.slice(0, 8)}</span>
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <GarmentTypeBadge type={g.garment_type ?? "final"} />
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <span className="text-sm truncate">{g.customer_name ?? "—"}</span>
-                </TableCell>
-                <TableCell className="px-3 py-3 text-sm tabular-nums text-muted-foreground">
-                  #{g.order_id}{g.invoice_number ? ` / ${g.invoice_number}` : ""}
-                </TableCell>
-                <TableCell className="px-3 py-3">
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-warn)] bg-[var(--status-warn-bg)] px-2 py-0.5 rounded-md">
-                    <ParkingSquare className="w-3 h-3" /> {getRedoParkedReasonLabel(g.redo_parked_reason)}
-                  </span>
-                </TableCell>
-                <TableCell className="px-3 py-3 text-right">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => onResume(g.id, "next_slot")}
-                  >
-                    {busy ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1" />}
-                    Resume
-                  </Button>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-}
-
 // ── Heat-Map Calendar ─────────────────────────────────────────────────────────
 
 function HeatCalendar({
@@ -553,8 +483,6 @@ function SchedulerPage() {
   // the entire workshop list (joins, measurements, etc.) just to count plans.
   const { data: allGarments = [] } = useWorkshopWorkload();
   const scheduleMut = useScheduleGarments();
-  const resumeMut = useResumeParkedRedo();
-  const { user } = useAuth();
 
   // ── Data slices ───────────────────────────────────────────────────────────
   // Server guarantees every row is piece_stage=waiting_cut, location=workshop,
@@ -834,29 +762,8 @@ function SchedulerPage() {
     clearAll();
   };
 
-  // Resume a parked redo (CLAUDE.md §6) — un-parks once material/customer issue
-  // clears. The RPC re-runs the consume; a still-short fabric makes it raise.
-  // A fresh idempotency key per click keeps a lost-response retry single-effect.
-  const [resumingId, setResumingId] = useState<string | null>(null);
-  const handleResume = (garmentId: string, priority: RedoPriority) => {
-    setResumingId(garmentId);
-    resumeMut.mutate(
-      { garmentId, priority, userId: user?.id ?? null, idempotencyKey: crypto.randomUUID() },
-      {
-        onSuccess: (res) => {
-          if (res.already_active) {
-            toast.info("Redo already active");
-          } else if (res.consumed > 0) {
-            toast.success(`Redo resumed — ${res.consumed} m fabric consumed`);
-          } else {
-            toast.success("Redo resumed");
-          }
-        },
-        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to resume redo"),
-        onSettled: () => setResumingId(null),
-      },
-    );
-  };
+  // Parked-redo resume (CLAUDE.md §6) — shared with the Decisions hub.
+  const { resumingId, resume } = useResumeRedo();
 
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-24 lg:pb-10">
@@ -995,7 +902,7 @@ function SchedulerPage() {
                   <ParkedRedosTable
                     garments={sortedParkedRedos}
                     resumingId={resumingId}
-                    onResume={handleResume}
+                    onResume={resume}
                   />
                 </Section>
               )}

@@ -17,10 +17,10 @@ import {
 import type { ValueType, NameType } from "recharts/types/component/DefaultTooltipContent";
 import type { Payload } from "recharts/types/component/DefaultTooltipContent";
 import {
-  TrendingUp, ShieldCheck,
+  TrendingUp, TrendingDown, ShieldCheck,
   Package2, Star, ChevronDown, ChevronUp,
-  ArrowUpRight, ArrowDownRight, Minus,
-  Search, RotateCcw, Users, Clock,
+  ArrowUpRight, ArrowDownRight, ArrowRight, Minus,
+  Search, RotateCcw, Users, Clock, CheckCircle2,
   Timer, CalendarClock, ThumbsUp, Recycle, Rocket,
 } from "lucide-react";
 
@@ -118,6 +118,26 @@ const TONE_TEXT: Record<"ok" | "warn" | "bad" | "info", string> = {
   info: "text-[var(--status-info)]",
 };
 
+// Rate → semantic tone for the at-a-glance vitals. ≥90 good, ≥75 watch, else bad
+// — the same 90/75 break the first-pass-yield subtitle copy already uses.
+function rateTone(pct: number | null): "ok" | "warn" | "bad" | null {
+  if (pct === null) return null;
+  if (pct >= 90) return "ok";
+  if (pct >= 75) return "warn";
+  return "bad";
+}
+
+// One surfaced exception for the "Needs attention" panel. Findings are a pure
+// re-presentation of metrics already computed — they carry no new evaluation.
+type Finding = {
+  id: string;
+  tone: "ok" | "warn" | "bad" | "info";
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  detail: string;
+  action?: { label: string; run: () => void };
+};
+
 // Responsible-party display labels. The party value itself is derived server-side
 // from root_cause (root_cause_responsible_party, §2.9) — never recomputed here.
 const PARTY_LABEL: Record<string, string> = {
@@ -140,11 +160,14 @@ function KpiCard({
   label,
   value,
   subtitle,
+  tone,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | number;
   subtitle?: string;
+  /** Color the value by status. The number is the one signal — icon + label stay muted. */
+  tone?: "ok" | "warn" | "bad" | null;
 }) {
   return (
     <div className="bg-card border border-border rounded-md p-4">
@@ -152,7 +175,7 @@ function KpiCard({
         <Icon className="w-3.5 h-3.5 shrink-0" />
         <p className="text-xs">{label}</p>
       </div>
-      <p className="text-2xl font-semibold tabular-nums tracking-tight mt-2">{value}</p>
+      <p className={cn("text-2xl font-semibold tabular-nums tracking-tight mt-2", tone ? TONE_TEXT[tone] : "")}>{value}</p>
       {subtitle && <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p>}
     </div>
   );
@@ -658,6 +681,31 @@ function RedoImpactCard({ rows, isLoading }: { rows: RedoImpactRow[]; isLoading:
   );
 }
 
+// ── Needs-attention finding row ─────────────────────────────────────
+
+function FindingRow({ f }: { f: Finding }) {
+  const Icon = f.icon;
+  return (
+    <div className="flex items-start gap-3 px-4 py-3">
+      <Icon className={cn("w-4 h-4 shrink-0 mt-0.5", TONE_TEXT[f.tone])} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{f.title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{f.detail}</p>
+      </div>
+      {f.action && (
+        <button
+          type="button"
+          onClick={f.action.run}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground shrink-0 transition-colors rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          {f.action.label}
+          <ArrowRight className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────
 
 function PerformancePage() {
@@ -679,6 +727,12 @@ function PerformancePage() {
   const setStageFilter = (v: string | null) => patch({ stage: v ?? undefined });
   const setSearchQuery = (v: string) => patch({ q: v || undefined });
   const setTab = (v: PerfTab) => patch({ tab: v === "workers" ? undefined : v });
+
+  // A "Needs attention" finding scrolls the manager to the matching detail section.
+  // Resolved by element id (not a React ref) so the deferred click handlers below
+  // never read a ref on the render path.
+  const scrollToId = (id: string) =>
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const dateRange = useMemo(() => getDateRange(preset), [preset]);
   const { workers, daily, summary, units, stageCycleTimes, isLoading } = usePerformanceData(dateRange);
@@ -741,6 +795,127 @@ function PerformancePage() {
 
   const presetLabel = preset === "today" ? "today" : preset === "week" ? "this week" : preset === "month" ? "this month" : "this quarter";
 
+  // Avg pieces completed per active day — context for the Completed vital.
+  const avgPerDay = daily.length > 0
+    ? Math.round((daily.reduce((s, d) => s + d.completed, 0) / daily.length) * 10) / 10
+    : 0;
+
+  // ── Needs-attention findings ──────────────────────────────────────
+  // PURELY a re-presentation of metrics usePerformanceData already computed — no
+  // new performance evaluation here. The §6 scoring model is respected because the
+  // inputs already encode it: worker checks see only worker-scoped stages (sewing
+  // and soaking are unitOnly and never appear), sewing units carry their own
+  // defect/efficiency, soaking is absent from the page entirely, and only the
+  // production + QC redos are charged to the factory (§6 Q14). Shop-wide — not
+  // narrowed by the table's stage filter, so the summary stays stable.
+  const findings: Finding[] = [];
+
+  const belowWorkers = workers
+    .filter((w) => !w.unitOnly && w.dailyTarget > 0 && w.actual > 0 && w.efficiency < 70)
+    .sort((a, b) => a.efficiency - b.efficiency);
+  if (belowWorkers.length > 0) {
+    findings.push({
+      id: "below-workers",
+      tone: belowWorkers[0].efficiency < 50 ? "bad" : "warn",
+      icon: TrendingDown,
+      title: `${belowWorkers.length} worker${belowWorkers.length === 1 ? "" : "s"} below target`,
+      detail:
+        belowWorkers.slice(0, 3).map((w) => `${w.name} ${w.efficiency}%`).join(" · ") +
+        (belowWorkers.length > 3 ? ` · +${belowWorkers.length - 3} more` : ""),
+      action: {
+        label: "View",
+        run: () => {
+          patch({ tab: undefined, sort: undefined, dir: "asc" });
+          scrollToId("perf-breakdown");
+        },
+      },
+    });
+  }
+
+  const belowUnits = units
+    .filter((u) => u.totalDailyTarget > 0 && u.completed > 0 && u.efficiency < 70)
+    .sort((a, b) => a.efficiency - b.efficiency);
+  if (belowUnits.length > 0) {
+    findings.push({
+      id: "below-units",
+      tone: belowUnits[0].efficiency < 50 ? "bad" : "warn",
+      icon: Users,
+      title: `${belowUnits.length} sewing unit${belowUnits.length === 1 ? "" : "s"} below target`,
+      detail: belowUnits.slice(0, 3).map((u) => `${u.name} ${u.efficiency}%`).join(" · "),
+      action: {
+        label: "View",
+        run: () => {
+          patch({ tab: "units" });
+          scrollToId("perf-breakdown");
+        },
+      },
+    });
+  }
+
+  // Defect rate is stage/unit-attributable (§6 Q1) — surface the worst sewing unit.
+  const defectUnits = units
+    .filter((u) => u.defectRate !== null && u.defectRate > 15)
+    .sort((a, b) => (b.defectRate ?? 0) - (a.defectRate ?? 0));
+  if (defectUnits.length > 0) {
+    const u = defectUnits[0];
+    findings.push({
+      id: "defect-hotspot",
+      tone: (u.defectRate ?? 0) > 25 ? "bad" : "warn",
+      icon: RotateCcw,
+      title: `${STAGE_LABELS[u.stage] ?? u.stage} defect rate ${u.defectRate}%`,
+      detail: `${u.name} — QC routed work back from this stage`,
+      action: {
+        label: "View",
+        run: () => {
+          patch({ tab: "units", stage: u.stage });
+          scrollToId("perf-breakdown");
+        },
+      },
+    });
+  }
+
+  // Only production + QC redos are factory-attributable (§6 Q14); external parties
+  // carry the cost but no factory penalty, so they don't raise a flag here.
+  const internalRedos = redoRows.filter((r) => r.party != null && INTERNAL_PARTIES.has(r.party));
+  const internalRedoCount = internalRedos.reduce((s, r) => s + (r.redo_count ?? 0), 0);
+  const internalRedoCost = internalRedos.reduce((s, r) => s + (r.waste_cost ?? 0), 0);
+  if (internalRedoCount > 0) {
+    findings.push({
+      id: "factory-redos",
+      tone: "warn",
+      icon: Recycle,
+      title: `${internalRedoCount} factory redo${internalRedoCount === 1 ? "" : "s"} this period`,
+      detail: `${internalRedoCost.toFixed(2)} material scrapped — production / QC attributable`,
+      action: { label: "Breakdown", run: () => scrollToId("perf-redo") },
+    });
+  }
+
+  // Bottleneck — slowest stage by cycle time (soaking already excluded). Info-level:
+  // it points to where to look, it isn't a fault on its own.
+  if (cycleTimeChartData.length >= 2) {
+    const slowest = [...cycleTimeChartData].sort((a, b) => b.avgMinutes - a.avgMinutes)[0];
+    findings.push({
+      id: "bottleneck",
+      tone: "info",
+      icon: Clock,
+      title: `${slowest.name} is the slowest stage`,
+      detail: `${slowest.avgMinutes} min/piece average (n=${slowest.sampleCount})`,
+      action: {
+        label: "View",
+        run: () => {
+          patch({
+            tab: (UNIT_SCOPED_STAGES as string[]).includes(slowest.stage) ? "units" : undefined,
+            stage: slowest.stage,
+          });
+          scrollToId("perf-breakdown");
+        },
+      },
+    });
+  }
+
+  const TONE_RANK: Record<Finding["tone"], number> = { bad: 0, warn: 1, info: 2, ok: 3 };
+  findings.sort((a, b) => TONE_RANK[a.tone] - TONE_RANK[b.tone]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <PageHeader
@@ -774,24 +949,20 @@ function PerformancePage() {
         </div>
       ) : (
         <>
-          {/* Primary KPIs */}
+          {/* Vitals — the glance layer. Colored by status so a manager reads
+              green / amber / red without parsing the number. */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiCard
               icon={Package2}
               label="Completed"
               value={summary.totalCompleted}
-              subtitle={presetLabel}
-            />
-            <KpiCard
-              icon={Timer}
-              label="Avg workshop time"
-              value={formatDuration(summary.avgWorkshopMinutes)}
-              subtitle={summary.avgWorkshopMinutes === null ? "No timing data" : "start → completion"}
+              subtitle={daily.length > 0 ? `${avgPerDay}/day avg` : presetLabel}
             />
             <KpiCard
               icon={CalendarClock}
               label="On-time delivery"
               value={summary.onTimePct === null ? "—" : `${summary.onTimePct}%`}
+              tone={rateTone(summary.onTimePct)}
               subtitle={
                 summary.onTimePct === null
                   ? "No delivery dates"
@@ -804,6 +975,7 @@ function PerformancePage() {
               icon={ShieldCheck}
               label="First-pass yield"
               value={summary.qcPassRate === null ? "—" : `${summary.qcPassRate}%`}
+              tone={rateTone(summary.qcPassRate)}
               subtitle={
                 summary.qcPassRate === null
                   ? "No QC data"
@@ -814,16 +986,50 @@ function PerformancePage() {
                   : "Needs attention"
               }
             />
-          </div>
-
-          {/* Secondary metrics — inline strip, no tile chrome */}
-          <div className="bg-card border border-border rounded-md grid grid-cols-2 md:grid-cols-4 overflow-hidden">
-            <SecondaryStat
-              index={0}
+            <KpiCard
               icon={ThumbsUp}
               label="Customer accept"
               value={summary.acceptRate === null ? "—" : `${summary.acceptRate}%`}
-              hint={summary.acceptRate === null ? "no trials" : "at trial / collection"}
+              tone={rateTone(summary.acceptRate)}
+              subtitle={summary.acceptRate === null ? "no trials yet" : "at trial / collection"}
+            />
+          </div>
+
+          {/* Needs attention — exceptions auto-surfaced from the same KPIs, so the
+              manager sees what's wrong without reading every chart and table. */}
+          <SectionCard
+            title="Needs attention"
+            action={
+              findings.length > 0 ? (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {findings.length} flag{findings.length === 1 ? "" : "s"}
+                </span>
+              ) : null
+            }
+            bodyClassName="p-0"
+          >
+            {findings.length === 0 ? (
+              <div className="flex items-center gap-2.5 px-4 py-4 text-sm text-muted-foreground">
+                <CheckCircle2 className="w-4 h-4 text-[var(--status-ok)] shrink-0" />
+                Everything is tracking well this period — no flags.
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {findings.map((f) => (
+                  <FindingRow key={f.id} f={f} />
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Secondary metrics — informational strip, demoted below the vitals */}
+          <div className="bg-card border border-border rounded-md grid grid-cols-2 md:grid-cols-4 overflow-hidden">
+            <SecondaryStat
+              index={0}
+              icon={Timer}
+              label="Avg workshop time"
+              value={formatDuration(summary.avgWorkshopMinutes)}
+              hint={summary.avgWorkshopMinutes === null ? "no timing data" : "start → done"}
             />
             <SecondaryStat
               index={1}
@@ -982,10 +1188,12 @@ function PerformancePage() {
           </div>
 
           {/* Redo impact by responsibility (Q14) */}
-          <RedoImpactCard rows={redoRows} isLoading={redoImpact.isLoading} />
+          <div id="perf-redo" className="scroll-mt-4">
+            <RedoImpactCard rows={redoRows} isLoading={redoImpact.isLoading} />
+          </div>
 
           {/* Breakdown */}
-          <div className="space-y-3">
+          <div id="perf-breakdown" className="space-y-3 scroll-mt-4">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <SlidingPillSwitcher
                 value={tab}

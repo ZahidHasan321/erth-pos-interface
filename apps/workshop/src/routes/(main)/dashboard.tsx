@@ -1,9 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   useWorkshopGarments,
   useBrovaStatus,
-  useRedoReplacementsPending,
 } from "@/hooks/useWorkshopGarments";
 import {
   PageHeader,
@@ -11,7 +10,6 @@ import {
   StatsCard,
   EmptyState,
 } from "@/components/shared/PageShell";
-import { RedoPendingDialog } from "@/components/shared/RedoPendingDialog";
 import { Skeleton } from "@repo/ui/skeleton";
 import { cn, getLocalDateStr, parseUtcTimestamp } from "@/lib/utils";
 import {
@@ -20,7 +18,7 @@ import {
 import {
   Inbox, ClipboardList, LayoutDashboard,
   Truck, ArrowRight, Zap, AlertTriangle,
-  RotateCcw, Hammer, Lock,
+  Hammer, Lock,
   ParkingSquare,
 } from "lucide-react";
 
@@ -73,8 +71,6 @@ const PLAN_KEY_TO_STAGE: Record<string, string> = {
 
 function DashboardPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
-  const { data: redoPending = [] } = useRedoReplacementsPending();
-  const [redoDialogOpen, setRedoDialogOpen] = useState(false);
 
   // Orders that still have a final parked at waiting_for_acceptance. Drives
   // the "indefinite parking" check below — we need brova-acceptance counts
@@ -167,11 +163,10 @@ function DashboardPage() {
     return {
       overdueOrders: overdueOrderIds.size,
       express: express.length,
-      redoPending: redoPending.length,
       acceptWithFixStranded: finalsStillInProductionByOrder.size,
       stuckFinals: stuckFinalsOrderIds.size,
     };
-  }, [allGarments, redoPending, waitingFinalOrderIds, brovaStatus]);
+  }, [allGarments, waitingFinalOrderIds, brovaStatus]);
 
   // Cards only render when count > 0. Tone is semantic, not decorative.
   const actionCards = useMemo(() => {
@@ -211,17 +206,6 @@ function DashboardPage() {
         tone: "bad",
       });
     }
-    if (exceptions.redoPending > 0) {
-      cards.push({
-        key: "redo-pending",
-        label: "Redo replacements pending",
-        count: exceptions.redoPending,
-        desc: "Discarded by Reject-Redo — create the replacement garment",
-        onClick: () => setRedoDialogOpen(true),
-        icon: RotateCcw,
-        tone: "warn",
-      });
-    }
     if (exceptions.acceptWithFixStranded > 0) {
       cards.push({
         key: "accept-with-fix-stranded",
@@ -246,7 +230,6 @@ function DashboardPage() {
     }
 
     return cards;
-  // setRedoDialogOpen is a stable setState dispatcher; only `exceptions` drives content.
   }, [exceptions]);
 
   // ── Production pipeline (from actual garment data) ────────────────
@@ -509,11 +492,6 @@ function DashboardPage() {
         </SectionCard>
       )}
 
-      <RedoPendingDialog
-        open={redoDialogOpen}
-        onClose={() => setRedoDialogOpen(false)}
-        pending={redoPending}
-      />
     </div>
   );
 }

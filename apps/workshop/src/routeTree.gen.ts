@@ -22,6 +22,7 @@ import { Route as mainParkingRouteImport } from './routes/(main)/parking'
 import { Route as mainNotificationsRouteImport } from './routes/(main)/notifications'
 import { Route as mainInvestigationsRouteImport } from './routes/(main)/investigations'
 import { Route as mainDispatchRouteImport } from './routes/(main)/dispatch'
+import { Route as mainDecisionsRouteImport } from './routes/(main)/decisions'
 import { Route as mainDashboardRouteImport } from './routes/(main)/dashboard'
 import { Route as mainBoardRouteImport } from './routes/(main)/board'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
@@ -120,6 +121,11 @@ const mainInvestigationsRoute = mainInvestigationsRouteImport.update({
 const mainDispatchRoute = mainDispatchRouteImport.update({
   id: '/dispatch',
   path: '/dispatch',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainDecisionsRoute = mainDecisionsRouteImport.update({
+  id: '/decisions',
+  path: '/decisions',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const mainDashboardRoute = mainDashboardRouteImport.update({
@@ -316,6 +322,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof authLoginRoute
   '/board': typeof mainBoardRoute
   '/dashboard': typeof mainDashboardRoute
+  '/decisions': typeof mainDecisionsRoute
   '/dispatch': typeof mainDispatchRoute
   '/investigations': typeof mainInvestigationsRoute
   '/notifications': typeof mainNotificationsRoute
@@ -363,6 +370,7 @@ export interface FileRoutesByTo {
   '/login': typeof authLoginRoute
   '/board': typeof mainBoardRoute
   '/dashboard': typeof mainDashboardRoute
+  '/decisions': typeof mainDecisionsRoute
   '/dispatch': typeof mainDispatchRoute
   '/investigations': typeof mainInvestigationsRoute
   '/notifications': typeof mainNotificationsRoute
@@ -414,6 +422,7 @@ export interface FileRoutesById {
   '/(auth)/login': typeof authLoginRoute
   '/(main)/board': typeof mainBoardRoute
   '/(main)/dashboard': typeof mainDashboardRoute
+  '/(main)/decisions': typeof mainDecisionsRoute
   '/(main)/dispatch': typeof mainDispatchRoute
   '/(main)/investigations': typeof mainInvestigationsRoute
   '/(main)/notifications': typeof mainNotificationsRoute
@@ -465,6 +474,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/board'
     | '/dashboard'
+    | '/decisions'
     | '/dispatch'
     | '/investigations'
     | '/notifications'
@@ -512,6 +522,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/board'
     | '/dashboard'
+    | '/decisions'
     | '/dispatch'
     | '/investigations'
     | '/notifications'
@@ -562,6 +573,7 @@ export interface FileRouteTypes {
     | '/(auth)/login'
     | '/(main)/board'
     | '/(main)/dashboard'
+    | '/(main)/decisions'
     | '/(main)/dispatch'
     | '/(main)/investigations'
     | '/(main)/notifications'
@@ -702,6 +714,13 @@ declare module '@tanstack/react-router' {
       path: '/dispatch'
       fullPath: '/dispatch'
       preLoaderRoute: typeof mainDispatchRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/decisions': {
+      id: '/(main)/decisions'
+      path: '/decisions'
+      fullPath: '/decisions'
+      preLoaderRoute: typeof mainDecisionsRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/dashboard': {
@@ -987,6 +1006,7 @@ interface mainRouteRouteChildren {
   mainCompletedRouteRoute: typeof mainCompletedRouteRouteWithChildren
   mainBoardRoute: typeof mainBoardRoute
   mainDashboardRoute: typeof mainDashboardRoute
+  mainDecisionsRoute: typeof mainDecisionsRoute
   mainDispatchRoute: typeof mainDispatchRoute
   mainInvestigationsRoute: typeof mainInvestigationsRoute
   mainNotificationsRoute: typeof mainNotificationsRoute
@@ -1028,6 +1048,7 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainCompletedRouteRoute: mainCompletedRouteRouteWithChildren,
   mainBoardRoute: mainBoardRoute,
   mainDashboardRoute: mainDashboardRoute,
+  mainDecisionsRoute: mainDecisionsRoute,
   mainDispatchRoute: mainDispatchRoute,
   mainInvestigationsRoute: mainInvestigationsRoute,
   mainNotificationsRoute: mainNotificationsRoute,

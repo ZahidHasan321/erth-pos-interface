@@ -16,6 +16,7 @@ import {
 } from "@repo/ui/sidebar";
 import { useSidebarCounts } from "@/hooks/useSidebarCounts";
 import { useTransferRequests } from "@/hooks/useTransfers";
+import { useRedoReplacementsPending, useParkedRedos } from "@/hooks/useWorkshopGarments";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
@@ -36,7 +37,7 @@ import {
   ChevronDown,
   TrendingUp,
   ShieldCheck,
-  ShieldAlert,
+  ListChecks,
   UserCog,
   Package,
   Building2,
@@ -52,6 +53,11 @@ export function WorkshopSidebar() {
   const { data: receivingDeliveries = [] } = useTransferRequests({ status: "dispatched", direction: "shop_to_workshop" });
   // Requests the shop made that the workshop must send (no approve step — §4).
   const { data: sendRequests = [] } = useTransferRequests({ status: ["requested"], direction: "workshop_to_shop" });
+  // Garments awaiting a manager decision — investigations + redos to create +
+  // parked redos (CLAUDE.md §6). Drives the prominent Decisions badge.
+  const { data: redoPending = [] } = useRedoReplacementsPending();
+  const { data: parkedRedos = [] } = useParkedRedos();
+  const decisionsBadge = (counts?.investigations ?? 0) + redoPending.length + parkedRedos.length;
   const { isMobile, setOpenMobile, state } = useSidebar();
   const routerState = useRouterState({ select: (s) => s.location.pathname });
   const { user: authUser } = useAuth();
@@ -80,11 +86,16 @@ export function WorkshopSidebar() {
   ];
 
   const peopleItems = [
-    { label: "Team",         icon: Users,       href: "/team" },
-    { label: "Performance",   icon: TrendingUp,  href: "/performance" },
-    { label: "QC Analytics",  icon: ShieldCheck, href: "/qc-analytics" },
-    { label: "Investigations", icon: ShieldAlert, href: "/investigations", count: counts?.investigations, badgeTone: "warn" as const },
+    { label: "Team", icon: Users, href: "/team" },
     ...((isAdmin(authUser) || isManager(authUser)) ? [{ label: "Users", icon: UserCog, href: "/users" }] : []),
+  ];
+
+  // Insights — analytics surfaces, separated from People (team management).
+  // QC Analytics + Performance moved out of People; Investigations folded into
+  // the Decisions hub (CLAUDE.md §6).
+  const insightsItems = [
+    { label: "Performance",  icon: TrendingUp,  href: "/performance" },
+    { label: "QC Analytics", icon: ShieldCheck, href: "/qc-analytics" },
   ];
 
   const fulfillmentItems = [
@@ -144,6 +155,19 @@ export function WorkshopSidebar() {
                     <span>Dashboard</span>
                   </Link>
                 </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/decisions")}>
+                  <Link to="/decisions">
+                    <ListChecks className="w-4 h-4" aria-hidden="true" />
+                    <span>Decisions</span>
+                  </Link>
+                </SidebarMenuButton>
+                {!!decisionsBadge && (
+                  <SidebarMenuBadge className="bg-[var(--status-warn-bg)] text-[var(--status-warn)]">
+                    {decisionsBadge}
+                  </SidebarMenuBadge>
+                )}
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
@@ -241,17 +265,26 @@ export function WorkshopSidebar() {
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
-                  {!!item.count && (
-                    <SidebarMenuBadge
-                      className={cn(
-                        item.badgeTone === "warn"
-                          ? "bg-[var(--status-warn-bg)] text-[var(--status-warn)]"
-                          : "bg-muted text-foreground",
-                      )}
-                    >
-                      {item.count}
-                    </SidebarMenuBadge>
-                  )}
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Insights</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {insightsItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild isActive={isActive(item.href)}>
+                    <Link to={item.href}>
+                      <item.icon className="w-4 h-4" aria-hidden="true" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
