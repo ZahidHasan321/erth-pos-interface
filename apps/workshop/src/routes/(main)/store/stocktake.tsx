@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { isAdmin, isManager } from "@/lib/rbac";
 import { formatQty } from "@/lib/inventory";
-import { getFabrics } from "@/api/fabrics";
 import { getAccessories } from "@/api/accessories";
 import {
   getStocktakeStatus,
@@ -47,15 +46,14 @@ function StocktakePage() {
   const statusQ = useQuery({ queryKey: ["stocktake_status", SIDE], queryFn: () => getStocktakeStatus(SIDE), staleTime: 30_000 });
   const sessionId = statusQ.data?.open_session_id ?? null;
 
-  const fabricsQ = useQuery({ queryKey: ["fabrics"], queryFn: () => getFabrics(), staleTime: 60_000 });
+  // Workshop stock is accessories only — fabric/shelf are shop-side (§4).
   const accQ = useQuery({ queryKey: ["accessories"], queryFn: () => getAccessories(), staleTime: 60_000 });
 
   const lines: Line[] = useMemo(() => {
     const out: Line[] = [];
     for (const a of accQ.data ?? []) if (!a.is_archived) out.push({ itemType: "accessory", itemId: a.id, name: a.name, system: Number(a.workshop_stock ?? 0) });
-    for (const f of fabricsQ.data ?? []) if (!f.is_archived) out.push({ itemType: "fabric", itemId: f.id, name: f.name, system: Number(f.workshop_stock ?? 0) });
     return out.sort((a, b) => a.name.localeCompare(b.name));
-  }, [fabricsQ.data, accQ.data]);
+  }, [accQ.data]);
 
   const countsQ = useQuery({ queryKey: ["stocktake_counts", sessionId], queryFn: () => getStocktakeCounts(sessionId!), enabled: sessionId != null, staleTime: 10_000 });
   const historyQ = useQuery({ queryKey: ["stocktake_history", SIDE, 3], queryFn: () => getStocktakeHistory(SIDE, 3), staleTime: 60_000 });
@@ -145,10 +143,9 @@ function StocktakePage() {
       qc.invalidateQueries({ queryKey: ["stocktake_status", SIDE] });
       qc.invalidateQueries({ queryKey: ["stocktake_history", SIDE] });
       qc.invalidateQueries({ queryKey: ["stocktake_counts"] });
-      qc.invalidateQueries({ queryKey: ["fabrics"] });
       qc.invalidateQueries({ queryKey: ["accessories"] });
       qc.invalidateQueries({ queryKey: ["stock_movements"] });
-      toast.success(`Stocktake validated — ${res.adjustments_applied} adjustment${res.adjustments_applied !== 1 ? "s" : ""} applied`);
+      toast.success(`Stocktake validated, ${res.adjustments_applied} adjustment${res.adjustments_applied !== 1 ? "s" : ""} applied`);
     },
     onError: (err: unknown) => toast.error(`Could not validate: ${err instanceof Error ? err.message : String(err)}`),
   });
@@ -166,7 +163,7 @@ function StocktakePage() {
   function handleValidate() {
     const m = missingReason();
     if (m) {
-      toast.error(`${m.name} has a variance — add a reason first`);
+      toast.error(`${m.name} has a variance, add a reason first`);
       return;
     }
     validateMut.mutate();
@@ -201,7 +198,7 @@ function StocktakePage() {
 
   const progressPct = lines.length === 0 ? 0 : Math.round((countedCount / lines.length) * 100);
 
-  const itemsLoading = fabricsQ.isLoading || accQ.isLoading;
+  const itemsLoading = accQ.isLoading;
 
   return (
     <div className="px-4 sm:px-6 py-5 max-w-[1100px] mx-auto pb-12 space-y-5">
@@ -301,7 +298,7 @@ function StocktakePage() {
           ) : visibleLines.length === 0 ? (
             <EmptyState
               icon={CheckCircle2}
-              message={filter === "uncounted" ? "Every item has been counted." : filter === "variances" ? "No variances — counts match the system." : "No items to count."}
+              message={filter === "uncounted" ? "Every item has been counted." : filter === "variances" ? "No variances. Counts match the system." : "No items to count."}
             />
           ) : (
             <TableContainer className="rounded-md shadow-none max-h-[60vh] overflow-y-auto">
@@ -332,7 +329,7 @@ function StocktakePage() {
                             type="button"
                             onClick={() => toggleMatch(l)}
                             aria-pressed={matched}
-                            aria-label={matched ? `${l.name} matches system — tap to clear` : `Mark ${l.name} as matching system (${formatQty(l.itemType, l.system)})`}
+                            aria-label={matched ? `${l.name} matches system, tap to clear` : `Mark ${l.name} as matching system (${formatQty(l.itemType, l.system)})`}
                             className={cn(
                               "grid place-items-center h-8 w-8 rounded-md border transition-colors motion-reduce:transition-none touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                               matched
@@ -345,7 +342,6 @@ function StocktakePage() {
                         </TableCell>
                         <TableCell>
                           <span className="text-sm">{l.name}</span>
-                          <span className="ml-2 text-xs text-muted-foreground capitalize">{l.itemType}</span>
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
                           {formatQty(l.itemType, l.system)}
@@ -357,19 +353,19 @@ function StocktakePage() {
                             value={e.counted}
                             onChange={(ev) => setEntry(key, { counted: ev.target.value })}
                             className="h-8 text-right tabular-nums"
-                            placeholder="—"
+                            placeholder="-"
                             aria-label={`Counted quantity for ${l.name}`}
                           />
                         </TableCell>
                         <TableCell className={cn("text-right tabular-nums text-sm font-medium", variance == null || variance === 0 ? "text-muted-foreground" : variance > 0 ? "text-[var(--status-ok)]" : "text-[var(--status-bad)]")}>
-                          {variance == null ? "—" : `${variance > 0 ? "+" : ""}${formatQty(l.itemType, variance)}`}
+                          {variance == null ? "-" : `${variance > 0 ? "+" : ""}${formatQty(l.itemType, variance)}`}
                         </TableCell>
                         <TableCell>
                           <Input
                             value={e.reason}
                             onChange={(ev) => setEntry(key, { reason: ev.target.value })}
                             className={cn("h-8", needsReason && !e.reason.trim() && "border-[var(--status-bad)] focus-visible:ring-[var(--status-bad)]")}
-                            placeholder={needsReason ? "Reason required" : "—"}
+                            placeholder={needsReason ? "Reason required" : "-"}
                             disabled={!needsReason}
                             aria-required={needsReason}
                             aria-label={`Variance reason for ${l.name}`}
@@ -405,7 +401,7 @@ function StocktakePage() {
                   params={{ sessionId: String(h.id) }}
                   className="flex items-center justify-between px-4 py-2 text-sm hover:bg-muted/50 transition-colors motion-reduce:transition-none"
                 >
-                  <span>{h.validated_at ? new Date(h.validated_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
+                  <span>{h.validated_at ? new Date(h.validated_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "-"}</span>
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">Validated <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
                 </Link>
               </li>

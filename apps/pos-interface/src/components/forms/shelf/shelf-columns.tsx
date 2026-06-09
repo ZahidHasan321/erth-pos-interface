@@ -30,7 +30,7 @@ export const columns: ColumnDef<ShelfProduct>[] = [
     cell: ({ row }) => (
       <div className="flex flex-col text-left min-w-0">
         <span className="text-sm font-medium text-foreground truncate">
-          {row.original.product_type || '—'}
+          {row.original.product_type || '-'}
         </span>
         {row.original.brand && (
           <span className="text-xs text-muted-foreground truncate">{row.original.brand}</span>

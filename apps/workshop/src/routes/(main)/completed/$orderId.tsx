@@ -139,7 +139,7 @@ function OrderHeader({ garments, orderId }: { garments: WorkshopGarment[]; order
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-lg font-medium tabular-nums">#{orderId}</span>
-            <span className="text-base">{first.customer_name ?? "—"}</span>
+            <span className="text-base">{first.customer_name ?? "-"}</span>
             {brands.map((b) => <BrandBadge key={b} brand={b} />)}
             {hasExpress && <ExpressBadge />}
             {first.home_delivery_order && (

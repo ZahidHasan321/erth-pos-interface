@@ -1,3 +1,4 @@
+import { Fragment, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useAssignedOrdersPage } from "@/hooks/useWorkshopGarments";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -26,6 +27,7 @@ import {
   ArrowUp,
   ArrowDown,
   AlertTriangle,
+  Link2,
 } from "lucide-react";
 
 const BRANDS = ["ERTH", "SAKKBA", "QASS"] as const;
@@ -94,7 +96,7 @@ const URGENCY_TEXT: Record<UrgencyTone, string> = {
  */
 function DeliveryDisplay({ row, align = "center" }: { row: AssignedOrderRow; align?: "center" | "start" }) {
   if (!row.delivery_date) {
-    return <span className="text-muted-foreground">—</span>;
+    return <span className="text-muted-foreground">-</span>;
   }
 
   const u = deliveryUrgency(row.delivery_date);
@@ -294,6 +296,49 @@ const STATUS_TEXT: Record<PillColor, string> = {
   zinc:    "text-muted-foreground",
 };
 
+// ── Linked-order grouping (§2.13) ────────────────────────────
+// Rows arrive group-adjacent from the RPC (members of a link group sort to the
+// position of the group's most-urgent member). Fold consecutive same-group rows
+// into a cluster so the tracker reads a linked group as one deliverable. A group
+// with only one of its members in production renders as a plain single row.
+
+type TrackerItem =
+  | { kind: "single"; row: AssignedOrderRow }
+  | { kind: "group"; groupId: number; rows: AssignedOrderRow[] };
+
+function buildTrackerItems(rows: AssignedOrderRow[]): TrackerItem[] {
+  const items: TrackerItem[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    const groupId = rows[i].link_group_id;
+    let j = i + 1;
+    while (j < rows.length && rows[j].link_group_id === groupId) j++;
+    const slice = rows.slice(i, j);
+    items.push(slice.length > 1 ? { kind: "group", groupId, rows: slice } : { kind: "single", row: slice[0] });
+    i = j;
+  }
+  return items;
+}
+
+/** Shared "Linked" cluster header — the shared delivery date + order count. */
+function LinkedHeader({ rows }: { rows: AssignedOrderRow[] }) {
+  const date = rows.find((r) => r.delivery_date)?.delivery_date ?? null;
+  const u = deliveryUrgency(date);
+  return (
+    <div className="flex items-center gap-2 text-sm font-medium">
+      <Link2 className="w-3.5 h-3.5 text-blue-600" />
+      <span className="text-blue-700 dark:text-blue-400">Linked</span>
+      <span className="text-muted-foreground">· {rows.length} orders</span>
+      {date && (
+        <span className={cn("ml-auto inline-flex items-center gap-1 tabular-nums", URGENCY_TEXT[u.tone])}>
+          <Clock className="w-3.5 h-3.5" />
+          {formatDate(date)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── Order Card (mobile) ──────────────────────────────────────
 
 function AssignedOrderCard({ group }: { group: AssignedOrderRow }) {
@@ -311,7 +356,7 @@ function AssignedOrderCard({ group }: { group: AssignedOrderRow }) {
           <div className="flex items-center gap-2 flex-wrap min-w-0">
             <span className="font-mono text-base">#{group.order_id}</span>
             <OrderIndicators group={group} />
-            <span className="font-medium text-base truncate tracking-tight">{group.customer_name ?? "—"}</span>
+            <span className="font-medium text-base truncate tracking-tight">{group.customer_name ?? "-"}</span>
             {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
           </div>
 
@@ -338,9 +383,76 @@ function AssignedOrderCard({ group }: { group: AssignedOrderRow }) {
   );
 }
 
+// ── Order Card (mobile) — linked-group wrapper ───────────────
+
+function LinkedGroupCard({ rows }: { rows: AssignedOrderRow[] }) {
+  return (
+    <div className="rounded-md border border-blue-500/30 bg-blue-500/[0.03] p-1.5">
+      <div className="px-1.5 py-1">
+        <LinkedHeader rows={rows} />
+      </div>
+      <div className="space-y-1.5">
+        {rows.map((r) => <AssignedOrderCard key={r.order_id} group={r} />)}
+      </div>
+    </div>
+  );
+}
+
 // ── Orders Table (desktop) ────────────────────────────────────
 
-function OrdersTable({ orders, navigate }: { orders: AssignedOrderRow[]; navigate: (id: number) => void }) {
+function OrderTableRow({ row, navigate, linked = false }: { row: AssignedOrderRow; navigate: (id: number) => void; linked?: boolean }) {
+  return (
+    <TableRow
+      onClick={() => navigate(row.order_id)}
+      className={cn(
+        "hover:bg-muted/30 border-b border-border/40 cursor-pointer transition-colors",
+        linked && "bg-blue-500/[0.03] hover:bg-blue-500/[0.06]",
+      )}
+    >
+      <TableCell className={cn("py-2.5 px-3", linked && "border-l-2 border-l-blue-500/50")}>
+        <div className="flex items-center">
+          <span className="font-mono font-medium text-base">#{row.order_id}</span>
+          <OrderIndicators group={row} />
+        </div>
+        {row.invoice_number && (
+          <span className="text-sm text-muted-foreground">INV-{row.invoice_number}</span>
+        )}
+      </TableCell>
+      <TableCell className="py-2.5 px-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-medium text-base tracking-tight">{row.customer_name ?? "-"}</span>
+          {row.customer_mobile && (
+            <span className="font-mono text-sm text-muted-foreground">{row.customer_mobile}</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="py-2.5 px-3">
+        <div className="flex items-center gap-1">
+          {row.brands.map((b) => <BrandBadge key={b} brand={b} />)}
+        </div>
+      </TableCell>
+      <TableCell className="py-3 px-3 align-top">
+        <GarmentBreakdown row={row} />
+      </TableCell>
+      <TableCell className="py-3 px-3 align-middle text-center">
+        <DeliveryDisplay row={row} align="center" />
+      </TableCell>
+      <TableCell className="py-2.5 px-3">
+        <Link
+          to="/assigned/$orderId"
+          params={{ orderId: String(row.order_id) }}
+          className="inline-flex items-center gap-1 text-sm font-medium text-foreground hover:text-primary whitespace-nowrap"
+          onClick={(e) => e.stopPropagation()}
+        >
+          Details
+          <ArrowRight className="w-4 h-4" />
+        </Link>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function OrdersTable({ items, navigate }: { items: TrackerItem[]; navigate: (id: number) => void }) {
   return (
     <Table className="w-full">
       <TableHeader>
@@ -354,53 +466,22 @@ function OrdersTable({ orders, navigate }: { orders: AssignedOrderRow[]; navigat
         </TableRow>
       </TableHeader>
       <TableBody>
-        {orders.map((group) => (
-          <TableRow
-            key={group.order_id}
-            onClick={() => navigate(group.order_id)}
-            className="hover:bg-muted/30 border-b border-border/40 cursor-pointer transition-colors"
-          >
-            <TableCell className="py-2.5 px-3">
-              <div className="flex items-center">
-                <span className="font-mono font-medium text-base">#{group.order_id}</span>
-                <OrderIndicators group={group} />
-              </div>
-              {group.invoice_number && (
-                <span className="text-sm text-muted-foreground">INV-{group.invoice_number}</span>
-              )}
-            </TableCell>
-            <TableCell className="py-2.5 px-3">
-              <div className="flex flex-col gap-0.5">
-                <span className="font-medium text-base tracking-tight">{group.customer_name ?? "—"}</span>
-                {group.customer_mobile && (
-                  <span className="font-mono text-sm text-muted-foreground">{group.customer_mobile}</span>
-                )}
-              </div>
-            </TableCell>
-            <TableCell className="py-2.5 px-3">
-              <div className="flex items-center gap-1">
-                {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
-              </div>
-            </TableCell>
-            <TableCell className="py-3 px-3 align-top">
-              <GarmentBreakdown row={group} />
-            </TableCell>
-            <TableCell className="py-3 px-3 align-middle text-center">
-              <DeliveryDisplay row={group} align="center" />
-            </TableCell>
-            <TableCell className="py-2.5 px-3">
-              <Link
-                to="/assigned/$orderId"
-                params={{ orderId: String(group.order_id) }}
-                className="inline-flex items-center gap-1 text-sm font-medium text-foreground hover:text-primary whitespace-nowrap"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Details
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </TableCell>
-          </TableRow>
-        ))}
+        {items.map((item) =>
+          item.kind === "single" ? (
+            <OrderTableRow key={item.row.order_id} row={item.row} navigate={navigate} />
+          ) : (
+            <Fragment key={`g-${item.groupId}`}>
+              <TableRow className="bg-blue-500/[0.06] hover:bg-blue-500/[0.06] border-b border-blue-500/20">
+                <TableCell colSpan={6} className="py-1.5 px-3">
+                  <LinkedHeader rows={item.rows} />
+                </TableCell>
+              </TableRow>
+              {item.rows.map((r) => (
+                <OrderTableRow key={r.order_id} row={r} navigate={navigate} linked />
+              ))}
+            </Fragment>
+          ),
+        )}
       </TableBody>
     </Table>
   );
@@ -444,6 +525,8 @@ function AssignedPage() {
   });
 
   const rows = pageQuery.data?.rows ?? [];
+  // Fold linked orders (§2.13) into adjacent clusters; rows arrive group-adjacent.
+  const items = useMemo(() => buildTrackerItems(rows), [rows]);
   const totalCount = pageQuery.data?.totalCount ?? 0;
   const totalUnfiltered = pageQuery.data?.totalUnfiltered ?? 0;
   const chipCounts = pageQuery.data?.chipCounts;
@@ -595,18 +678,22 @@ function AssignedPage() {
         <>
           {totalCount > rows.length && (
             <p className="mb-3 text-sm text-muted-foreground">
-              Showing first {rows.length} of {totalCount} — refine filters to narrow.
+              Showing first {rows.length} of {totalCount}. Refine filters to narrow.
             </p>
           )}
           {isMobile ? (
             <div className="space-y-2">
-              {rows.map((group) => (
-                <AssignedOrderCard key={group.order_id} group={group} />
-              ))}
+              {items.map((item) =>
+                item.kind === "single" ? (
+                  <AssignedOrderCard key={item.row.order_id} group={item.row} />
+                ) : (
+                  <LinkedGroupCard key={`g-${item.groupId}`} rows={item.rows} />
+                ),
+              )}
             </div>
           ) : (
             <div className="rounded-md border border-border overflow-hidden bg-card py-0 gap-0">
-              <OrdersTable orders={rows} navigate={goToOrder} />
+              <OrdersTable items={items} navigate={goToOrder} />
             </div>
           )}
         </>

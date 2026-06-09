@@ -61,7 +61,7 @@ export function EodPaymentChart({ data }: EodPaymentChartProps) {
                                     <span className="tabular-nums text-xs text-muted-foreground w-12 text-right">{m.count}</span>
                                     <span className="tabular-nums font-medium w-24 text-right">{fmtK(m.total)}</span>
                                     <span className={`tabular-nums w-20 text-right text-xs ${refund > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                                        {refund > 0 ? `−${fmtK(refund)}` : "—"}
+                                        {refund > 0 ? `−${fmtK(refund)}` : "-"}
                                     </span>
                                     <span className="tabular-nums text-xs text-muted-foreground w-10 text-right">{pct}%</span>
                                 </div>

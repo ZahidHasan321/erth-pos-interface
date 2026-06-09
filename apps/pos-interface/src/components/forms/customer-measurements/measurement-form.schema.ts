@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MEASUREMENTS_SPEC, type MeasurementKey } from "@repo/database";
+import { MEASUREMENTS_SPEC, type MeasurementKey, SHOULDER_SLOPE_VALUES } from "@repo/database";
 
 // Required numeric field — operator must enter a value.
 const requiredDecimal = z.number({ message: "Required" });
@@ -27,6 +27,11 @@ export const customerMeasurementsSchema = z.object({
   type: z.enum(["Body", "Dishdasha"]),
   reference: z.string({ message: "Required" }),
   notes: z.string().optional().nullable(),
+
+  // Shoulder slope — categorical body measurement, required (no silent default).
+  // Defaults to undefined so the picker shows "not filled" and submit is blocked
+  // until the operator picks one of the four shapes.
+  shoulder_slope: z.enum(SHOULDER_SLOPE_VALUES, { error: "Pick a shoulder slope" }),
 
   ...measurementFields,
 });
@@ -60,5 +65,6 @@ export const customerMeasurementsDefaults: CustomerMeasurementsSchema = {
   measurer_id: undefined as never,
   measurement_date: new Date().toISOString(),
   notes: "",
+  shoulder_slope: undefined as never,
   ...measurementDefaults,
 } as unknown as CustomerMeasurementsSchema;

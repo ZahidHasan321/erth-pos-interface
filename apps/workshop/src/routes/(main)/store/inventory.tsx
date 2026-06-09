@@ -7,7 +7,6 @@ import { Button } from "@repo/ui/button";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { Skeleton } from "@repo/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui/tabs";
 import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shared/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 
@@ -15,24 +14,22 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { getPermission } from "@/lib/rbac";
 import { isLowStock, formatQty, getLowStockThreshold } from "@/lib/inventory";
-import { getFabrics } from "@/api/fabrics";
 import { getAccessories } from "@/api/accessories";
 import { UNIT_OF_MEASURE_LABELS } from "@/components/store/transfer-constants";
 import { RestockDialog } from "@/components/inventory/RestockDialog";
 import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
 import { StocktakeBanner } from "@/components/inventory/StocktakeBanner";
 import { PageHeader } from "@/components/shared/PageShell";
-import type { Fabric, Accessory, StockItemType } from "@repo/database";
+import type { Accessory, StockItemType } from "@repo/database";
 
 type StatusFilter = "all" | "low" | "out" | "ok";
-// Fabrics arrive from the shop via transfer (view-only here); accessories are the
-// workshop's own stock. Shelf items are shop-owned and not shown in the workshop.
-type ItemType = "fabric" | "accessory";
+// The workshop's only stock is accessories — fabric and shelf live solely on the
+// shop side (consumed there at order confirmation) and never appear here (§4).
+type ItemType = "accessory";
 
-// URL is the source of truth for the item-type tab + filters. Defaults
-// (accessory tab, all statuses, all categories, empty search) are omitted.
+// URL is the source of truth for the filters. Defaults (all statuses, all
+// categories, empty search) are omitted.
 type InventorySearch = {
-  type?: "fabric";
   q?: string;
   status?: "low" | "out" | "ok";
   category?: string;
@@ -42,7 +39,6 @@ export const Route = createFileRoute("/(main)/store/inventory")({
   component: InventoryPage,
   head: () => ({ meta: [{ title: "Inventory" }] }),
   validateSearch: (raw: Record<string, unknown>): InventorySearch => ({
-    type: raw.type === "fabric" ? "fabric" : undefined,
     q: typeof raw.q === "string" && raw.q ? raw.q : undefined,
     status:
       raw.status === "low" || raw.status === "out" || raw.status === "ok" ? raw.status : undefined,
@@ -51,35 +47,30 @@ export const Route = createFileRoute("/(main)/store/inventory")({
 });
 
 function InventoryPage() {
-  // URL is the source of truth for tab + filters; defaults applied on read.
+  // URL is the source of truth for filters; defaults applied on read.
   const sp = Route.useSearch();
-  const activeTab: ItemType = sp.type ?? "accessory";
   const search = sp.q ?? "";
   const status = sp.status ?? "all";
   const navigate = Route.useNavigate();
-  const setActiveTab = (v: ItemType) =>
-    navigate({ search: (prev) => ({ ...prev, type: v === "accessory" ? undefined : v }), replace: true });
   const setSearch = (v: string) =>
     navigate({ search: (prev) => ({ ...prev, q: v || undefined }), replace: true });
   const setStatus = (v: StatusFilter) =>
     navigate({ search: (prev) => ({ ...prev, status: v === "all" ? undefined : v }), replace: true });
 
-  // Shared cache with the tabs (same query keys) — drives the Need-to-Restock list.
-  const { data: fabrics = [] } = useQuery({ queryKey: ["fabrics"], queryFn: () => getFabrics(), staleTime: 60_000 });
+  // Shared cache with the table (same query key) — drives the Need-to-Restock list.
   const { data: accessories = [] } = useQuery({ queryKey: ["accessories"], queryFn: () => getAccessories(), staleTime: 60_000 });
 
-  // Items below their threshold against the WORKSHOP's own count (incl. out-of-stock).
+  // Accessories below their threshold against the WORKSHOP's own count (incl. out-of-stock).
   const needRestock = useMemo(() => {
     const out: RestockItem[] = [];
-    const push = (type: ItemType, id: number, name: string, stock: unknown, override: number | string | null) => {
-      const qty = Number(stock ?? 0);
-      const threshold = getLowStockThreshold(type, override);
-      if (qty < threshold) out.push({ type, id, name, qty, threshold });
-    };
-    for (const a of accessories) if (!a.is_archived) push("accessory", a.id, a.name, a.workshop_stock, a.low_stock_threshold);
-    for (const f of fabrics) if (!f.is_archived) push("fabric", f.id, f.name, f.workshop_stock, f.low_stock_threshold);
+    for (const a of accessories) {
+      if (a.is_archived) continue;
+      const qty = Number(a.workshop_stock ?? 0);
+      const threshold = getLowStockThreshold("accessory", a.low_stock_threshold);
+      if (qty < threshold) out.push({ type: "accessory", id: a.id, name: a.name, qty, threshold });
+    }
     return out.sort((x, y) => x.qty / x.threshold - y.qty / y.threshold);
-  }, [fabrics, accessories]);
+  }, [accessories]);
 
   return (
     <div className="px-4 sm:px-6 py-5 max-w-[1600px] mx-auto pb-10">
@@ -95,36 +86,27 @@ function InventoryPage() {
 
       <NeedToRestock items={needRestock} />
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ItemType)}>
-        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-          <TabsList className="h-auto gap-0.5 flex-nowrap overflow-x-auto overflow-y-hidden">
-            <TabsTrigger value="accessory">Accessories</TabsTrigger>
-            <TabsTrigger value="fabric">Fabrics</TabsTrigger>
-          </TabsList>
-          <div className="flex items-center gap-2 flex-wrap">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search…"
-              className="w-[220px]"
-            />
-            <SlidingPillSwitcher
-              value={status}
-              onChange={setStatus}
-              options={[
-                { value: "all", label: "All" },
-                { value: "ok", label: "In stock" },
-                { value: "low", label: "Low" },
-                { value: "out", label: "Out" },
-              ]}
-              size="sm"
-            />
-          </div>
-        </div>
+      <div className="flex items-center justify-end gap-2 mb-4 flex-wrap">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search…"
+          className="w-[220px]"
+        />
+        <SlidingPillSwitcher
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: "all", label: "All" },
+            { value: "ok", label: "In stock" },
+            { value: "low", label: "Low" },
+            { value: "out", label: "Out" },
+          ]}
+          size="sm"
+        />
+      </div>
 
-        <TabsContent value="fabric"><FabricsTab search={search} status={status} /></TabsContent>
-        <TabsContent value="accessory"><AccessoriesTab search={search} status={status} /></TabsContent>
-      </Tabs>
+      <AccessoriesTab search={search} status={status} />
     </div>
   );
 }
@@ -166,7 +148,6 @@ function NeedToRestock({ items }: { items: RestockItem[] }) {
             >
               <span className="flex items-center gap-2 min-w-0">
                 <span className="truncate text-sm">{r.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground capitalize">{r.type}</span>
               </span>
               <span className="shrink-0 text-xs tabular-nums">
                 <span className={cn("font-medium", r.qty <= 0 ? "text-[var(--status-bad)]" : "text-[var(--status-warn)]")}>
@@ -200,11 +181,6 @@ function LowStockBadge() {
 }
 function OutBadge() {
   return <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground">Out</span>;
-}
-// Season is shop-owned metadata, shown here read-only so workshop staff can eyeball
-// seasonal stock arriving via bulk transfer. Neutral chip — the low/out badge keeps the color.
-function SeasonChip({ season }: { season: "summer" | "winter" }) {
-  return <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground capitalize">{season}</span>;
 }
 
 function TableSkeleton({ cols }: { cols: number }) {
@@ -317,121 +293,6 @@ function RowQuickActions({
   );
 }
 
-// ─── Fabrics ───────────────────────────────────────────────────────────
-
-function FabricsTab({ search, status }: { search: string; status: StatusFilter }) {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  // Fabrics are shop-owned — the workshop holds transferred-in stock (view + restock/adjust
-  // its own count) but never creates a fabric, so no "Add fabric" here.
-  const canAdd = getPermission(user, "inventory:fabrics") === "full";
-  const canRestock = getPermission(user, "inventory:restock") === "full";
-  const canAdjust = getPermission(user, "inventory:adjust") === "full";
-
-  const { data: fabrics = [], isLoading, isError, refetch } = useQuery({ queryKey: ["fabrics"], queryFn: () => getFabrics(), staleTime: 60_000 });
-  const [restockTarget, setRestockTarget] = useState<Fabric | null>(null);
-  const [adjustTarget, setAdjustTarget] = useState<Fabric | null>(null);
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return fabrics
-      .filter((f) =>
-        (!q || f.name?.toLowerCase().includes(q) || f.color?.toLowerCase().includes(q))
-        && applyStatus(status, "fabric", Number(f.workshop_stock ?? 0), f.low_stock_threshold)
-      )
-      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-  }, [fabrics, search, status]);
-
-  const lowCount = useMemo(
-    () => fabrics.reduce((n, f) => n + (isLowStock("fabric", Number(f.workshop_stock ?? 0), f.low_stock_threshold) ? 1 : 0), 0),
-    [fabrics],
-  );
-
-  if (isLoading) return <TableSkeleton cols={5} />;
-  if (isError) return <QueryErrorState onRetry={refetch} />;
-
-  return (
-    <>
-      <TabToolbar
-        count={filtered.length}
-        total={fabrics.length}
-        lowCount={lowCount}
-        label="fabrics"
-        addLabel="Add fabric"
-        addTo="/store/inventory/fabric/new"
-        canAdd={canAdd}
-      />
-      <TableShell>
-        <TableHeader>
-          <TableRow className="bg-muted/30">
-            <TableHead>Name</TableHead>
-            <TableHead>Color code</TableHead>
-            <TableHead className="text-right">Price/m</TableHead>
-            <TableHead className="text-right">Stock</TableHead>
-            <TableHead className="w-[110px]" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.map((f) => {
-            const ws = Number(f.workshop_stock ?? 0);
-            const low = isLowStock("fabric", ws, f.low_stock_threshold);
-            const out = ws <= 0;
-            return (
-              <TableRow key={f.id} className="cursor-pointer" onClick={() => navigate({ to: "/store/inventory/$type/$id", params: { type: "fabric", id: String(f.id) } })}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    {f.color_hex && <span className="w-4 h-4 rounded-full border shrink-0" style={{ backgroundColor: f.color_hex }} aria-hidden="true" />}
-                    {f.name}
-                    {f.season && <SeasonChip season={f.season} />}
-                    {out ? <OutBadge /> : low && <LowStockBadge />}
-                  </div>
-                </TableCell>
-                <TableCell>{f.color ?? "—"}</TableCell>
-                <TableCell className="text-right tabular-nums">{f.price_per_meter ?? "—"}</TableCell>
-                <TableCell className={cn("text-right tabular-nums", low && "text-[var(--status-bad)] font-medium")}>{formatQty("fabric", ws)}</TableCell>
-                <TableCell>
-                  <RowQuickActions
-                    canRestock={canRestock}
-                    canAdjust={canAdjust}
-                    onRestock={() => setRestockTarget(f)}
-                    onAdjust={() => setAdjustTarget(f)}
-                  />
-                </TableCell>
-              </TableRow>
-            );
-          })}
-          {filtered.length === 0 && (
-            <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">No fabrics match the current filters</TableCell></TableRow>
-          )}
-        </TableBody>
-      </TableShell>
-
-      {restockTarget && (
-        <RestockDialog
-          open
-          onClose={() => setRestockTarget(null)}
-          itemType="fabric"
-          itemId={restockTarget.id}
-          itemName={restockTarget.name}
-          defaultLocation="workshop"
-          currentStock={Number(restockTarget.workshop_stock ?? 0)}
-        />
-      )}
-      {adjustTarget && (
-        <AdjustStockDialog
-          open
-          onClose={() => setAdjustTarget(null)}
-          itemType="fabric"
-          itemId={adjustTarget.id}
-          itemName={adjustTarget.name}
-          defaultLocation="workshop"
-          currentStock={Number(adjustTarget.workshop_stock ?? 0)}
-        />
-      )}
-    </>
-  );
-}
-
 // ─── Accessories ──────────────────────────────────────────────────────
 
 function AccessoriesTab({ search, status }: { search: string; status: StatusFilter }) {
@@ -516,7 +377,7 @@ function AccessoriesTab({ search, status }: { search: string; status: StatusFilt
                 </TableCell>
                 <TableCell className="capitalize text-muted-foreground">{a.category}</TableCell>
                 <TableCell className="text-muted-foreground">{UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure}</TableCell>
-                <TableCell className="text-right tabular-nums">{a.price ?? "—"}</TableCell>
+                <TableCell className="text-right tabular-nums">{a.price ?? "-"}</TableCell>
                 <TableCell className={cn("text-right tabular-nums", low && "text-[var(--status-bad)] font-medium")}>{formatQty("accessory", ws, a.unit_of_measure)}</TableCell>
                 <TableCell>
                   <RowQuickActions

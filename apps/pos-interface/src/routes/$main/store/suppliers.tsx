@@ -185,15 +185,15 @@ function SuppliersPage() {
                       <TableCell>
                         {s.phone ? (
                           <span className="inline-flex items-center gap-1.5 text-sm"><Phone className="h-3 w-3 text-muted-foreground" />{s.phone}</span>
-                        ) : <span className="text-muted-foreground">—</span>}
+                        ) : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell>
                         {s.email ? (
                           <span className="inline-flex items-center gap-1.5 text-sm"><Mail className="h-3 w-3 text-muted-foreground" />{s.email}</span>
-                        ) : <span className="text-muted-foreground">—</span>}
+                        ) : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[280px] truncate">
-                        {s.notes ?? "—"}
+                        {s.notes ?? "-"}
                       </TableCell>
                       <TableCell className="text-right">
                         {canManage && (
@@ -224,7 +224,7 @@ function SuppliersPage() {
                   {filtered.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                        {suppliers.length === 0 ? "No suppliers yet — add one to start tracking restocks." : "No suppliers match the search."}
+                        {suppliers.length === 0 ? "No suppliers yet. Add one to start tracking restocks." : "No suppliers match the search."}
                       </TableCell>
                     </TableRow>
                   )}

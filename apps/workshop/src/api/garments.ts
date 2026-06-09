@@ -1,7 +1,7 @@
 import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
 import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry } from '@repo/database';
-import type { PieceStage, RootCause, RedoPriority, Location } from '@repo/database';
+import type { PieceStage, Location } from '@repo/database';
 import {
   QC_OPTIONS,
   evaluateQc,
@@ -102,6 +102,7 @@ interface RawWorkOrder {
   delivery_date?: string | null;
   order_phase?: string | null;
   home_delivery?: boolean | null;
+  linked_order_id?: number | null;
 }
 interface RawAlterationOrder {
   invoice_number?: number | null;
@@ -140,7 +141,7 @@ const WORKSHOP_QUERY = `
     brand,
     checkout_status,
     order_date,
-    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery),
+    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery, linked_order_id),
     customer:customers!customer_id(name, phone, country_code)
   ),
   measurement:measurements!measurement_id(*),
@@ -158,7 +159,7 @@ const WORKSHOP_QUERY_LIGHT = `
     brand,
     checkout_status,
     order_date,
-    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery),
+    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery, linked_order_id),
     customer:customers!customer_id(name, phone, country_code)
   ),
   fabric_ref:fabrics!fabric_id(name, color)
@@ -179,6 +180,7 @@ function flattenGarment(raw: RawGarmentRow): WorkshopGarment {
     delivery_date_order: wo?.delivery_date ?? undefined,
     home_delivery_order: wo?.home_delivery ?? false,
     order_phase: wo?.order_phase ?? undefined,
+    linked_order_id: wo?.linked_order_id ?? null,
     customer_name: cust?.name ?? undefined,
     customer_mobile: [cust?.country_code, cust?.phone].filter(Boolean).join(' ') || undefined,
     measurement: (measurement ?? null) as WorkshopGarment['measurement'],
@@ -209,6 +211,7 @@ function flattenLightGarment(raw: RawGarmentRow): WorkshopGarment {
     delivery_date_order: wo?.delivery_date ?? undefined,
     home_delivery_order: wo?.home_delivery ?? false,
     order_phase: wo?.order_phase ?? undefined,
+    linked_order_id: wo?.linked_order_id ?? null,
     customer_name: cust?.name ?? undefined,
     customer_mobile: [cust?.country_code, cust?.phone].filter(Boolean).join(' ') || undefined,
     measurement: null,
@@ -530,29 +533,6 @@ export const getCompletedTodayGarments = async (): Promise<WorkshopGarment[]> =>
   return (data ?? []).filter((g: RawGarmentRow) => g.order !== null).map(flattenLightGarment);
 };
 
-/**
- * Reject-Redo replacements pending. §2.5: a Reject-Redo discards the original
- * garment and the workshop must manually create a replacement. Surfaces those
- * originals that haven't been replaced yet. Excludes refund-discarded rows —
- * those clear feedback_status (see triggers.sql refund path), so requiring
- * feedback_status='needs_redo' isolates the Reject-Redo path.
- */
-export interface RedoPendingRow {
-  id: string;
-  garment_id: string | null;
-  order_id: number;
-}
-export const getRedoReplacementsPending = async (): Promise<RedoPendingRow[]> => {
-  const { data, error } = await db
-    .from('garments')
-    .select('id, garment_id, order_id')
-    .eq('piece_stage', 'discarded')
-    .eq('feedback_status', 'needs_redo')
-    .is('replaced_by_garment_id', null);
-  if (error) throw new Error(`getRedoReplacementsPending: failed to fetch pending replacements: ${error.message}`);
-  return (data ?? []) as RedoPendingRow[];
-};
-
 // ── Assigned view RPCs ────────────────────────────────────────────────
 // See get_assigned_overview + get_assigned_orders_page in triggers.sql.
 // The old getAssignedViewGarments fetched every in_progress garment with
@@ -666,6 +646,10 @@ export interface AssignedOrderRow {
   order_id: number;
   /** 'WORK' or 'ALTERATION'. Production tracker now surfaces both. */
   order_type: string | null;
+  /** Order linking (§2.13): primary this order is linked under, null if primary/unlinked. */
+  linked_order_id: number | null;
+  /** Link-group key: COALESCE(linked_order_id, order_id) — the primary's id. Members of a group share it. */
+  link_group_id: number;
   invoice_number: number | null;
   customer_name: string | null;
   customer_mobile: string | null;
@@ -833,7 +817,7 @@ const GARMENT_DETAIL_QUERY = `
     order_type,
     checkout_status,
     order_date,
-    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery),
+    workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery, linked_order_id),
     alterationOrder:alteration_orders!order_id(invoice_number, received_date, order_phase),
     customer:customers!customer_id(name, phone, country_code)
   ),
@@ -1867,90 +1851,6 @@ export const createGarmentForOrder = async (
   }
 
   return inserted as { id: string; garment_id: string };
-};
-
-/**
- * Create a replacement garment by cloning the original server-side via RPC
- * (CLAUDE.md §2.5/§4). The RPC discards' fabric accounting lives here: it
- * auto-consumes the replacement's fresh fabric, records the scrapped original's
- * length as a net-zero material-waste annotation classified by `rootCause`, and
- * parks the replacement when shop fabric is short (`waiting_material`) or the
- * cloth is customer-brought OUT (`customer_decision`). The original row is
- * discarded with its `replaced_by_garment_id` FK pointing at the new row; the
- * new row starts fresh at trip 1 / waiting_cut.
- *
- * Idempotent on `idempotencyKey` — a lost-response replay creates exactly one
- * replacement, one consume, one annotation.
- */
-export interface CreateReplacementResult {
-  id: string;
-  garment_id: string;
-  parked: boolean;
-  parked_reason: 'waiting_material' | 'customer_decision' | null;
-}
-export const createReplacementGarment = async (
-  replacesGarmentId: string,
-  args: { rootCause: RootCause; redoPriority: RedoPriority; userId: string | null; idempotencyKey: string },
-): Promise<CreateReplacementResult> => {
-  const { data, error } = await withWriteRetry(
-    () => db.rpc('create_replacement_garment', {
-      p_replaces_garment_id: replacesGarmentId,
-      p_root_cause: args.rootCause,
-      p_redo_priority: args.redoPriority,
-      p_user_id: args.userId,
-      p_idempotency_key: args.idempotencyKey,
-    }),
-    (r) => isTransientNetworkError(r.error),
-  );
-  if (error) throw new Error(`createReplacementGarment: failed to create replacement for original ${replacesGarmentId}: ${error.message}`);
-  return data as CreateReplacementResult;
-};
-
-/**
- * Resume a parked redo replacement (CLAUDE.md §6). Un-parks the row once the
- * material shortage or customer-fabric decision clears: re-runs the fabric
- * consume (company fabric) or just clears the park (OUT cloth), sets the new
- * priority, and flips in_production so it becomes schedulable. Idempotent.
- * Still-short fabric → the RPC raises and the row stays parked.
- */
-export interface ResumeParkedRedoResult {
-  resumed: boolean;
-  consumed: number;
-  already_active?: boolean;
-}
-export const resumeParkedRedo = async (
-  garmentId: string,
-  args: { priority: RedoPriority; userId: string | null; idempotencyKey: string },
-): Promise<ResumeParkedRedoResult> => {
-  const { data, error } = await withWriteRetry(
-    () => db.rpc('resume_parked_redo', {
-      p_garment_id: garmentId,
-      p_priority: args.priority,
-      p_user_id: args.userId,
-      p_idempotency_key: args.idempotencyKey,
-    }),
-    (r) => isTransientNetworkError(r.error),
-  );
-  if (error) throw new Error(`resumeParkedRedo: failed to resume parked redo ${garmentId}: ${error.message}`);
-  return data as ResumeParkedRedoResult;
-};
-
-/**
- * Parked redo replacements (CLAUDE.md §6). The RPC leaves parked rows at
- * in_production=false, so they fall outside getSchedulerGarments' filter —
- * fetched separately here for the scheduler's "Parked redos" section. Light
- * query (no measurements); the section renders fabric / customer / order +
- * the redo_parked_reason.
- */
-export const getParkedRedos = async (): Promise<WorkshopGarment[]> => {
-  const { data, error } = await db
-    .from('garments')
-    .select(WORKSHOP_QUERY_LIGHT)
-    .eq('location', 'workshop')
-    .eq('redo_priority', 'parked')
-    .eq('order.checkout_status', 'confirmed');
-  if (error) throw new Error(`getParkedRedos: failed to fetch parked redos: ${error.message}`);
-  return (data ?? []).filter((g: { order: unknown }) => g.order !== null).map(flattenLightGarment);
 };
 
 /**

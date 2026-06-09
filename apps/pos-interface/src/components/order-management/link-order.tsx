@@ -323,7 +323,7 @@ export default function LinkOrder() {
                     />
                   ) : (
                     <div className="px-4 py-3 text-sm text-muted-foreground bg-muted/10">
-                      Promote one of the orders below — children inherit its identity.
+                      Promote one of the orders below. Children inherit its identity.
                     </div>
                   )}
 
@@ -457,7 +457,7 @@ export default function LinkOrder() {
                             )}
                           </td>
                           <td className="p-3 whitespace-nowrap text-sm text-muted-foreground">
-                            {phase ? ORDER_PHASE_LABELS[phase] : "—"}
+                            {phase ? ORDER_PHASE_LABELS[phase] : "-"}
                           </td>
                         </tr>
                       );
@@ -639,10 +639,10 @@ function MergePreviewBanner({
           Linking <span className="font-medium text-foreground">{childCount + 1}</span>{" "}
           orders into{" "}
           <span className="font-medium text-foreground">#{primaryId}</span>
-          {" "}— set a revised delivery date to continue.
+          {". "}Set a revised delivery date to continue.
         </span>
       ) : needsPrimary ? (
-        <span>Promote one order to primary — children will inherit its identity.</span>
+        <span>Promote one order to primary. Children will inherit its identity.</span>
       ) : needsMore ? (
         <span>Add at least one more order to link.</span>
       ) : null}

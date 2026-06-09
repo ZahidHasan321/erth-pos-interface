@@ -25,6 +25,7 @@ import { buildPrefillValues } from "@/components/forms/add-garment/prefill";
 import { CustomerFeedbackPanel } from "@/components/shared/GarmentDetailSections";
 import { SectionCard, StatusBanner } from "@/components/shared/PageShell";
 import { canEdit } from "@/lib/rbac";
+import { serializeCollarPosition } from "@/lib/qc-spec";
 import { cn } from "@/lib/utils";
 import type { WorkshopGarment } from "@repo/database";
 
@@ -136,7 +137,12 @@ function AddGarmentPage() {
       if (!customerId) throw new Error("Could not determine customer for this order");
       const { id: measurementId } = await createMeasurement(
         customerId,
-        values.measurements as Record<string, unknown>,
+        {
+          ...(values.measurements as Record<string, unknown>),
+          // Categorical body measurement — lives on the measurement row alongside
+          // the numeric dimensions (see schema shoulderSlopeEnum).
+          shoulder_slope: values.shoulder_slope ?? null,
+        },
       );
 
       const input: CreateGarmentInput = {
@@ -151,7 +157,7 @@ function AddGarmentPage() {
         style: values.style,
         collar_type: values.collar_type,
         collar_button: values.collar_button,
-        collar_position: values.collar_position,
+        collar_position: serializeCollarPosition(values.collar_position) ?? null,
         collar_thickness: values.collar_thickness,
         cuffs_type: values.cuffs_type,
         cuffs_thickness: values.cuffs_thickness,
@@ -260,7 +266,7 @@ function AddGarmentPage() {
           <StatusBanner tone="bad">Original garment not found.</StatusBanner>
         ) : replacesId && alreadyReplaced ? (
           <StatusBanner tone="warn">
-            This garment already has a replacement — cannot create another.
+            This garment already has a replacement. Cannot create another.
           </StatusBanner>
         ) : (
           <FormProvider {...form}>
@@ -375,8 +381,8 @@ function AddGarmentPage() {
 
 function ReplacesSummary({ original }: { original: WorkshopGarment }) {
   const fabric = original.fabric_source === "OUT"
-    ? `OUT · ${original.shop_name || "—"}`
-    : `IN · #${original.fabric_id ?? "—"}`;
+    ? `OUT · ${original.shop_name || "-"}`
+    : `IN · #${original.fabric_id ?? "-"}`;
   const color = original.color || null;
   const length = original.fabric_length != null ? `${original.fabric_length} m` : null;
 
@@ -414,7 +420,7 @@ function ReplacesSummary({ original }: { original: WorkshopGarment }) {
         )}
       </dl>
       <p className="text-sm text-muted-foreground border-t border-border pt-2.5">
-        Original kept for history. No extra pricing — this replaces the old garment.
+        Original kept for history. No extra pricing. This replaces the old garment.
       </p>
     </SectionCard>
   );

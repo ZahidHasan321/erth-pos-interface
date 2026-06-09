@@ -21,6 +21,16 @@ export function useStepNavigation({
   const sectionRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const isManualScrolling = React.useRef(false);
 
+  // Stable ref-callback factory. Keeps the sectionRefs mutation inside this hook
+  // so consumers don't write to a hook-returned ref directly (which the React
+  // compiler's immutability rule flags). Callers can still read sectionRefs.
+  const setSectionRef = React.useCallback(
+    (index: number) => (el: HTMLDivElement | null) => {
+      sectionRefs.current[index] = el;
+    },
+    [],
+  );
+
   // Helper to find the scrollable parent
   const getScrollParent = (node: HTMLElement | null): HTMLElement | Window => {
     if (!node) return window;
@@ -171,6 +181,7 @@ export function useStepNavigation({
 
   return {
     sectionRefs,
+    setSectionRef,
     handleStepChange,
     handleProceed,
     visibleSteps,

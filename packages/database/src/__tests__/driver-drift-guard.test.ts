@@ -377,9 +377,9 @@ const CITATIONS: Citation[] = [
   // ── sendBackToWorkshop ─────────────────────────────────────────────────────
   {
     driverFn: "sendBackToWorkshop",
-    rawCitation: "apps/pos-interface/src/api/garments.ts:120",
+    rawCitation: "apps/pos-interface/src/api/garments.ts:69",
     citedPath: "apps/pos-interface/src/api/garments.ts",
-    citedLine: 120,
+    citedLine: 69,
     anchorTokens: [
       "dispatchGarmentToWorkshop",
       "transit_to_workshop",

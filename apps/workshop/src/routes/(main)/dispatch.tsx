@@ -143,6 +143,9 @@ function ReadyOrderCard({
   const finalCount = group.garments.filter((g) => g.garment_type === "final").length;
   const alterationCount = group.garments.filter((g) => g.garment_type === "alteration").length;
   const isPending = groupIds.some((id) => dispatchPendingIds.has(id));
+  // Groups are sorted by delivery date; surface it so the order is legible and
+  // staff can prioritise what to send. Mirrors the In-Transit card.
+  const urgency = deliveryUrgency(group.deliveryDate);
 
   return (
     <div className="rounded-md border border-border bg-card overflow-hidden">
@@ -166,6 +169,12 @@ function ReadyOrderCard({
                   <span className="text-xs text-muted-foreground">· Inv {group.invoiceNumber}</span>
                 )}
                 {hasExpress && <ExpressBadge />}
+                {group.deliveryDate && (
+                  <span className={cn("text-xs font-medium tabular-nums", urgency.className)}>
+                    {formatDate(group.deliveryDate)}
+                    {urgency.label && <span className="ml-1">{urgency.label}</span>}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
                 <span className="text-foreground">{group.customerName ?? "Unknown"}</span>
@@ -469,7 +478,7 @@ function DispatchHistoryTab() {
 
       {/* Print header */}
       <div className="hidden print:block mb-4">
-        <h1 className="text-xl font-semibold">Dispatch History — {period === 'today' ? 'Today' : period === 'week' ? 'This Week' : 'This Month'}</h1>
+        <h1 className="text-xl font-semibold">Dispatch History: {period === 'today' ? 'Today' : period === 'week' ? 'This Week' : 'This Month'}</h1>
         <p className="text-sm text-muted-foreground">
           Workshop → Shop · {periodLabel} · {rows.length} record{rows.length === 1 ? '' : 's'}
         </p>
@@ -512,7 +521,7 @@ function DispatchHistoryTab() {
                     </TableCell>
                     <TableCell className="text-base tabular-nums">#{r.order_id}</TableCell>
                     <TableCell className="text-xs text-muted-foreground tabular-nums">
-                      {r.invoice_number ?? '—'}
+                      {r.invoice_number ?? '-'}
                     </TableCell>
                     <TableCell>
                       <div className="text-sm truncate max-w-[180px]" title={r.customer_name ?? undefined}>{r.customer_name ?? 'Unknown'}</div>
@@ -528,9 +537,9 @@ function DispatchHistoryTab() {
                         <GarmentTypeBadge type={r.garment_type as 'brova' | 'final'} />
                       )}
                     </TableCell>
-                    <TableCell className="text-sm tabular-nums">{r.trip_number ?? '—'}</TableCell>
+                    <TableCell className="text-sm tabular-nums">{r.trip_number ?? '-'}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {r.brand ?? '—'}
+                      {r.brand ?? '-'}
                     </TableCell>
                   </TableRow>
                 );
@@ -592,13 +601,13 @@ function DispatchPage() {
   );
   const inTransitGroups = useMemo(() => groupInTransitByOrder(searchedInTransit), [searchedInTransit]);
 
-  // Accept-with-Fix brova must travel back with its order's finals (CLAUDE.md §2.4·6).
-  // If a dispatch batch carries an Accept-with-Fix brova (a brova back at the
-  // workshop, ready_for_dispatch, acceptance_status === true — plain-Accept brovas
-  // never return here and Reject-Repair brovas have acceptance_status === false)
-  // while the same order still has a final in production not in this batch,
-  // confirm before stranding the finals. No other case prompts.
-  const [pendingDispatch, setPendingDispatch] = useState<{ ids: string[]; finalCount: number } | null>(null);
+  // Two UI-only dispatch confirmations (no lifecycle/RPC effect) gate a batch
+  // that would leave related garments behind. Both may apply at once; the dialog
+  // shows whichever reasons fired. Description carries the specifics.
+  //   (a) Accept-with-Fix brova vs. its OWN order's finals (CLAUDE.md §2.4·6).
+  //   (b) Linked-order stranding (§2.13): a linked SIBLING order still has
+  //       garments on the workshop side not in this batch.
+  const [pendingDispatch, setPendingDispatch] = useState<{ ids: string[]; description: string } | null>(null);
 
   const runDispatch = async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -609,6 +618,12 @@ function DispatchPage() {
     if (ids.length === 0) return;
     const idSet = new Set(ids);
     const batch = allGarments.filter((g) => idSet.has(g.id));
+    const batchOrderIds = new Set(batch.map((g) => g.order_id));
+    const reasons: string[] = [];
+
+    // (a) Accept-with-Fix brova (back at workshop, ready_for_dispatch,
+    // acceptance_status === true — plain-Accept never returns, Reject-Repair is
+    // acceptance_status === false) must travel back with its order's finals.
     const hasAcceptWithFixBrova = batch.some(
       (g) =>
         g.garment_type === "brova" &&
@@ -616,10 +631,9 @@ function DispatchPage() {
         g.piece_stage === "ready_for_dispatch",
     );
     if (hasAcceptWithFixBrova) {
-      const orderIds = new Set(batch.map((g) => g.order_id));
       const strandedFinals = allGarments.filter(
         (g) =>
-          orderIds.has(g.order_id) &&
+          batchOrderIds.has(g.order_id) &&
           !idSet.has(g.id) &&
           g.garment_type === "final" &&
           (g.location === "workshop" || g.location === "transit_to_workshop") &&
@@ -628,9 +642,40 @@ function DispatchPage() {
           g.piece_stage !== "discarded",
       );
       if (strandedFinals.length > 0) {
-        setPendingDispatch({ ids, finalCount: strandedFinals.length });
-        return;
+        reasons.push(
+          `This order still has ${strandedFinals.length} final${strandedFinals.length === 1 ? "" : "s"} in production at the workshop. An Accept-with-Fix brova should travel back with its finals.`,
+        );
       }
+    }
+
+    // (b) Linked-order stranding (§2.13). Group key = linked_order_id ?? order_id
+    // (the primary's id). A garment counts as stranded when it belongs to a
+    // DIFFERENT order in the same link group and is still on the workshop side
+    // (a ready-but-unselected sibling counts; one already transit_to_shop does not).
+    const groupKeys = new Set(batch.map((g) => g.linked_order_id ?? g.order_id));
+    const strandedSiblings = allGarments.filter(
+      (g) =>
+        !idSet.has(g.id) &&
+        !batchOrderIds.has(g.order_id) &&
+        groupKeys.has(g.linked_order_id ?? g.order_id) &&
+        (g.location === "workshop" || g.location === "transit_to_workshop") &&
+        g.piece_stage !== "completed" &&
+        g.piece_stage !== "discarded",
+    );
+    if (strandedSiblings.length > 0) {
+      const siblingOrders = [...new Set(strandedSiblings.map((g) => g.order_id))].sort((a, b) => a - b);
+      const orderList = siblingOrders.map((id) => `#${id}`).join(", ");
+      reasons.push(
+        `Linked order ${orderList} still ${siblingOrders.length === 1 ? "has" : "have"} ${strandedSiblings.length} garment${strandedSiblings.length === 1 ? "" : "s"} at the workshop. Linked orders should be delivered together.`,
+      );
+    }
+
+    if (reasons.length > 0) {
+      setPendingDispatch({
+        ids,
+        description: `${reasons.join(" ")} Send the selected garment${ids.length === 1 ? "" : "s"} anyway?`,
+      });
+      return;
     }
     await runDispatch(ids);
   };
@@ -726,13 +771,9 @@ function DispatchPage() {
           setPendingDispatch(null);
           void runDispatch(ids);
         }}
-        title="Finals not ready yet"
-        description={
-          pendingDispatch
-            ? `This order still has ${pendingDispatch.finalCount} final${pendingDispatch.finalCount === 1 ? "" : "s"} in production at the workshop. An Accept-with-Fix brova should travel back with its finals. Send the brova without the finals?`
-            : ""
-        }
-        confirmText="Send without finals"
+        title="Not everything is going together"
+        description={pendingDispatch?.description ?? ""}
+        confirmText="Send anyway"
         cancelText="Cancel"
       />
     </div>

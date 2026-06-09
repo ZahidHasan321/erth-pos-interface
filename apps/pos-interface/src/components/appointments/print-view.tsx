@@ -64,7 +64,7 @@ export function PrintView(props: PrintViewProps) {
     );
     return (
       <div>
-        <h1>Appointments — {format(currentDate, "EEEE, d MMMM yyyy")}</h1>
+        <h1>Appointments: {format(currentDate, "EEEE, d MMMM yyyy")}</h1>
         <div className="subtitle">{dayAppts.length} appointment{dayAppts.length !== 1 ? "s" : ""}</div>
         <AppointmentTable appointments={dayAppts} showDate={false} />
       </div>
@@ -77,7 +77,7 @@ export function PrintView(props: PrintViewProps) {
 
   return (
     <div>
-      <h1>Appointments — {monthLabel}</h1>
+      <h1>Appointments: {monthLabel}</h1>
       <div className="subtitle">{sorted.length} appointment{sorted.length !== 1 ? "s" : ""}</div>
       <AppointmentTable appointments={sorted} showDate />
     </div>
@@ -119,11 +119,11 @@ function AppointmentTable({
             </td>
             <td style={{ fontWeight: 500 }}>{apt.customer_name}</td>
             <td>{apt.customer_phone}</td>
-            <td>{apt.area || "—"}</td>
-            <td>{apt.people_count ?? "—"}</td>
-            <td>{apt.estimated_pieces ?? "—"}</td>
-            <td className="capitalize">{apt.fabric_type ?? "—"}</td>
-            <td>{apt.assignee?.name ?? "—"}</td>
+            <td>{apt.area || "-"}</td>
+            <td>{apt.people_count ?? "-"}</td>
+            <td>{apt.estimated_pieces ?? "-"}</td>
+            <td className="capitalize">{apt.fabric_type ?? "-"}</td>
+            <td>{apt.assignee?.name ?? "-"}</td>
             <td>{APPOINTMENT_STATUS_LABELS[apt.status]}</td>
             <td>{apt.notes || ""}</td>
           </tr>

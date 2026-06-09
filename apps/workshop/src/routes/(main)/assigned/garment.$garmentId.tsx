@@ -5,7 +5,6 @@ import { useGarment } from "@/hooks/useWorkshopGarments";
 import { useUpdateGarmentDetails } from "@/hooks/useGarmentMutations";
 import { getAllFeedbackForGarment } from "@/api/feedback";
 import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
-import { RedoDialog } from "@/components/shared/RedoDialog";
 import {
   GarmentHeader,
   NotesSection,
@@ -172,7 +171,7 @@ function AssignedGarmentDetailPage() {
           feedbackNotes={garment.notes}
           garmentId={garment.id}
           tripHistory={garment.trip_history as TripHistoryEntry[] | string | null | undefined}
-          title={`Edit Plan — ${garment.garment_id}`}
+          title={`Edit Plan: ${garment.garment_id}`}
           lockedSteps={editability.lockedPlanSteps}
         />
       )}
@@ -185,7 +184,7 @@ function AssignedGarmentDetailPage() {
           garmentCount={1}
           defaultDate={garment.assigned_date ?? undefined}
           defaultPlan={garment.production_plan as Record<string, string> | null}
-          title={`Edit Plan — ${garment.garment_id}`}
+          title={`Edit Plan: ${garment.garment_id}`}
           confirmLabel="Save Changes"
           lockedSteps={editability.lockedPlanSteps}
         />
@@ -246,10 +245,9 @@ function SidebarTab({
   );
 }
 
-// Surfaces only for discarded garments. Disabled if already replaced.
+// Surfaces only for discarded garments that already have a replacement.
 function DiscardedReplacementCta({ garment }: { garment: WorkshopGarment }) {
   const { user } = useAuth();
-  const [redoOpen, setRedoOpen] = useState(false);
   if (garment.piece_stage !== "discarded") return null;
   if (!canEdit(user, "/assigned")) return null;
   const replacedById = (garment as WorkshopGarment & { replaced_by_garment_id: string | null }).replaced_by_garment_id;
@@ -260,15 +258,7 @@ function DiscardedReplacementCta({ garment }: { garment: WorkshopGarment }) {
       </span>
     );
   }
-  return (
-    <>
-      <Button variant="destructive" size="sm" onClick={() => setRedoOpen(true)}>
-        <Replace className="w-4 h-4 mr-1" />
-        Create replacement
-      </Button>
-      <RedoDialog open={redoOpen} onClose={() => setRedoOpen(false)} garmentId={garment.id} />
-    </>
-  );
+  return null;
 }
 
 function EditableDates({
@@ -310,7 +300,7 @@ function EditableDates({
           />
         ) : (
           <span className="text-base tabular-nums">
-            {deliveryValue ? formatDate(toLocalDateStr(deliveryValue)) : "—"}
+            {deliveryValue ? formatDate(toLocalDateStr(deliveryValue)) : "-"}
           </span>
         )}
       </div>
@@ -324,7 +314,7 @@ function EditableDates({
           />
         ) : (
           <span className="text-base tabular-nums">
-            {garment.assigned_date ? formatDate(garment.assigned_date) : "—"}
+            {garment.assigned_date ? formatDate(garment.assigned_date) : "-"}
           </span>
         )}
       </div>

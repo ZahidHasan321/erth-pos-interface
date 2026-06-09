@@ -24,7 +24,6 @@ type TransfersSearch = {
   tab?: TabKey;
   q?: string;
   direction?: "shop_to_workshop" | "workshop_to_shop";
-  itemType?: "fabric" | "shelf" | "accessory";
 };
 
 const isTab = (v: unknown): v is TabKey => v === "inbox" || v === "open" || v === "done";
@@ -38,10 +37,6 @@ export const Route = createFileRoute("/(main)/store/transfers")({
     direction:
       raw.direction === "shop_to_workshop" || raw.direction === "workshop_to_shop"
         ? raw.direction
-        : undefined,
-    itemType:
-      raw.itemType === "fabric" || raw.itemType === "shelf" || raw.itemType === "accessory"
-        ? raw.itemType
         : undefined,
   }),
 });
@@ -58,7 +53,6 @@ function TransfersPage() {
   const tab = sp.tab ?? "inbox";
   const search = sp.q ?? "";
   const direction = sp.direction ?? "all";
-  const itemType = sp.itemType ?? "all";
   const navigate = Route.useNavigate();
   const setTab = (v: TabKey) =>
     navigate({ search: (prev) => ({ ...prev, tab: v === "inbox" ? undefined : v }), replace: true });
@@ -66,8 +60,6 @@ function TransfersPage() {
     navigate({ search: (prev) => ({ ...prev, q: v || undefined }), replace: true });
   const setDirection = (v: string) =>
     navigate({ search: (prev) => ({ ...prev, direction: v === "all" ? undefined : (v as TransfersSearch["direction"]) }), replace: true });
-  const setItemType = (v: string) =>
-    navigate({ search: (prev) => ({ ...prev, itemType: v === "all" ? undefined : (v as TransfersSearch["itemType"]) }), replace: true });
   const [drawer, setDrawer] = useState<TransferRequestWithItems | null>(null);
 
   const { data: transfers = [], isLoading } = useTransferRequests();
@@ -80,7 +72,6 @@ function TransfersPage() {
       if (tab === "done" && isOpen(t)) return false;
 
       if (direction !== "all" && t.direction !== direction) return false;
-      if (itemType !== "all" && t.item_type !== itemType) return false;
 
       if (q) {
         const hay = [
@@ -93,7 +84,7 @@ function TransfersPage() {
       }
       return true;
     });
-  }, [transfers, tab, direction, itemType, search, user]);
+  }, [transfers, tab, direction, search, user]);
 
   const counts = useMemo(() => ({
     inbox: transfers.filter((t) => primaryActionFor(user, t)).length,
@@ -115,7 +106,7 @@ function TransfersPage() {
       {counts.stale > 0 && tab !== "done" && (
         <div className="mb-3">
           <StatusBanner tone="warn" icon={AlertCircle}>
-            {counts.stale} transfer{counts.stale !== 1 ? "s" : ""} stuck for over 3 days — see the In flight tab.
+            {counts.stale} transfer{counts.stale !== 1 ? "s" : ""} stuck for over 3 days. See the In flight tab.
           </StatusBanner>
         </div>
       )}
@@ -150,17 +141,6 @@ function TransfersPage() {
               { value: "all", label: "All directions" },
               { value: "shop_to_workshop", label: "Shop → Workshop" },
               { value: "workshop_to_shop", label: "Workshop → Shop" },
-            ]}
-          />
-          <SlidingPillSwitcher
-            value={itemType}
-            onChange={setItemType}
-            size="sm"
-            options={[
-              { value: "all", label: "All types" },
-              { value: "fabric", label: "Fabric" },
-              { value: "shelf", label: "Shelf" },
-              { value: "accessory", label: "Accessory" },
             ]}
           />
         </div>
@@ -352,13 +332,13 @@ function TransferCardMobile({
 function EmptyTransferState({ kind }: { kind: "inbox" | "open" | "done" }) {
   const messages = {
     inbox: { title: "You're all caught up", body: "Anything that needs you to send or receive will land here." },
-    open: { title: "Nothing in motion", body: "Active transfers — waiting on someone — will show up here." },
+    open: { title: "Nothing in motion", body: "Active transfers, waiting on someone, will show up here." },
     done: { title: "No history yet", body: "Completed transfers will be archived here." },
   };
   const m = messages[kind];
   return (
     <div className="space-y-3">
-      <SharedEmptyState icon={ArrowRightLeft} message={`${m.title} — ${m.body}`} />
+      <SharedEmptyState icon={ArrowRightLeft} message={`${m.title}. ${m.body}`} />
       {kind !== "done" && (
         <div className="flex justify-center">
           <Button size="sm" asChild>

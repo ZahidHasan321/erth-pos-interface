@@ -252,6 +252,58 @@ export async function createWorkOrder(
 }
 
 /**
+ * reprice_order_styles RPC (SPEC §2.5) — persist a brova-trial style reprice:
+ * absolute per-garment style snapshots + new aggregate style_charge + new
+ * order_total. Audit-only; never touches orders.paid. `idempotencyKey` defaults
+ * to a fresh UUID (one-shot); pass a FIXED key + call twice to exercise replay.
+ */
+export async function repriceOrderStyles(
+  tx: Tx,
+  orderId: number,
+  params: {
+    garments: { garment_id: string; style_price_snapshot: number }[];
+    newStyleCharge: number;
+    newOrderTotal: number;
+    actor?: string | null;
+    reason?: string | null;
+    idempotencyKey?: string;
+  },
+) {
+  const res = only(
+    await tx`
+      SELECT reprice_order_styles(
+        ${orderId},
+        ${tx.json(params.garments)}::jsonb,
+        ${params.newStyleCharge},
+        ${params.newOrderTotal},
+        ${params.actor ?? null}::uuid,
+        ${params.reason ?? null},
+        ${params.idempotencyKey ?? randomUUID()}::uuid
+      ) AS r
+    `,
+    "reprice_order_styles",
+  );
+  return res.r;
+}
+
+/** Style-price snapshots for an order's garments, keyed by garment_id. */
+export async function getStyleSnapshots(
+  tx: Tx,
+  orderId: number,
+): Promise<Record<string, number>> {
+  const rows = (await tx`
+    SELECT garment_id, style_price_snapshot FROM garments WHERE order_id = ${orderId}
+  `) as unknown as { garment_id: string; style_price_snapshot: string | null }[];
+  return Object.fromEntries(rows.map((r) => [r.garment_id, Number(r.style_price_snapshot) || 0]));
+}
+
+/** work_orders.style_charge for an order. */
+export async function getStyleCharge(tx: Tx, orderId: number): Promise<number> {
+  const [w] = await tx`SELECT style_charge FROM work_orders WHERE order_id = ${orderId}`;
+  return Number((w as { style_charge: string | null } | undefined)?.style_charge) || 0;
+}
+
+/**
  * createAlterationOrder (apps/pos-interface/src/api/alteration-orders.ts:85-218).
  * Mirrors the three inserts the real app issues in sequence:
  *   1. orders (order_type='ALTERATION', checkout_status='confirmed')
@@ -731,7 +783,7 @@ export async function finalReject(
 }
 
 /**
- * dispatchGarmentToWorkshop (apps/pos-interface/src/api/garments.ts:120) —
+ * dispatchGarmentToWorkshop (apps/pos-interface/src/api/garments.ts:69) —
  * send a garment back: trip+1, reset to waiting_cut / transit_to_workshop.
  */
 export async function sendBackToWorkshop(tx: Tx, garmentId: string) {
@@ -745,13 +797,16 @@ export async function sendBackToWorkshop(tx: Tx, garmentId: string) {
 }
 
 /**
- * create_replacement_garment RPC (triggers.sql:1527) — REAL deployed code.
- * apps/workshop createReplacementGarment calls the same function: clones the
- * original's specs server-side, starts fresh at trip 1 / waiting_cut / workshop,
- * links replaced_by_garment_id (double-replacement guard), and (Group A)
- * attributes the scrap via root_cause, auto-consumes fresh fabric for the
- * replacement cut, and records the scrapped fabric as a net-zero material-waste
- * annotation (parking the replacement if material is short / customer-brought).
+ * create_replacement_garment RPC — REAL deployed code (SPEC.md §2.5). The SHOP
+ * creates the redo replacement at the brova trial: clones the original's specs
+ * server-side, starts fresh at trip 0 / waiting_cut / SHOP (so it lands in the
+ * shop dispatch queue), links replaced_by_garment_id (double-replacement guard),
+ * auto-consumes fresh fabric for the replacement cut, and records the scrapped
+ * ORIGINAL fabric as a net-zero material-waste annotation. The replacement WAITS
+ * IN DISPATCH (redo_parked_reason) when its IN material is short (waiting_material)
+ * or it's customer-brought OUT cloth (customer_decision). The replacement's fabric
+ * source defaults to the original's, overridable via fabricSource/fabricId. The
+ * shop redo no longer captures root_cause (left null unless explicitly passed).
  *
  * Returns the full RPC result jsonb so callers can read parked/parked_reason.
  */
@@ -759,25 +814,27 @@ export async function createReplacementResult(
   tx: Tx,
   originalGarmentId: string,
   opts: {
-    rootCause?: string;
-    priority?: string;
+    rootCause?: string | null;
     userId?: string;
     idempotencyKey?: string;
+    fabricSource?: "IN" | "OUT" | null;
+    fabricId?: number | null;
   } = {},
-): Promise<{ id: string; garment_id: string; parked: boolean; parked_reason: string | null }> {
+): Promise<{ id: string; garment_id: string; parked: boolean; parked_reason: string | null; fabric_source: string }> {
   const res = only(
     await tx`
       SELECT create_replacement_garment(
         ${originalGarmentId}::uuid,
-        ${opts.rootCause ?? "production_error"}::root_cause,
-        ${opts.priority ?? "next_slot"}::redo_priority,
+        ${opts.rootCause ?? null}::root_cause,
         ${opts.userId ?? null}::uuid,
-        ${opts.idempotencyKey ?? randomUUID()}::uuid
+        ${opts.idempotencyKey ?? randomUUID()}::uuid,
+        ${opts.fabricSource ?? null}::text,
+        ${opts.fabricId ?? null}::int
       ) AS r
     `,
     "create_replacement_garment",
   );
-  return res.r as { id: string; garment_id: string; parked: boolean; parked_reason: string | null };
+  return res.r as { id: string; garment_id: string; parked: boolean; parked_reason: string | null; fabric_source: string };
 }
 
 /** Convenience wrapper returning just the new replacement id (back-compat). */
@@ -785,31 +842,33 @@ export async function createReplacement(
   tx: Tx,
   originalGarmentId: string,
   opts: {
-    rootCause?: string;
-    priority?: string;
+    rootCause?: string | null;
     userId?: string;
     idempotencyKey?: string;
+    fabricSource?: "IN" | "OUT" | null;
+    fabricId?: number | null;
   } = {},
 ): Promise<string> {
   return (await createReplacementResult(tx, originalGarmentId, opts)).id;
 }
 
 /**
- * resume_parked_redo RPC (Group A) — a manager un-parks a redo replacement once
- * material is available (or the OUT-fabric customer decision is made). For
- * company fabric this is where the real -L consumption finally lands; no second
- * scrap annotation is written (that was eager at creation).
+ * resume_parked_redo RPC (SPEC.md §2.5/§6) — the SHOP un-parks a replacement
+ * waiting in the dispatch queue once the customer brought their cloth or our stock
+ * was restocked. For company (IN) fabric this is where the deferred real -L
+ * consumption finally lands; no second scrap annotation is written (eager at
+ * creation). The replacement stays at the shop (trip 0, in_production false) and
+ * becomes dispatchable (redo_parked_reason cleared).
  */
 export async function resumeParkedRedo(
   tx: Tx,
   garmentId: string,
-  opts: { priority?: string; userId?: string; idempotencyKey?: string } = {},
+  opts: { userId?: string; idempotencyKey?: string } = {},
 ): Promise<{ resumed: boolean; consumed: number; already_active?: boolean }> {
   const res = only(
     await tx`
       SELECT resume_parked_redo(
         ${garmentId}::uuid,
-        ${opts.priority ?? "next_slot"}::redo_priority,
         ${opts.userId ?? null}::uuid,
         ${opts.idempotencyKey ?? randomUUID()}::uuid
       ) AS r
@@ -817,6 +876,33 @@ export async function resumeParkedRedo(
     "resume_parked_redo",
   );
   return res.r as { resumed: boolean; consumed: number; already_active?: boolean };
+}
+
+/**
+ * redo_promote_final_to_brova RPC (SPEC.md §2.5 outcome 3) — redo with NO
+ * replacement: discard the brova and (optionally) promote one parked final to be
+ * the new trial brova. finalId null → discard-only. Writes no money (cashier
+ * refund is separate). root_cause is not captured at the shop redo (left null).
+ */
+export async function promoteFinalToBrova(
+  tx: Tx,
+  brovaId: string,
+  finalId: string | null,
+  opts: { rootCause?: string | null; userId?: string; idempotencyKey?: string } = {},
+): Promise<{ brova_id: string; promoted_final_id: string | null; promoted_garment_id: string | null }> {
+  const res = only(
+    await tx`
+      SELECT redo_promote_final_to_brova(
+        ${brovaId}::uuid,
+        ${finalId ?? null}::uuid,
+        ${opts.rootCause ?? null}::root_cause,
+        ${opts.userId ?? null}::uuid,
+        ${opts.idempotencyKey ?? randomUUID()}::uuid
+      ) AS r
+    `,
+    "redo_promote_final_to_brova",
+  );
+  return res.r as { brova_id: string; promoted_final_id: string | null; promoted_garment_id: string | null };
 }
 
 /**

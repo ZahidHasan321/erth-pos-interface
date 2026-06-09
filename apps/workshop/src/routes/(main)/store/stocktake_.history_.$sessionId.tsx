@@ -111,9 +111,9 @@ function StocktakeHistoryDetailPage() {
                           r.variance === 0 ? "text-muted-foreground" : r.variance > 0 ? "text-[var(--status-ok)]" : "text-[var(--status-bad)]",
                         )}
                       >
-                        {r.variance === 0 ? "—" : `${r.variance > 0 ? "+" : ""}${formatQty(r.itemType, r.variance)}`}
+                        {r.variance === 0 ? "-" : `${r.variance > 0 ? "+" : ""}${formatQty(r.itemType, r.variance)}`}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{r.reason?.trim() || "—"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{r.reason?.trim() || "-"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

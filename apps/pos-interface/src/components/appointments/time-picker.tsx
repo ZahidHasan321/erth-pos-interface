@@ -167,7 +167,7 @@ export function TimePicker({
         <div className="max-h-[240px] overflow-y-auto py-1">
           {filtered.length === 0 ? (
             <div className="px-3 py-4 text-xs text-center text-muted-foreground">
-              No matching time — press Enter to use "{inputValue}"
+              No matching time, press Enter to use "{inputValue}"
             </div>
           ) : (
             filtered.map((slot) => {

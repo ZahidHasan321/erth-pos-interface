@@ -1327,6 +1327,9 @@ BEGIN
        SET location = 'transit_to_workshop', trip_number = 1
      WHERE order_id = p_order_id
        AND trip_number = 0
+       -- A redo replacement still WAITING IN DISPATCH (on the customer's cloth or a
+       -- restock, §2.5) is not dispatchable until the shop resume clears the mark.
+       AND redo_parked_reason IS NULL
        AND (p_garment_ids IS NULL OR id = ANY(p_garment_ids))
     RETURNING id
   )
@@ -1501,6 +1504,12 @@ ALTER TABLE garments ADD COLUMN IF NOT EXISTS root_cause root_cause;
 ALTER TABLE garments ADD COLUMN IF NOT EXISTS redo_priority redo_priority;
 ALTER TABLE garments ADD COLUMN IF NOT EXISTS redo_parked_reason redo_parked_reason;
 ALTER TABLE garments ADD COLUMN IF NOT EXISTS redo_customer_must_provide_fabric BOOLEAN NOT NULL DEFAULT false;
+-- redo_priority is retained but UNUSED/vestigial (§6): redo is shop-initiated, the
+-- workshop redo-priority queue was dropped. redo_parked_reason now marks a
+-- replacement WAITING IN SHOP DISPATCH (customer cloth / restock), not a workshop
+-- scheduler park. promoted_to_brova_at stamps a final promoted to brova by the
+-- §2.5 outcome-3 redo (audit: this brova row was originally a final).
+ALTER TABLE garments ADD COLUMN IF NOT EXISTS promoted_to_brova_at TIMESTAMPTZ;
 
 -- Net-zero redo-scrap waste annotation: qty_delta=0 keeps the ledger conserving
 -- while annotated_qty carries the scrapped length; root_cause attributes it.
@@ -1541,21 +1550,29 @@ CREATE INDEX IF NOT EXISTS garment_investigations_garment_idx ON garment_investi
 -- spec columns server-side (one read of truth), starts fresh at
 -- trip 1 / waiting_cut / workshop, and links original.replaced_by_garment_id
 -- (double-replacement guard preserved).
--- GROUP A (CLAUDE.md §2.5/§4): the workshop creates the redo replacement and,
--- in the SAME call, (a) attributes the scrap on the discarded original via
--- root_cause, (b) auto-consumes fresh fabric for the replacement cut, and
--- (c) records the scrapped fabric as a net-zero material-waste annotation. If
--- the replacement material is short (or it's customer-brought OUT cloth), the
--- replacement is PARKED instead of consuming — the scrap annotation is still
--- written eagerly (the scrap is a fact at discard; only the cut waits).
--- New signature → drop the old single-arg overload so the function resolves.
+-- GROUP A (SPEC.md §2.5/§4): the SHOP creates the redo replacement at the brova
+-- trial and, in the SAME call, (a) attributes the scrap on the discarded original
+-- via root_cause, (b) auto-consumes fresh fabric for the replacement cut, and
+-- (c) records the scrapped fabric as a net-zero material-waste annotation. The
+-- replacement is created AT THE SHOP (location='shop', trip 0, waiting_cut) so it
+-- lands in the shop dispatch queue and then flows through the normal dispatch →
+-- production → trial path like any fresh garment. The replacement's fabric source
+-- is a redo-time choice (default = the original's): IN consumes our stock, OUT is
+-- customer-brought (no consume). If the IN material is short OR it's OUT cloth, the
+-- replacement WAITS IN DISPATCH (redo_parked_reason set) until the shop resume step
+-- clears it — the scrap annotation is still written eagerly (the scrap is a fact at
+-- discard; only the replacement cut waits). The scrap annotation keys on the
+-- ORIGINAL's source (company IN only); consume/park key on the REPLACEMENT's source.
+-- New signature → drop the old overloads so the function resolves.
 DROP FUNCTION IF EXISTS create_replacement_garment(uuid);
+DROP FUNCTION IF EXISTS create_replacement_garment(uuid, root_cause, redo_priority, uuid, uuid);
 CREATE OR REPLACE FUNCTION create_replacement_garment(
   p_replaces_garment_id UUID,
   p_root_cause root_cause DEFAULT NULL,
-  p_redo_priority redo_priority DEFAULT 'next_slot',
   p_user_id UUID DEFAULT NULL,
-  p_idempotency_key UUID DEFAULT NULL
+  p_idempotency_key UUID DEFAULT NULL,
+  p_fabric_source TEXT DEFAULT NULL,   -- 'IN' | 'OUT' for the REPLACEMENT; NULL → inherit original
+  p_fabric_id INT DEFAULT NULL          -- catalogue fabric to consume when source IN and original had none
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -1564,11 +1581,14 @@ DECLARE
   v_new_garment_id TEXT;
   v_new_id UUID;
   v_required NUMERIC;
-  v_must_provide BOOLEAN;
-  v_parked BOOLEAN := false;
+  v_orig_must_provide BOOLEAN;      -- original used customer (OUT) cloth → no scrap annotation
+  v_repl_source TEXT;               -- 'IN' | 'OUT' for the replacement
+  v_repl_must_provide BOOLEAN;      -- replacement uses customer (OUT) cloth → no consume, waits customer_decision
+  v_repl_fabric_id INT;             -- catalogue fabric the replacement consumes (NULL for OUT)
+  v_parked BOOLEAN := false;        -- IN replacement short on stock → waits on a restock
   v_shop_stock NUMERIC;
-  v_unit_cost NUMERIC;
-  v_final_priority redo_priority;
+  v_repl_unit_cost NUMERIC;         -- price of the replacement's consumed fabric
+  v_orig_unit_cost NUMERIC;         -- price of the original's scrapped fabric
   v_parked_reason redo_parked_reason;
   v_parked_text TEXT;
   v_result JSONB;
@@ -1594,28 +1614,41 @@ BEGIN
   UPDATE garments SET root_cause = p_root_cause WHERE id = p_replaces_garment_id;
 
   v_required := COALESCE(v_orig.fabric_length, 0);
-  v_must_provide := (v_orig.fabric_source = 'OUT');
+  v_orig_must_provide := (v_orig.fabric_source = 'OUT');
 
-  -- Material availability check for company (IN) fabric. Customer (OUT) cloth is
-  -- never decremented; that path parks on customer_decision below.
-  IF NOT v_must_provide AND v_required > 0 AND v_orig.fabric_id IS NOT NULL THEN
-    SELECT shop_stock, price_per_meter INTO v_shop_stock, v_unit_cost
-      FROM fabrics WHERE id = v_orig.fabric_id FOR UPDATE;
-    IF v_shop_stock IS NULL THEN
-      RAISE EXCEPTION 'create_replacement_garment: fabric % not found for original %', v_orig.fabric_id, p_replaces_garment_id;
+  -- Replacement fabric source: default to the original's, overridable at redo time.
+  v_repl_source := UPPER(COALESCE(NULLIF(p_fabric_source, ''), v_orig.fabric_source::text, 'IN'));
+  v_repl_must_provide := (v_repl_source = 'OUT');
+  -- Catalogue fabric the replacement consumes: an explicit pick wins (the
+  -- customer-cloth→our-stock cross case), else the original's fabric (common
+  -- same-source IN case). NULL for an OUT (customer-brought) replacement.
+  v_repl_fabric_id := CASE WHEN v_repl_must_provide THEN NULL
+                          ELSE COALESCE(p_fabric_id, v_orig.fabric_id) END;
+
+  -- Material availability for a company (IN) replacement. Short stock → WAIT
+  -- (waiting_material): do not raise, do not decrement; the cut is deferred to
+  -- the shop resume step. Customer (OUT) replacements never touch our stock.
+  IF NOT v_repl_must_provide AND v_required > 0 THEN
+    IF v_repl_fabric_id IS NULL THEN
+      RAISE EXCEPTION 'create_replacement_garment: replacement uses our stock but no fabric specified (original % has no catalogue fabric — pass p_fabric_id)', p_replaces_garment_id;
     END IF;
-    -- Short stock → PARK (do not raise, do not decrement). The scrap annotation
-    -- still gets written below; the replacement waits on material.
+    SELECT shop_stock, price_per_meter INTO v_shop_stock, v_repl_unit_cost
+      FROM fabrics WHERE id = v_repl_fabric_id FOR UPDATE;
+    IF v_shop_stock IS NULL THEN
+      RAISE EXCEPTION 'create_replacement_garment: fabric % not found for replacement of %', v_repl_fabric_id, p_replaces_garment_id;
+    END IF;
     IF v_shop_stock < v_required THEN
       v_parked := true;
     END IF;
   END IF;
 
-  -- Resolve the replacement's redo queue fields.
-  v_final_priority := CASE WHEN v_parked OR v_must_provide THEN 'parked'::redo_priority ELSE p_redo_priority END;
+  -- Shop-dispatch waiting marker. A replacement waiting on the customer's cloth
+  -- (customer_decision) or on a restock (waiting_material) is created but held
+  -- out of the dispatch queue (dispatch_order skips it) until the shop resume
+  -- step clears redo_parked_reason. redo_priority is left NULL (vestigial, §6).
   v_parked_reason := CASE
-    WHEN v_must_provide THEN 'customer_decision'::redo_parked_reason
-    WHEN v_parked       THEN 'waiting_material'::redo_parked_reason
+    WHEN v_repl_must_provide THEN 'customer_decision'::redo_parked_reason
+    WHEN v_parked            THEN 'waiting_material'::redo_parked_reason
     ELSE NULL END;
 
   -- nextGarmentIdForOrder: max numeric suffix of "<order_id>-<n>" siblings + 1.
@@ -1627,6 +1660,8 @@ BEGIN
      AND split_part(garment_id, '-', 2) ~ '^[0-9]+$';
   v_new_garment_id := v_orig.order_id || '-' || v_next;
 
+  -- Created AT THE SHOP (trip 0, waiting_cut, in_production false) → lands in the
+  -- shop dispatch queue. fabric_id/fabric_source are the REPLACEMENT's choice.
   INSERT INTO garments (
     order_id, garment_id, measurement_id, garment_type, fabric_id,
     fabric_source, color, shop_name, fabric_length, style, style_id,
@@ -1636,11 +1671,11 @@ BEGIN
     jabzour_1, jabzour_2, jabzour_thickness, lines, soaking, express,
     delivery_date, notes, quantity,
     piece_stage, location, in_production, trip_number,
-    redo_priority, redo_parked_reason, redo_customer_must_provide_fabric
+    redo_parked_reason, redo_customer_must_provide_fabric
   )
   SELECT
-    order_id, v_new_garment_id, measurement_id, garment_type, fabric_id,
-    fabric_source, color, shop_name, fabric_length,
+    order_id, v_new_garment_id, measurement_id, garment_type, v_repl_fabric_id,
+    v_repl_source::fabric_source, color, shop_name, fabric_length,
     COALESCE(style, 'kuwaiti'), style_id,
     collar_type, collar_button, collar_position, collar_thickness,
     cuffs_type, cuffs_thickness, front_pocket_type, front_pocket_thickness,
@@ -1649,8 +1684,8 @@ BEGIN
     jabzour_1, jabzour_2, jabzour_thickness,
     COALESCE(lines, 1), COALESCE(soaking, false), COALESCE(express, false),
     delivery_date, notes, COALESCE(quantity, 1),
-    'waiting_cut', 'workshop', (NOT v_parked AND NOT v_must_provide), 1,
-    v_final_priority, v_parked_reason, v_must_provide
+    'waiting_cut', 'shop', false, 0,
+    v_parked_reason, v_repl_must_provide
   FROM garments WHERE id = p_replaces_garment_id
   RETURNING id INTO v_new_id;
 
@@ -1658,71 +1693,74 @@ BEGIN
      SET replaced_by_garment_id = v_new_id
    WHERE id = p_replaces_garment_id AND replaced_by_garment_id IS NULL;
 
-  -- Auto-consume fresh fabric for the replacement cut (real -L decrement),
+  -- Auto-consume the replacement's fresh cut from shop stock (real -L decrement),
   -- mirroring complete_work_order's stamp+UPDATE so fabric_stock_audit logs a
-  -- real `consumption` row. Only when not parked and not customer-brought.
-  IF NOT v_parked AND NOT v_must_provide AND v_required > 0 AND v_orig.fabric_id IS NOT NULL THEN
+  -- real `consumption` row. Only for a company (IN) replacement with stock on
+  -- hand (not waiting on a restock, not customer-brought).
+  IF NOT v_parked AND NOT v_repl_must_provide AND v_required > 0 AND v_repl_fabric_id IS NOT NULL THEN
     PERFORM set_config('app.movement_type', 'consumption', true);
     PERFORM set_config('app.movement_ref_type', 'garment', true);
     PERFORM set_config('app.movement_ref_id', '', true);
     PERFORM set_config('app.movement_user_id', COALESCE(p_user_id::text, ''), true);
     PERFORM set_config('app.movement_supplier_id', '', true);
-    PERFORM set_config('app.movement_unit_cost', COALESCE(v_unit_cost::text, ''), true);
+    PERFORM set_config('app.movement_unit_cost', COALESCE(v_repl_unit_cost::text, ''), true);
     PERFORM set_config('app.movement_reason', 'redo replacement cut', true);
     PERFORM set_config('app.movement_notes', 'redo replacement cut: ' || v_new_garment_id, true);
 
     UPDATE fabrics
        SET real_stock = real_stock - v_required,
            shop_stock = shop_stock - v_required
-     WHERE id = v_orig.fabric_id;
+     WHERE id = v_repl_fabric_id;
   END IF;
 
-  -- Net-zero material-waste annotation for the scrapped original L. Written
-  -- EVEN when parked (the discard is a fact now; only the replacement cut waits).
-  -- Direct INSERT — qty_delta=0 would be dropped by _log_stock_movement, and a
-  -- column change here would mis-fire the consumption stamp. Mirrors the
-  -- lost-in-transit precedent. The unit_cost is the original's fabric price; for
-  -- OUT cloth there is no annotation (it never entered our stock).
-  IF v_required > 0 AND NOT v_must_provide AND v_orig.fabric_id IS NOT NULL THEN
-    IF v_unit_cost IS NULL THEN
-      SELECT price_per_meter INTO v_unit_cost FROM fabrics WHERE id = v_orig.fabric_id;
-    END IF;
+  -- Net-zero material-waste annotation for the scrapped ORIGINAL L. Keyed on the
+  -- ORIGINAL's fabric source (company IN only — OUT cloth was never our stock).
+  -- Written EVEN when the replacement waits (the discard is a fact now; only the
+  -- replacement cut waits). Direct INSERT — qty_delta=0 would be dropped by
+  -- _log_stock_movement, and a column change here would mis-fire the consumption
+  -- stamp. Mirrors the lost-in-transit precedent.
+  IF v_required > 0 AND NOT v_orig_must_provide AND v_orig.fabric_id IS NOT NULL THEN
+    SELECT price_per_meter INTO v_orig_unit_cost FROM fabrics WHERE id = v_orig.fabric_id;
     INSERT INTO stock_movements (
       item_type, item_id, location, movement_type, qty_delta, annotated_qty,
       unit_cost, root_cause, ref_type, ref_id, reason, notes, user_id
     )
     VALUES (
       'fabric', v_orig.fabric_id, 'shop', 'waste', 0, v_required,
-      v_unit_cost, p_root_cause, 'garment', NULL, 'redo',
+      v_orig_unit_cost, p_root_cause, 'garment', NULL, 'redo',
       'redo scrap: ' || v_orig.garment_id || ' L=' || v_required, p_user_id
     );
   END IF;
 
   v_parked_text := CASE
-    WHEN v_must_provide THEN 'customer_decision'
-    WHEN v_parked       THEN 'waiting_material'
+    WHEN v_repl_must_provide THEN 'customer_decision'
+    WHEN v_parked            THEN 'waiting_material'
     ELSE NULL END;
 
   v_result := jsonb_build_object(
     'id', v_new_id,
     'garment_id', v_new_garment_id,
-    'parked', (v_parked OR v_must_provide),
-    'parked_reason', v_parked_text
+    'parked', (v_parked OR v_repl_must_provide),
+    'parked_reason', v_parked_text,
+    'fabric_source', v_repl_source
   );
   PERFORM idem_store(p_idempotency_key, v_result);
   RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
--- GROUP A (CLAUDE.md §6 resume-parked action): a manager resumes a parked redo
--- replacement once material is available (or the OUT-fabric customer decision is
--- made). For company fabric, this is where the real -L consumption finally
+-- GROUP A (SPEC.md §2.5/§6 shop resume action): the SHOP un-parks a replacement
+-- waiting in the dispatch queue once the blocker clears — the customer brought
+-- their cloth (customer_decision) or our stock was restocked (waiting_material).
+-- For company (IN) fabric this is where the deferred real -L consumption finally
 -- lands; the scrap annotation was already written at creation, so it is NOT
--- re-written here.
+-- re-written here. The replacement stays AT THE SHOP (trip 0, in_production false)
+-- and becomes dispatchable — clearing redo_parked_reason lets dispatch_order pick
+-- it up. No scheduling priority is set (the redo-priority queue was dropped, §6).
 DROP FUNCTION IF EXISTS resume_parked_redo(uuid, redo_priority, uuid, uuid);
+DROP FUNCTION IF EXISTS resume_parked_redo(uuid, uuid, uuid);
 CREATE OR REPLACE FUNCTION resume_parked_redo(
   p_garment_id UUID,
-  p_priority redo_priority DEFAULT 'next_slot',
   p_user_id UUID DEFAULT NULL,
   p_idempotency_key UUID DEFAULT NULL
 )
@@ -1743,20 +1781,19 @@ BEGIN
     RAISE EXCEPTION 'resume_parked_redo: garment % not found', p_garment_id;
   END IF;
 
-  -- Already active (not parked) → nothing to resume. Idempotent no-op.
-  IF v_g.redo_priority IS DISTINCT FROM 'parked'::redo_priority THEN
+  -- Not waiting (already dispatchable) → nothing to resume. Idempotent no-op.
+  IF v_g.redo_parked_reason IS NULL THEN
     v_result := jsonb_build_object('resumed', false, 'already_active', true, 'consumed', 0);
     PERFORM idem_store(p_idempotency_key, v_result);
     RETURN v_result;
   END IF;
 
-  -- Customer-brought (OUT) cloth: nothing to consume; just clear the park so the
-  -- replacement becomes schedulable.
+  -- Customer-brought (OUT) cloth: nothing to consume; just clear the wait so the
+  -- replacement becomes dispatchable. The OUT flag stays (it's still customer cloth).
   IF v_g.redo_customer_must_provide_fabric THEN
     UPDATE garments
-       SET redo_priority = p_priority,
-           redo_parked_reason = NULL,
-           in_production = true
+       SET redo_parked_reason = NULL,
+           in_production = false
      WHERE id = p_garment_id;
     v_result := jsonb_build_object('resumed', true, 'consumed', 0);
     PERFORM idem_store(p_idempotency_key, v_result);
@@ -1771,7 +1808,7 @@ BEGIN
     IF v_shop_stock IS NULL THEN
       RAISE EXCEPTION 'resume_parked_redo: fabric % not found for garment %', v_g.fabric_id, p_garment_id;
     END IF;
-    -- Still short → stays parked; the manager retries after a restock.
+    -- Still short → stays waiting; the shop retries after a restock.
     IF v_shop_stock < v_required THEN
       RAISE EXCEPTION 'resume_parked_redo: cannot resume — only % of fabric % on hand, need %',
         v_shop_stock, v_g.fabric_id, v_required;
@@ -1794,12 +1831,125 @@ BEGIN
   END IF;
 
   UPDATE garments
-     SET redo_priority = p_priority,
-         redo_parked_reason = NULL,
-         in_production = true
+     SET redo_parked_reason = NULL,
+         in_production = false
    WHERE id = p_garment_id;
 
   v_result := jsonb_build_object('resumed', true, 'consumed', v_required);
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- GROUP A (SPEC.md §2.5 redo outcome 3): redo with NO replacement. At the brova
+-- trial the SHOP discards the brova and (optionally) PROMOTES one parked final to
+-- be the new trial brova — the final's fabric was already cut at confirmation, so
+-- no fresh fabric is consumed. The remaining finals stay parked on the promoted
+-- brova (the discarded brova's replaced_by_garment_id points at it → §2.8 label).
+-- p_final_id NULL → discard-only (single-garment order / no parked final): nothing
+-- is promoted. The customer refund is the cashier's §2.6 job — this RPC writes no
+-- money. The discarded brova's own company (IN) fabric is recorded as a net-zero
+-- scrap annotation (root_cause), exactly like a normal redo discard (§4).
+DROP FUNCTION IF EXISTS redo_promote_final_to_brova(uuid, uuid, root_cause, uuid, uuid);
+CREATE OR REPLACE FUNCTION redo_promote_final_to_brova(
+  p_brova_id UUID,
+  p_final_id UUID DEFAULT NULL,
+  p_root_cause root_cause DEFAULT NULL,
+  p_user_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_brova garments%ROWTYPE;
+  v_final garments%ROWTYPE;
+  v_required NUMERIC;
+  v_unit_cost NUMERIC;
+  v_promoted_garment_id TEXT := NULL;
+  v_result JSONB;
+BEGIN
+  IF NOT idem_claim(p_idempotency_key, 'redo_promote_final_to_brova') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  SELECT * INTO v_brova FROM garments WHERE id = p_brova_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'redo_promote_final_to_brova: brova % not found', p_brova_id;
+  END IF;
+  IF v_brova.garment_type <> 'brova' THEN
+    RAISE EXCEPTION 'redo_promote_final_to_brova: garment % is not a brova (%); only a brova is redone this way', p_brova_id, v_brova.garment_type;
+  END IF;
+  IF v_brova.piece_stage = 'discarded' THEN
+    RAISE EXCEPTION 'redo_promote_final_to_brova: brova % is already discarded', p_brova_id;
+  END IF;
+  IF v_brova.replaced_by_garment_id IS NOT NULL THEN
+    RAISE EXCEPTION 'redo_promote_final_to_brova: brova % already has a replacement', p_brova_id;
+  END IF;
+
+  -- Validate the chosen final only when one is given (NULL = discard-only).
+  IF p_final_id IS NOT NULL THEN
+    SELECT * INTO v_final FROM garments WHERE id = p_final_id FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'redo_promote_final_to_brova: final % not found', p_final_id;
+    END IF;
+    IF v_final.order_id <> v_brova.order_id THEN
+      RAISE EXCEPTION 'redo_promote_final_to_brova: final % is not in the same order as brova %', p_final_id, p_brova_id;
+    END IF;
+    IF v_final.garment_type <> 'final' THEN
+      RAISE EXCEPTION 'redo_promote_final_to_brova: garment % is not a final (%); only a parked final can be promoted', p_final_id, v_final.garment_type;
+    END IF;
+    IF v_final.piece_stage <> 'waiting_for_acceptance' THEN
+      RAISE EXCEPTION 'redo_promote_final_to_brova: final % is not a parked final (stage %); only a final parked at waiting_for_acceptance can be promoted', p_final_id, v_final.piece_stage;
+    END IF;
+  END IF;
+
+  -- 1. Discard the brova (terminal). root_cause attributes the scrap. When a final
+  --    is promoted, link the discarded brova to it as its "replacement brova" so the
+  --    §2.8 finals-waiting-on-replacement-brova label resolves correctly.
+  UPDATE garments
+     SET piece_stage = 'discarded',
+         feedback_status = 'needs_redo',
+         acceptance_status = false,
+         in_production = false,
+         root_cause = p_root_cause,
+         replaced_by_garment_id = p_final_id
+   WHERE id = p_brova_id;
+
+  -- 2. Promote the chosen parked final to a brova and release it to production. It
+  --    goes through the normal production → dispatch → trial path. It stays at the
+  --    workshop where it was parked; in_production false (the scheduler / receive
+  --    starts it, like release_finals). promoted_to_brova_at stamps the audit.
+  IF p_final_id IS NOT NULL THEN
+    UPDATE garments
+       SET garment_type = 'brova',
+           piece_stage = 'waiting_cut',
+           in_production = false,
+           promoted_to_brova_at = now()
+     WHERE id = p_final_id;
+    v_promoted_garment_id := v_final.garment_id;
+  END IF;
+
+  -- 3. Net-zero scrap annotation for the discarded brova's company (IN) fabric —
+  --    same conservation treatment as a normal redo discard (§4). OUT cloth was
+  --    never our stock → no annotation (root_cause still captured above).
+  v_required := COALESCE(v_brova.fabric_length, 0);
+  IF v_required > 0 AND v_brova.fabric_source = 'IN' AND v_brova.fabric_id IS NOT NULL THEN
+    SELECT price_per_meter INTO v_unit_cost FROM fabrics WHERE id = v_brova.fabric_id;
+    INSERT INTO stock_movements (
+      item_type, item_id, location, movement_type, qty_delta, annotated_qty,
+      unit_cost, root_cause, ref_type, ref_id, reason, notes, user_id
+    )
+    VALUES (
+      'fabric', v_brova.fabric_id, 'shop', 'waste', 0, v_required,
+      v_unit_cost, p_root_cause, 'garment', NULL, 'redo',
+      'redo scrap (promote): ' || v_brova.garment_id || ' L=' || v_required, p_user_id
+    );
+  END IF;
+
+  v_result := jsonb_build_object(
+    'brova_id', p_brova_id,
+    'promoted_final_id', p_final_id,
+    'promoted_garment_id', v_promoted_garment_id
+  );
   PERFORM idem_store(p_idempotency_key, v_result);
   RETURN v_result;
 END;
@@ -1874,6 +2024,86 @@ BEGIN
     'discount_value', COALESCE(p_discount_value, 0),
     'order_total', v_final_total
   );
+END;
+$$ LANGUAGE plpgsql;
+
+-- 12b. RPC: Reprice an order's style component after a brova-trial per-final
+-- style change (SPEC §2.5). The client recomputes each changed garment's style
+-- price with the SAME pricing function used at order creation
+-- (calculateGarmentStylePrice) and passes the absolute new snapshots + the new
+-- aggregate style_charge + new order_total. This RPC just persists them
+-- atomically, serializing on the order row.
+--
+-- Audit-only: it writes the true new order_total EVEN IF that drops below the
+-- amount already paid — unlike update_order_discount (which blocks), the
+-- resulting credit is a MANUAL cashier refund per §2.6. It NEVER touches
+-- orders.paid (owned by sync_order_paid_from_transactions). Fabric/stitching
+-- are not repriced — only style moves. Idempotent via idem_claim/replay/store
+-- AND naturally idempotent (absolute assignment converges on replay).
+CREATE OR REPLACE FUNCTION reprice_order_styles(
+  p_order_id INT,
+  p_garments JSONB,            -- [{ garment_id: uuid, style_price_snapshot: decimal }]
+  p_new_style_charge DECIMAL,
+  p_new_order_total DECIMAL,
+  p_actor UUID DEFAULT NULL,
+  p_reason TEXT DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_order RECORD;
+  v_elem JSONB;
+  v_old_order_total DECIMAL;
+  v_old_style_charge DECIMAL;
+  v_result JSONB;
+BEGIN
+  -- Lost-response replay must not double-anything (though absolute assignment is
+  -- already idempotent; this also preserves the originally-reported delta).
+  IF NOT idem_claim(p_idempotency_key, 'reprice_order_styles') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  -- Serialize concurrent repricings of the same order.
+  SELECT * INTO v_order FROM orders WHERE id = p_order_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order % not found', p_order_id;
+  END IF;
+
+  v_old_order_total := COALESCE(v_order.order_total, 0);
+  SELECT COALESCE(style_charge, 0) INTO v_old_style_charge
+    FROM work_orders WHERE order_id = p_order_id;
+
+  -- 1. Update each changed garment's style-price snapshot. Scoped to this order
+  --    so a stray id can never write across orders.
+  FOR v_elem IN SELECT * FROM jsonb_array_elements(COALESCE(p_garments, '[]'::jsonb))
+  LOOP
+    UPDATE garments
+    SET style_price_snapshot = (v_elem->>'style_price_snapshot')::DECIMAL
+    WHERE id = (v_elem->>'garment_id')::UUID
+      AND order_id = p_order_id;
+  END LOOP;
+
+  -- 2. Roll the new aggregate style charge into the work order.
+  UPDATE work_orders SET style_charge = p_new_style_charge WHERE order_id = p_order_id;
+
+  -- 3. Write the new order total. Audit-only: allowed to fall below paid (the
+  --    credit is a manual cashier refund). orders.paid is never touched here.
+  UPDATE orders SET order_total = p_new_order_total WHERE id = p_order_id;
+
+  v_result := jsonb_build_object(
+    'status', 'success',
+    'order_id', p_order_id,
+    'old_order_total', v_old_order_total,
+    'new_order_total', p_new_order_total,
+    'delta', p_new_order_total - v_old_order_total,
+    'old_style_charge', v_old_style_charge,
+    'new_style_charge', p_new_style_charge,
+    'actor', p_actor,
+    'reason', p_reason
+  );
+
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -5084,6 +5314,10 @@ BEGIN
             o.id                             AS order_id,
             o.brand::text                    AS brand,
             o.order_type::text               AS order_type,
+            wo.linked_order_id               AS linked_order_id,
+            -- Link-group key (§2.13): the primary's order id. Children carry the
+            -- primary in linked_order_id; primary/unlinked rows fall back to own id.
+            COALESCE(wo.linked_order_id, o.id) AS link_group_id,
             COALESCE(wo.invoice_number, ao.invoice_number)         AS invoice_number,
             COALESCE(wo.delivery_date, agg.earliest_garment_delivery) AS delivery_date,
             COALESCE(wo.home_delivery, agg.any_home_delivery)      AS home_delivery,
@@ -5195,9 +5429,18 @@ BEGIN
             ) AS rn
         FROM chip_filtered cf
     ),
+    grouped AS (
+        -- Pull linked-order siblings (§2.13) adjacent: a link group sorts to the
+        -- position of its most-urgent (lowest-rn) member, members kept together
+        -- and ordered by rn within the group. Unlinked orders are a group of one,
+        -- so group_rank = rn and their position is unchanged.
+        SELECT r.*,
+            MIN(r.rn) OVER (PARTITION BY r.link_group_id) AS group_rank
+        FROM ranked r
+    ),
     page AS (
-        SELECT * FROM ranked
-        ORDER BY rn
+        SELECT * FROM grouped
+        ORDER BY group_rank, link_group_id, rn
         LIMIT v_page_size
         OFFSET v_offset
     ),
@@ -5242,9 +5485,13 @@ BEGIN
     page_rows AS (
         SELECT
             p.rn,
+            p.group_rank,
+            p.link_group_id,
             jsonb_build_object(
                 'order_id',        p.order_id,
                 'order_type',      p.order_type,
+                'linked_order_id', p.linked_order_id,
+                'link_group_id',   p.link_group_id,
                 'invoice_number',  p.invoice_number,
                 'customer_name',   p.customer_name,
                 'customer_mobile', NULLIF(TRIM(BOTH FROM COALESCE(p.customer_country_code, '') || ' ' || COALESCE(p.customer_phone, '')), ''),
@@ -5283,7 +5530,7 @@ BEGIN
         LEFT JOIN page_garment_summaries pgs ON pgs.order_id = p.order_id
     )
     SELECT jsonb_build_object(
-        'data',             COALESCE((SELECT jsonb_agg(row_json ORDER BY rn) FROM page_rows), '[]'::jsonb),
+        'data',             COALESCE((SELECT jsonb_agg(row_json ORDER BY group_rank, link_group_id, rn) FROM page_rows), '[]'::jsonb),
         'total_count',      (SELECT COUNT(*) FROM chip_filtered),
         'total_unfiltered', (SELECT COUNT(*) FROM tab_filtered),
         'chip_counts', jsonb_build_object(

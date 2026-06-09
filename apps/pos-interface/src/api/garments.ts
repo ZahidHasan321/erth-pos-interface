@@ -27,58 +27,6 @@ export const updateGarment = async (
   return { status: 'success', data: data as Garment };
 };
 
-// Repoint every garment in an order that currently points to `oldMeasurementId`
-// over to `newMeasurementId` — brovas AND finals. Used by feedback page when a
-// new measurements row is created from customer-requested changes; any garment
-// sharing the same old id (typically the matching finals) inherits the update.
-export const bulkRepointMeasurement = async (
-  orderId: number,
-  oldMeasurementId: string,
-  newMeasurementId: string,
-): Promise<ApiResponse<Garment[]>> => {
-  const { data, error } = await withWriteRetry(
-    () => db
-      .from(TABLE_NAME)
-      .update({ measurement_id: newMeasurementId })
-      .eq('order_id', orderId)
-      .eq('measurement_id', oldMeasurementId)
-      .select(),
-    (r) => isTransientNetworkError(r.error),
-  );
-
-  if (error) {
-    console.error('bulkRepointMeasurement: failed to repoint sibling brova garments:', error);
-    throw error;
-  }
-  return { status: 'success', data: data as Garment[] };
-};
-
-// Overwrite style-related fields on every garment in an order that shares the
-// same per-order `style_id` group — brovas AND finals. `style_id` itself stays
-// fixed so grouping holds. When customer rejects a brova's style on trial, the
-// matching finals inherit the new style so workshop produces them correctly.
-export const bulkUpdateStyleFields = async (
-  orderId: number,
-  styleId: number,
-  fields: Partial<Garment>,
-): Promise<ApiResponse<Garment[]>> => {
-  const { data, error } = await withWriteRetry(
-    () => db
-      .from(TABLE_NAME)
-      .update(fields)
-      .eq('order_id', orderId)
-      .eq('style_id', styleId)
-      .select(),
-    (r) => isTransientNetworkError(r.error),
-  );
-
-  if (error) {
-    console.error('bulkUpdateStyleFields: failed to update sibling style fields:', error);
-    throw error;
-  }
-  return { status: 'success', data: data as Garment[] };
-};
-
 export const getGarmentsForRedispatch = async (): Promise<ApiResponse<Garment[]>> => {
   // Find garments at shop that have a feedback record requesting "workshop" distribution
   // for the garment's current trip number
@@ -158,4 +106,107 @@ export const dispatchGarmentToWorkshop = async (
   }
 
   return { status: 'success', data: data as Garment };
+};
+
+// ── Redo (brova trial, SPEC §2.5) ───────────────────────────────────────────
+// Redo is decided at the brova feedback page (shop-initiated). The shop either
+// creates a replacement (from our stock or the customer's fabric) that waits in
+// the shop dispatch queue and is then dispatched like any garment, OR discards
+// the brova and promotes a parked final to be the new trial brova. No root_cause
+// is captured at the shop redo (§2.5); the cashier handles any refund (§2.6/§3).
+
+export interface RedoReplacementResult {
+  id: string;
+  garment_id: string;
+  parked: boolean;
+  parked_reason: "waiting_material" | "customer_decision" | null;
+  fabric_source: "IN" | "OUT";
+}
+
+/**
+ * create_replacement_garment RPC (§2.5 outcomes 1–2). Clones the discarded
+ * brova's spec into a fresh replacement at the SHOP (trip 0, waiting_cut), to be
+ * dispatched like any garment. `fabricSource` defaults to the original's; pass
+ * `fabricId` when switching a customer-cloth original to our stock. An IN
+ * replacement short on stock, or an OUT (customer) replacement, is created
+ * WAITING IN DISPATCH (`parked_reason`) until resumed from the dispatch page.
+ */
+export const createRedoReplacement = async (
+  brovaId: string,
+  opts: {
+    fabricSource?: "IN" | "OUT" | null;
+    fabricId?: number | null;
+    userId?: string | null;
+    idempotencyKey?: string;
+  } = {},
+): Promise<ApiResponse<RedoReplacementResult>> => {
+  const idempotencyKey = opts.idempotencyKey ?? crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('create_replacement_garment', {
+      p_replaces_garment_id: brovaId,
+      p_user_id: opts.userId ?? null,
+      p_idempotency_key: idempotencyKey,
+      p_fabric_source: opts.fabricSource ?? null,
+      p_fabric_id: opts.fabricId ?? null,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
+  if (error) {
+    console.error('createRedoReplacement: failed to create redo replacement:', error);
+    return { status: 'error', message: `Failed to create redo replacement for brova ${brovaId}: ${error.message}` };
+  }
+  return { status: 'success', data: data as RedoReplacementResult };
+};
+
+/**
+ * resume_parked_redo RPC (§2.5/§6). Un-parks a replacement waiting in the shop
+ * dispatch queue once the customer brought their cloth or our stock was
+ * restocked; for IN fabric this lands the deferred -L cut. The replacement then
+ * becomes dispatchable.
+ */
+export const resumeRedoReplacement = async (
+  garmentId: string,
+  opts: { userId?: string | null; idempotencyKey?: string } = {},
+): Promise<ApiResponse<{ resumed: boolean; consumed: number }>> => {
+  const idempotencyKey = opts.idempotencyKey ?? crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('resume_parked_redo', {
+      p_garment_id: garmentId,
+      p_user_id: opts.userId ?? null,
+      p_idempotency_key: idempotencyKey,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
+  if (error) {
+    console.error('resumeRedoReplacement: failed to resume parked redo:', error);
+    return { status: 'error', message: `Failed to resume redo replacement ${garmentId}: ${error.message}` };
+  }
+  return { status: 'success', data: data as { resumed: boolean; consumed: number } };
+};
+
+/**
+ * redo_promote_final_to_brova RPC (§2.5 outcome 3). Discards the brova and
+ * (optionally) promotes a parked final to be the new trial brova. `finalId` null
+ * → discard-only. Writes no money — the refund is the cashier's job (§2.6/§3).
+ */
+export const redoPromoteFinalToBrova = async (
+  brovaId: string,
+  finalId: string | null,
+  opts: { userId?: string | null; idempotencyKey?: string } = {},
+): Promise<ApiResponse<{ brova_id: string; promoted_final_id: string | null; promoted_garment_id: string | null }>> => {
+  const idempotencyKey = opts.idempotencyKey ?? crypto.randomUUID();
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('redo_promote_final_to_brova', {
+      p_brova_id: brovaId,
+      p_final_id: finalId,
+      p_user_id: opts.userId ?? null,
+      p_idempotency_key: idempotencyKey,
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
+  if (error) {
+    console.error('redoPromoteFinalToBrova: failed to promote final to brova:', error);
+    return { status: 'error', message: `Failed to discard brova ${brovaId} / promote final: ${error.message}` };
+  }
+  return { status: 'success', data: data as { brova_id: string; promoted_final_id: string | null; promoted_garment_id: string | null } };
 };

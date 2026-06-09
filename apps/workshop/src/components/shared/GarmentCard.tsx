@@ -148,7 +148,7 @@ export const GarmentCard = memo(function GarmentCard({
               {!compact && <BrandBadge brand={garment.order_brand} />}
               {!compact && (
                 <span className="text-base text-muted-foreground truncate">
-                  {garment.customer_name ?? "—"}
+                  {garment.customer_name ?? "-"}
                 </span>
               )}
             </div>

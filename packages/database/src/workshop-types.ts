@@ -47,6 +47,10 @@ export type WorkshopGarment = Omit<Garment, 'production_plan' | 'worker_history'
     delivery_date_order?: string;
     home_delivery_order?: boolean;
     order_phase?: string;
+    // Order linking (§2.13): the primary order this order is linked under, or
+    // null when this order is the primary / unlinked. Denormalized from
+    // work_orders so dispatch can detect linked siblings client-side.
+    linked_order_id?: number | null;
     style_name?: string;
     style_image_url?: string;
     fabric_name?: string;

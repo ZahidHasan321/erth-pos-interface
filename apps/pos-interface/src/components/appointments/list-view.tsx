@@ -134,16 +134,16 @@ export function ListView({
                       {apt.customer_phone}
                     </td>
                     <td className="px-3 py-2.5 hidden md:table-cell font-medium text-muted-foreground truncate max-w-[120px]">
-                      {apt.area || apt.city || "—"}
+                      {apt.area || apt.city || "-"}
                     </td>
                     <td className="px-3 py-2.5 hidden lg:table-cell font-bold text-center">
-                      {apt.people_count ?? "—"}
+                      {apt.people_count ?? "-"}
                     </td>
                     <td className="px-3 py-2.5 hidden lg:table-cell font-bold text-center">
-                      {apt.estimated_pieces ?? "—"}
+                      {apt.estimated_pieces ?? "-"}
                     </td>
                     <td className="px-3 py-2.5 hidden sm:table-cell font-medium text-muted-foreground truncate max-w-[100px]">
-                      {apt.assignee?.name ?? "—"}
+                      {apt.assignee?.name ?? "-"}
                     </td>
                     <td className="px-3 py-2.5">
                       <Badge

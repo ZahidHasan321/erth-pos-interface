@@ -337,7 +337,7 @@ function ErthDashboard() {
           <div>
             <h2 className="text-base font-semibold">Showroom queue</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Action priority — alterations first, then trials, then pickups
+              Action priority: alterations first, then trials, then pickups
             </p>
           </div>
           <Link
@@ -368,7 +368,7 @@ function ErthDashboard() {
           <CellLink
             label="Needs action"
             value={`${needsActionCount}`}
-            sub="Rejected — send back"
+            sub="Rejected: send back"
             tone={needsActionCount > 0 ? "neg" : undefined}
             to={`/${main}/orders/orders-at-showroom`}
             search={{ stage: "needs_action" }}
@@ -530,7 +530,7 @@ function DeliveryRow({
 }) {
   return (
     <Link
-      to={order.order_type === 'SALES' ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
+      to={order.order_type === 'SALES' ? "/$main/orders/new-sales-order" : "/$main/orders/view-work-order"}
       params={{ main }}
       search={{ orderId: order.id }}
       className="flex items-center gap-3 px-5 py-2.5 hover:bg-muted/50 transition-colors"
@@ -743,7 +743,7 @@ function DefaultDashboard() {
                     return (
                       <Link
                         key={order.id}
-                        to={order.order_type === 'SALES' ? "/$main/orders/new-sales-order" : "/$main/orders/new-work-order"}
+                        to={order.order_type === 'SALES' ? "/$main/orders/new-sales-order" : "/$main/orders/view-work-order"}
                         search={{ orderId: order.id }}
                         className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group"
                       >

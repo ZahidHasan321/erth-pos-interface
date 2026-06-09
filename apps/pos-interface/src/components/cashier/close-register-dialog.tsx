@@ -95,7 +95,7 @@ export function CloseRegisterDialog({ open, onOpenChange, session }: CloseRegist
         // Belt-and-braces — onInvalid already covers zod errors, but the
         // variance-notes rule lives outside zod so guard here too.
         if (notesRequired) {
-            toast.error("Variance is non-zero — explain the difference in notes before closing.");
+            toast.error("Variance is non-zero. Explain the difference in notes before closing.");
             return;
         }
         if (!idemKeyRef.current) idemKeyRef.current = crypto.randomUUID();
@@ -218,7 +218,7 @@ export function CloseRegisterDialog({ open, onOpenChange, session }: CloseRegist
                         <Textarea
                             {...form.register("notes")}
                             placeholder={notesRequired
-                                ? "Explain the over/short — e.g. miscounted, gave wrong change, refund slip missed..."
+                                ? "Explain the over/short, e.g. miscounted, gave wrong change, refund slip missed..."
                                 : "Any notes about the register close..."}
                             className={`resize-none h-16 ${notesRequired ? "border-red-300 focus-visible:ring-red-300" : ""}`}
                         />

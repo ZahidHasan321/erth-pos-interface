@@ -158,7 +158,7 @@ function UserRow({
   const jobFunctions = (user as unknown as { job_functions: JobFunction[] | null }).job_functions ?? [];
 
   const subline = department === "shop"
-    ? (brands && brands.length > 0 ? brands.map((b) => BRAND_LABELS[b] ?? b).join(" · ") : "—")
+    ? (brands && brands.length > 0 ? brands.map((b) => BRAND_LABELS[b] ?? b).join(" · ") : "-")
     : (jobFunctions.length > 0 ? jobFunctions.map((j) => JOB_FUNCTION_LABELS[j]).join(" · ") : "Office staff");
 
   return (

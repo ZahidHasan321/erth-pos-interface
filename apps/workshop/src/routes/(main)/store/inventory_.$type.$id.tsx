@@ -40,8 +40,10 @@ type ItemType = "fabric" | "shelf" | "accessory";
 export const Route = createFileRoute("/(main)/store/inventory_/$type/$id")({
   component: InventoryItemPage,
   parseParams: ({ type, id }) => {
-    if (type !== "fabric" && type !== "shelf" && type !== "accessory") {
-      throw new Error(`Invalid inventory type: ${type}`);
+    // The workshop holds only accessories — fabric/shelf are shop-side (§4), so
+    // their detail/create routes are unreachable here even by direct URL.
+    if (type !== "accessory") {
+      throw new Error(`The workshop only stocks accessories (got: ${type})`);
     }
     return { type: type as ItemType, id };
   },
@@ -327,7 +329,7 @@ function ItemDetail({ type, id, isNew }: { type: ItemType; id: number | null; is
         <BackLink />
       </div>
 
-      <PageHeader icon={Package} title={heading || "—"} subtitle={headingPrefix}>
+      <PageHeader icon={Package} title={heading || "-"} subtitle={headingPrefix}>
         {!isNew && !editing && canEdit && (
           <Button size="sm" variant="outline" onClick={startEdit}>
             <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
@@ -529,7 +531,7 @@ function DetailsForm({
         {editing ? (
           <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={type === "shelf" ? "e.g. Ready-made dishdasha" : "e.g. Cotton premium"} />
         ) : (
-          <Value>{form.name || "—"}</Value>
+          <Value>{form.name || "-"}</Value>
         )}
       </Field>
 
@@ -540,7 +542,7 @@ function DetailsForm({
             {editing ? (
               <Input value={form.color} onChange={(e) => set("color", e.target.value)} placeholder="e.g. C04" />
             ) : (
-              <Value>{form.color || "—"}</Value>
+              <Value>{form.color || "-"}</Value>
             )}
           </Field>
           <Field label="Swatch">
@@ -559,7 +561,7 @@ function DetailsForm({
                 {form.color_hex && (
                   <span className="w-4 h-4 rounded-full border shrink-0" style={{ backgroundColor: form.color_hex }} />
                 )}
-                <Value>{form.color_hex || "—"}</Value>
+                <Value>{form.color_hex || "-"}</Value>
               </div>
             )}
           </Field>
@@ -572,7 +574,7 @@ function DetailsForm({
           {editing ? (
             <Input value={form.brand} onChange={(e) => set("brand", e.target.value)} placeholder="Optional" />
           ) : (
-            <Value>{form.brand || "—"}</Value>
+            <Value>{form.brand || "-"}</Value>
           )}
         </Field>
       )}
@@ -584,7 +586,7 @@ function DetailsForm({
             {editing ? (
               <CategoryCombobox value={form.category} onChange={(v) => set("category", v)} existing={existingCategories} />
             ) : (
-              <Value className="capitalize">{form.category || "—"}</Value>
+              <Value className="capitalize">{form.category || "-"}</Value>
             )}
           </Field>
           <Field label="Unit of measure">
@@ -609,7 +611,7 @@ function DetailsForm({
         {editing ? (
           <Input type="number" step="0.001" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} placeholder="0.000" />
         ) : (
-          <Value className="tabular-nums">{form.price || "—"}</Value>
+          <Value className="tabular-nums">{form.price || "-"}</Value>
         )}
       </Field>
 
@@ -634,7 +636,7 @@ function DetailsForm({
             </Button>
           </div>
         ) : (
-          <Value className="font-mono text-sm">{form.sku || "—"}</Value>
+          <Value className="font-mono text-sm">{form.sku || "-"}</Value>
         )}
       </Field>
 
@@ -648,7 +650,7 @@ function DetailsForm({
             >
               <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">— No default —</SelectItem>
+                <SelectItem value="none">(No default)</SelectItem>
                 {suppliers.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -657,7 +659,7 @@ function DetailsForm({
             </Button>
           </div>
         ) : (
-          <Value>{suppliers.find((s) => s.id === form.default_supplier_id)?.name ?? "—"}</Value>
+          <Value>{suppliers.find((s) => s.id === form.default_supplier_id)?.name ?? "-"}</Value>
         )}
       </Field>
 
@@ -681,7 +683,7 @@ function DetailsForm({
               placeholder="Care instructions, supplier notes, anything else worth tracking…"
             />
           ) : (
-            <Value className="whitespace-pre-wrap">{form.description || "—"}</Value>
+            <Value className="whitespace-pre-wrap">{form.description || "-"}</Value>
           )}
         </Field>
       </div>

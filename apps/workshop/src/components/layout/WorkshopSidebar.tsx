@@ -16,7 +16,6 @@ import {
 } from "@repo/ui/sidebar";
 import { useSidebarCounts } from "@/hooks/useSidebarCounts";
 import { useTransferRequests } from "@/hooks/useTransfers";
-import { useRedoReplacementsPending, useParkedRedos } from "@/hooks/useWorkshopGarments";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
@@ -53,11 +52,9 @@ export function WorkshopSidebar() {
   const { data: receivingDeliveries = [] } = useTransferRequests({ status: "dispatched", direction: "shop_to_workshop" });
   // Requests the shop made that the workshop must send (no approve step — §4).
   const { data: sendRequests = [] } = useTransferRequests({ status: ["requested"], direction: "workshop_to_shop" });
-  // Garments awaiting a manager decision — investigations + redos to create +
-  // parked redos (CLAUDE.md §6). Drives the prominent Decisions badge.
-  const { data: redoPending = [] } = useRedoReplacementsPending();
-  const { data: parkedRedos = [] } = useParkedRedos();
-  const decisionsBadge = (counts?.investigations ?? 0) + redoPending.length + parkedRedos.length;
+  // Garments awaiting a manager decision — investigations (§2.10). Drives the
+  // prominent Decisions badge.
+  const decisionsBadge = counts?.investigations ?? 0;
   const { isMobile, setOpenMobile, state } = useSidebar();
   const routerState = useRouterState({ select: (s) => s.location.pathname });
   const { user: authUser } = useAuth();

@@ -32,6 +32,9 @@ export const getMeasurementsByCustomerId = async (customerId: number): Promise<A
   return { status: 'success', data: data as Measurement[], count: data?.length || 0 };
 };
 
+/** Alias — same as getMeasurementsByCustomerId; selects id, measurement_id, customer_id (plus all fields). */
+export const getMeasurementsByCustomer = getMeasurementsByCustomerId;
+
 export const getMeasurementById = async (id: string): Promise<ApiResponse<Measurement>> => {
   const { data, error } = await db
     .from(TABLE_NAME)

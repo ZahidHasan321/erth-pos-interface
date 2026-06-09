@@ -311,7 +311,11 @@ export function ShelfForm({ form, isOrderDisabled, onProceed, hasOrder = true }:
         )}
 
         {/* Cart */}
-        <div className="flex flex-1 min-w-0 flex-col gap-3 h-[24rem] lg:h-[34rem] p-4 bg-muted/20">
+        <div
+          className={`flex flex-1 min-w-0 flex-col gap-3 p-4 bg-muted/20 ${
+            isOrderDisabled ? '' : 'h-[24rem] lg:h-[34rem]'
+          }`}
+        >
           <h3 className="text-sm font-medium text-muted-foreground shrink-0">
             Selected items
             {watchedProducts.length > 0 && (

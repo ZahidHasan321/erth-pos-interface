@@ -171,3 +171,61 @@ describe("evaluateQc × enabledKeys (CLAUDE.md §QC Fail: passed keys cannot reg
     expect(result.failed_measurements).not.toContain("pen_pocket_length");
   });
 });
+
+// ─── §2.11 toggle options — explicit, checked both directions ────────────────
+
+describe("evaluateQc × §2.11 toggle options (explicit Yes/No, both directions)", () => {
+  const evalOpt = (
+    expectedOptions: Record<string, unknown>,
+    options: Record<string, unknown>,
+    keys: string[],
+  ) =>
+    evaluateQc({}, expectedOptions, { measurements: {}, options, quality_ratings: {} }, new Set(keys));
+
+  it("No-spec boolean: inspector records Yes → fail (No must be absent)", () => {
+    const r = evalOpt({ wallet_pocket: false }, { wallet_pocket: true }, ["wallet_pocket"]);
+    expect(r.result).toBe("fail");
+    expect(r.failed_options).toContain("wallet_pocket");
+  });
+
+  it("No-spec boolean: inspector records No → pass", () => {
+    const r = evalOpt({ wallet_pocket: false }, { wallet_pocket: false }, ["wallet_pocket"]);
+    expect(r.failed_options).not.toContain("wallet_pocket");
+    expect(r.result).toBe("pass");
+  });
+
+  it("Yes-spec boolean: inspector records No → fail (Yes must be present)", () => {
+    const r = evalOpt({ pen_holder: true }, { pen_holder: false }, ["pen_holder"]);
+    expect(r.result).toBe("fail");
+    expect(r.failed_options).toContain("pen_holder");
+  });
+
+  it("UNANSWERED boolean does NOT auto-fail even against a Yes-spec (point-2 fix)", () => {
+    // The whole bug: a Yes-spec field with an untouched (undefined) input used to
+    // flag red the instant the dialog opened. It must stay un-failed until the
+    // inspector answers (the completeness gate in the form forces an answer).
+    const r = evalOpt({ wallet_pocket: true }, {}, ["wallet_pocket"]);
+    expect(r.failed_options).not.toContain("wallet_pocket");
+    expect(r.result).toBe("pass");
+  });
+
+  it("collar_position: spec Up, inspector Standard → fail", () => {
+    const r = evalOpt({ collar_position: "up" }, { collar_position: "standard" }, ["collar_position"]);
+    expect(r.failed_options).toContain("collar_position");
+  });
+
+  it("collar_position: spec Standard (stored null), inspector Standard → pass", () => {
+    const r = evalOpt({ collar_position: null }, { collar_position: "standard" }, ["collar_position"]);
+    expect(r.failed_options).not.toContain("collar_position");
+  });
+
+  it("collar_position: spec Standard (stored null), inspector Up → fail", () => {
+    const r = evalOpt({ collar_position: null }, { collar_position: "up" }, ["collar_position"]);
+    expect(r.failed_options).toContain("collar_position");
+  });
+
+  it("collar_position: unanswered input does NOT auto-fail", () => {
+    const r = evalOpt({ collar_position: "up" }, {}, ["collar_position"]);
+    expect(r.failed_options).not.toContain("collar_position");
+  });
+});

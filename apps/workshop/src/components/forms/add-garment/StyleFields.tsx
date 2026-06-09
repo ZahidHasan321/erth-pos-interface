@@ -10,6 +10,7 @@ import {
 import type { AddGarmentFormValues } from "./schema";
 import { SectionCard } from "@/components/shared/PageShell";
 import { cn } from "@/lib/utils";
+import { COLLAR_POSITIONS, type CollarPosition } from "@/lib/qc-spec";
 
 export function ImageOptionGrid({
   options, value, onChange, allowClear = false, cols = "auto", disabled = false, failed = false,
@@ -136,55 +137,135 @@ export function ThicknessPicker({
   );
 }
 
-export function IconToggle({
-  checked, onChange, icon, label, disabled = false, failed = false,
+/**
+ * Explicit Yes / No toggle for a present-or-absent option (§2.11). An
+ * unanswered field renders in a distinct "not filled" state (dashed amber
+ * border, no Yes/No selected) so the user has to make a deliberate choice
+ * rather than leave a silent default. `value` is `undefined`/`null` until
+ * answered.
+ */
+export function YesNoToggle({
+  value, onChange, icon, label, disabled = false, failed = false,
 }: {
-  checked: boolean;
+  value: boolean | null | undefined;
   onChange: (v: boolean) => void;
   icon: string;
   label: string;
   disabled?: boolean;
-  /** When true, the toggle renders in the bad-status tone — QC fail indicator. Applies in
-   *  both checked and unchecked states because boolean OFF is a real answer
-   *  the QC operator might need to flag. */
+  /** When true, render in the bad-status tone — QC fail indicator. */
   failed?: boolean;
 }) {
+  const answered = value === true || value === false;
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
+    <div
       className={cn(
-        "relative flex flex-col items-center gap-1 p-2.5 rounded-md border bg-background transition-colors min-w-[72px]",
-        !disabled && !failed && "hover:border-primary/60",
+        "flex flex-col items-center gap-1.5 p-2.5 rounded-md border bg-background transition-colors min-w-[88px]",
         failed
           ? "border-[color:var(--status-bad)] bg-[var(--status-bad-bg)]"
-          : checked
-            ? "border-primary bg-primary/5"
-            : "border-border",
+          : !answered
+            ? "border-dashed border-amber-400/80"
+            : value
+              ? "border-primary/60"
+              : "border-border",
         disabled && "opacity-50 cursor-not-allowed",
       )}
     >
-      {checked && (
-        <span
-          className={cn(
-            "absolute top-1 right-1 rounded-full p-0.5",
-            failed ? "bg-[color:var(--status-bad)] text-white" : "bg-primary text-primary-foreground",
-          )}
-        >
-          <Check className="w-3 h-3" />
-        </span>
-      )}
-      <img src={icon} alt={label} className="h-8 w-8 object-contain" />
+      <img
+        src={icon}
+        alt={label}
+        className={cn(
+          "h-8 w-8 object-contain transition-opacity",
+          value === false && "opacity-30 grayscale",
+          !answered && "opacity-60",
+        )}
+      />
       <span
         className={cn(
           "text-xs font-medium",
-          failed ? "text-[color:var(--status-bad)]" : checked ? "text-foreground" : "text-muted-foreground",
+          failed ? "text-[color:var(--status-bad)]" : "text-foreground",
         )}
       >
         {label}
       </span>
-    </button>
+      <div className="inline-flex rounded-md border bg-background p-0.5">
+        {([true, false] as const).map((opt) => {
+          const selected = value === opt;
+          return (
+            <button
+              key={String(opt)}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(opt)}
+              className={cn(
+                "px-2.5 py-1 rounded-[5px] text-xs font-semibold transition-colors",
+                selected
+                  ? failed
+                    ? "bg-[color:var(--status-bad)] text-white"
+                    : opt
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-foreground text-background"
+                  : "text-muted-foreground hover:bg-muted",
+                disabled && "cursor-not-allowed",
+              )}
+            >
+              {opt ? "Yes" : "No"}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Up / Down / Standard picker for collar position (§2.11). Unanswered renders
+ * in the "not filled" state so Standard is a deliberate choice, not a default.
+ * `value` is `undefined` until answered; "standard" persists as null.
+ */
+export function CollarPositionPicker({
+  value, onChange, disabled = false, failed = false,
+}: {
+  value: CollarPosition | null | undefined;
+  onChange: (v: CollarPosition) => void;
+  disabled?: boolean;
+  failed?: boolean;
+}) {
+  const answered = value === "up" || value === "down" || value === "standard";
+  return (
+    <div
+      className={cn(
+        "inline-flex rounded-md border bg-background p-0.5",
+        disabled && "opacity-50",
+        failed
+          ? "border-[color:var(--status-bad)]"
+          : !answered && "border-dashed border-amber-400/80",
+      )}
+    >
+      {COLLAR_POSITIONS.map((p) => {
+        const selected = value === p.value;
+        const showFail = selected && failed;
+        return (
+          <button
+            key={p.value}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(p.value)}
+            className={cn(
+              "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+              showFail
+                ? "bg-[color:var(--status-bad)] text-white"
+                : selected
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground",
+              !disabled && !selected && "hover:text-foreground hover:bg-muted",
+              disabled && "cursor-not-allowed",
+            )}
+          >
+            {p.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -280,14 +361,18 @@ export function StyleFields() {
               control={control}
               name="small_tabaggi"
               render={({ field }) => (
-                <IconToggle
-                  checked={!!field.value}
+                <YesNoToggle
+                  value={field.value}
                   onChange={field.onChange}
                   icon={smallTabaggiImage}
                   label="Small Tabaggi"
+                  failed={!!errors.small_tabaggi}
                 />
               )}
             />
+            {errors.small_tabaggi && (
+              <p className="text-xs text-[color:var(--status-bad)] mt-1">{errors.small_tabaggi.message as string}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label className="text-sm text-muted-foreground">Position</Label>
@@ -295,29 +380,16 @@ export function StyleFields() {
               control={control}
               name="collar_position"
               render={({ field }) => (
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={field.value === "up"}
-                      onChange={(e) => field.onChange(e.target.checked ? "up" : null)}
-                    />
-                    UP
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={field.value === "down"}
-                      onChange={(e) => field.onChange(e.target.checked ? "down" : null)}
-                    />
-                    DOWN
-                  </label>
-                  <span className="text-sm text-muted-foreground self-center">
-                    (none = ordinary)
-                  </span>
-                </div>
+                <CollarPositionPicker
+                  value={field.value}
+                  onChange={field.onChange}
+                  failed={!!errors.collar_position}
+                />
               )}
             />
+            {errors.collar_position && (
+              <p className="text-xs text-[color:var(--status-bad)]">{errors.collar_position.message as string}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label className="text-sm text-muted-foreground">Thickness</Label>
@@ -417,11 +489,12 @@ export function StyleFields() {
                 control={control}
                 name="wallet_pocket"
                 render={({ field }) => (
-                  <IconToggle
-                    checked={!!field.value}
+                  <YesNoToggle
+                    value={field.value}
                     onChange={field.onChange}
                     icon={walletIcon}
                     label="Wallet"
+                    failed={!!errors.wallet_pocket}
                   />
                 )}
               />
@@ -429,11 +502,12 @@ export function StyleFields() {
                 control={control}
                 name="pen_holder"
                 render={({ field }) => (
-                  <IconToggle
-                    checked={!!field.value}
+                  <YesNoToggle
+                    value={field.value}
                     onChange={field.onChange}
                     icon={penIcon}
                     label="Pen"
+                    failed={!!errors.pen_holder}
                   />
                 )}
               />
@@ -441,15 +515,19 @@ export function StyleFields() {
                 control={control}
                 name="mobile_pocket"
                 render={({ field }) => (
-                  <IconToggle
-                    checked={!!field.value}
+                  <YesNoToggle
+                    value={field.value}
                     onChange={field.onChange}
                     icon={phoneIcon}
                     label="Mobile"
+                    failed={!!errors.mobile_pocket}
                   />
                 )}
               />
             </div>
+            {(errors.wallet_pocket || errors.pen_holder || errors.mobile_pocket) && (
+              <p className="text-xs text-[color:var(--status-bad)]">Choose Yes or No for each accessory.</p>
+            )}
           </div>
         </SectionCard>
 

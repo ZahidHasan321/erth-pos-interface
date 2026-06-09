@@ -17,7 +17,7 @@ export const Route = createFileRoute("/(auth)/sakkba/login")({
     }
   },
   component: SakkbaLoginPage,
-  head: () => ({ meta: [{ title: "Sakkba — Sign In" }] }),
+  head: () => ({ meta: [{ title: "Sakkba: Sign In" }] }),
 });
 
 type ShopUser = {
@@ -310,7 +310,7 @@ function SakkbaLoginPage() {
                 fontSize: 12, lineHeight: 1.7, fontWeight: 400,
                 color: "oklch(1 0 0 / 0.5)", maxWidth: 200,
               }}>
-                Home fittings &<br />deliveries — managed.
+                Home fittings &<br />deliveries, managed.
               </p>
             </div>
 

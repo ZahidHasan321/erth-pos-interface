@@ -43,7 +43,7 @@ export function StocktakeBanner() {
           <div className="flex items-center justify-between gap-3">
             <span className="min-w-0 font-medium">
               {tier3
-                ? `Stocktake is ${days} day${days !== 1 ? "s" : ""} overdue — please run a physical count.`
+                ? `Stocktake is ${days} day${days !== 1 ? "s" : ""} overdue. Please run a physical count.`
                 : "The monthly stocktake is due."}
             </span>
             <div className="flex items-center gap-1.5 shrink-0">
@@ -67,7 +67,7 @@ export function StocktakeBanner() {
               <AlertTriangle className="h-5 w-5 text-[var(--status-bad)]" aria-hidden="true" /> Stocktake overdue
             </DialogTitle>
             <DialogDescription>
-              The monthly physical count is {days} day{days !== 1 ? "s" : ""} overdue. Regular counts keep stock accurate — please run one when you can.
+              The monthly physical count is {days} day{days !== 1 ? "s" : ""} overdue. Regular counts keep stock accurate. Please run one when you can.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">

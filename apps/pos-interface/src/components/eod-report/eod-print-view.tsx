@@ -239,7 +239,7 @@ function EodReportDocument({ summary, transactions, dateFrom, dateTo, registerSe
                                     "Variance",
                                     registerSession!.variance !== null
                                         ? `${Number(registerSession!.variance) > 0 ? "+" : ""}${fmt(Number(registerSession!.variance))} KWD`
-                                        : "—",
+                                        : "-",
                                 ],
                             ].map(([label, value], i, arr) => (
                                 <View key={i} style={[s.kvRow, ...(i === arr.length - 1 ? [s.kvRowLast] : [])]} wrap={false}>
@@ -256,7 +256,7 @@ function EodReportDocument({ summary, transactions, dateFrom, dateTo, registerSe
                                         <Text style={s.kvLabel}>
                                             {m.type === "cash_in" ? "+ " : "− "}
                                             {timeFmt.format(new Date(m.created_at))} · {CASH_MOVEMENT_CATEGORY_LABEL[m.reason_category] ?? "Other"}
-                                            {m.reason ? ` — ${m.reason}` : ""} ({m.performed_by_name})
+                                            {m.reason ? `: ${m.reason}` : ""} ({m.performed_by_name})
                                         </Text>
                                         <Text style={s.kvValue}>
                                             {m.type === "cash_in" ? "+" : "−"}
@@ -268,8 +268,8 @@ function EodReportDocument({ summary, transactions, dateFrom, dateTo, registerSe
                         )}
                         {registerSession!.status === "closed" && (
                             <Text style={[s.summarySub, { marginTop: 4 }]}>
-                                Closed by {registerSession!.closed_by_name ?? "—"} at{" "}
-                                {registerSession!.closed_at ? timeFmt.format(new Date(registerSession!.closed_at)) : "—"}
+                                Closed by {registerSession!.closed_by_name ?? "-"} at{" "}
+                                {registerSession!.closed_at ? timeFmt.format(new Date(registerSession!.closed_at)) : "-"}
                                 {registerSession!.closing_notes ? ` · ${registerSession!.closing_notes}` : ""}
                             </Text>
                         )}

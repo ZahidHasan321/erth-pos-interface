@@ -124,7 +124,7 @@ export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, d
         <DialogHeader className="px-6 pt-5 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Settings2 className="h-4 w-4 text-amber-600" />
-            Adjust stock — {itemName}
+            Adjust stock: {itemName}
           </DialogTitle>
         </DialogHeader>
 
@@ -199,7 +199,7 @@ export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, d
             <Section label="Reason" hint={direction === "none" ? "Set a change first" : "Required"}>
               <Select value={reasonValue} onValueChange={setReasonValue} disabled={direction === "none"}>
                 <SelectTrigger>
-                  <SelectValue placeholder={direction === "none" ? "—" : "Choose a reason"} />
+                  <SelectValue placeholder={direction === "none" ? "-" : "Choose a reason"} />
                 </SelectTrigger>
                 <SelectContent>
                   {reasons.map((r) => (

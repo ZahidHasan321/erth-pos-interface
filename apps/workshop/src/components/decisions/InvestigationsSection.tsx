@@ -63,7 +63,7 @@ function ReviewDialog({
       }),
     onSuccess: (res) => {
       toast.success(
-        res.resumed ? "Investigation recorded — production resumed" : "Investigation recorded",
+        res.resumed ? "Investigation recorded, production resumed" : "Investigation recorded",
         {
           description: decision === "redo"
             ? "Hold released. Create the replacement from the garment's redo action."

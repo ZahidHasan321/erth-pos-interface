@@ -393,7 +393,7 @@ export function BookingSheet({
                       <div className="text-sm font-medium truncate">{selectedCustomer.name}</div>
                       <div className="text-xs text-muted-foreground truncate">
                         {selectedCustomer.phone}
-                        {selectedCustomer.area && ` — ${selectedCustomer.area}`}
+                        {selectedCustomer.area && `, ${selectedCustomer.area}`}
                       </div>
                     </div>
                     <Button
@@ -499,7 +499,7 @@ export function BookingSheet({
                         >
                           <div className="text-xs text-muted-foreground flex items-center gap-1.5 px-0.5">
                             <UserPlus className="h-3.5 w-3.5" />
-                            New customer — enter their name below
+                            New customer, enter their name below
                           </div>
 
                           <FormField
@@ -743,7 +743,7 @@ export function BookingSheet({
                           <Input
                             type="number"
                             min={1}
-                            placeholder="—"
+                            placeholder="-"
                             {...field}
                             value={field.value ?? ""}
                             onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseInt(e.target.value))}
@@ -764,7 +764,7 @@ export function BookingSheet({
                           <Input
                             type="number"
                             min={1}
-                            placeholder="—"
+                            placeholder="-"
                             {...field}
                             value={field.value ?? ""}
                             onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseInt(e.target.value))}

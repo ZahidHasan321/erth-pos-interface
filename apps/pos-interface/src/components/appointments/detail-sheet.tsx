@@ -230,11 +230,11 @@ export function DetailSheet({
           <div className="px-5 py-4 space-y-2.5">
             <DetailRow
               icon={UserCheck}
-              label={<><span className="text-muted-foreground">Assigned:</span> <span className="font-medium">{appointment.assignee?.name ?? "—"}</span></>}
+              label={<><span className="text-muted-foreground">Assigned:</span> <span className="font-medium">{appointment.assignee?.name ?? "-"}</span></>}
             />
             <DetailRow
               icon={BookOpen}
-              label={<><span className="text-muted-foreground">Booked by:</span> {appointment.booker?.name ?? "—"}</>}
+              label={<><span className="text-muted-foreground">Booked by:</span> {appointment.booker?.name ?? "-"}</>}
             />
           </div>
 

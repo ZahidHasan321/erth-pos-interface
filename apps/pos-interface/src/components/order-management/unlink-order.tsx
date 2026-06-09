@@ -323,7 +323,7 @@ function LinkGroupCard({
                                 </td>
                                 <td className="py-2.5 px-4 whitespace-nowrap">
                                     <span className="text-sm text-muted-foreground">
-                                        {childPhase ? ORDER_PHASE_LABELS[childPhase] : "—"}
+                                        {childPhase ? ORDER_PHASE_LABELS[childPhase] : "-"}
                                     </span>
                                 </td>
                                 <td className="py-2.5 px-4 text-right whitespace-nowrap">

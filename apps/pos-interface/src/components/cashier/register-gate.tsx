@@ -119,7 +119,7 @@ function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
                     <h2 className="text-xl font-bold font-[Marcellus]">Register Closed</h2>
                     <p className="text-sm text-muted-foreground mt-1">
                         Closed by {session.closed_by_name || "Unknown"} at{" "}
-                        {session.closed_at ? timeFmt.format(new Date(session.closed_at)) : "—"}
+                        {session.closed_at ? timeFmt.format(new Date(session.closed_at)) : "-"}
                     </p>
                 </div>
 
@@ -231,7 +231,7 @@ export function RegisterMenu({ session }: { session: RegisterSessionData }) {
                         </div>
                         {isStale && (
                             <p className="text-xs text-amber-700 mt-1">
-                                Opened {sessionDateLabel} — close & reopen for today.
+                                Opened {sessionDateLabel}. Close & reopen for today.
                             </p>
                         )}
                     </div>

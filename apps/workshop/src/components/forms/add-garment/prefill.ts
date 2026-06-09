@@ -1,5 +1,6 @@
 import type { WorkshopGarment } from "@repo/database";
 import type { MeasurementRow } from "@/api/measurements";
+import { normalizeCollarPosition } from "@/lib/qc-spec";
 import { ALL_MEASUREMENT_KEYS } from "./constants";
 import { addGarmentDefaults, type AddGarmentFormValues } from "./schema";
 
@@ -33,7 +34,10 @@ export function buildPrefillValues(
     base.lines = source.lines ?? 1;
     base.collar_type = source.collar_type ?? null;
     base.collar_button = source.collar_button ?? null;
-    base.collar_position = (source.collar_position as "up" | "down" | null) ?? null;
+    // Existing rows are explicit answers (§2.11): a stored false reads as "No",
+    // an absent collar_position reads as "Standard". Only a brand-new (source
+    // null) garment starts unfilled.
+    base.collar_position = normalizeCollarPosition(source.collar_position);
     base.collar_thickness = source.collar_thickness ?? null;
     base.small_tabaggi = !!source.small_tabaggi;
     base.jabzour_1 = (source.jabzour_1 as string | null) ?? null;
@@ -54,6 +58,13 @@ export function buildPrefillValues(
     m[key] = raw == null || raw === "" ? null : Number(raw);
   }
   base.measurements = m as AddGarmentFormValues["measurements"];
+
+  // Shoulder slope is categorical and lives on the measurement row. Prefill it
+  // from the customer's existing measurement when present so the tailor only
+  // confirms it; a blank-add with no measurement starts unfilled (required gate).
+  const rawSlope = measurement?.shoulder_slope;
+  base.shoulder_slope =
+    (rawSlope as AddGarmentFormValues["shoulder_slope"]) ?? undefined;
 
   return base;
 }

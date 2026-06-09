@@ -231,8 +231,8 @@ function ReportsPage() {
                       <TableCell className={`text-right tabular-nums font-semibold ${Number(m.qty_delta) >= 0 ? "text-green-700" : "text-red-700"}`}>
                         {Number(m.qty_delta) >= 0 ? "+" : ""}{Number(m.qty_delta).toFixed(1)}
                       </TableCell>
-                      <TableCell className="text-sm">{m.reason ?? "—"}</TableCell>
-                      <TableCell className="text-sm">{m.user?.name ?? "—"}</TableCell>
+                      <TableCell className="text-sm">{m.reason ?? "-"}</TableCell>
+                      <TableCell className="text-sm">{m.user?.name ?? "-"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

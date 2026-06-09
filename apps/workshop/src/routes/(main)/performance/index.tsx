@@ -62,7 +62,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 /** Human-readable duration. Uses minutes <60, hours <24h, days otherwise. */
 function formatDuration(minutes: number | null): string {
-  if (minutes === null || !Number.isFinite(minutes)) return "—";
+  if (minutes === null || !Number.isFinite(minutes)) return "-";
   if (minutes < 60) return `${Math.round(minutes)}m`;
   const hours = minutes / 60;
   if (hours < 24) return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)}h`;
@@ -329,7 +329,7 @@ function WorkerTable({
                   <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STAGE_COLORS[w.stage] }} />
                   {STAGE_LABELS[w.stage] ?? w.stage}
                 </span>
-                <span className="text-sm text-muted-foreground truncate">{w.unit ?? "—"}</span>
+                <span className="text-sm text-muted-foreground truncate">{w.unit ?? "-"}</span>
                 <div>
                   {w.type ? (
                     <span className={cn(
@@ -339,12 +339,12 @@ function WorkerTable({
                       {w.type}
                     </span>
                   ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
+                    <span className="text-sm text-muted-foreground">-</span>
                   )}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground tabular-nums">{w.dailyTarget || "—"}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{w.dailyTarget || "-"}</span>
                     <span className="text-base font-medium tabular-nums">{w.actual}</span>
                   </div>
                   <TargetProgressBar
@@ -364,7 +364,7 @@ function WorkerTable({
                       </span>
                     </>
                   ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
+                    <span className="text-sm text-muted-foreground">-</span>
                   )}
                 </div>
                 <div className="flex items-center justify-end gap-0.5">
@@ -374,7 +374,7 @@ function WorkerTable({
                       <span className="text-sm font-medium tabular-nums">{w.rating}</span>
                     </>
                   ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
+                    <span className="text-sm text-muted-foreground">-</span>
                   )}
                 </div>
                 <div className="flex items-center justify-end">
@@ -384,7 +384,7 @@ function WorkerTable({
                       {w.reworkCount}
                     </span>
                   ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
+                    <span className="text-sm text-muted-foreground">-</span>
                   )}
                 </div>
               </div>
@@ -413,7 +413,7 @@ function WorkerTable({
                         {w.efficiency}%
                       </span>
                     )}
-                    <div className="text-xs text-muted-foreground tabular-nums">{w.actual}/{w.dailyTarget || "—"}</div>
+                    <div className="text-xs text-muted-foreground tabular-nums">{w.actual}/{w.dailyTarget || "-"}</div>
                   </div>
                 </div>
                 {w.dailyTarget > 0 && (
@@ -504,11 +504,11 @@ function UnitTable({ units, onMemberClick }: { units: UnitKpi[]; onMemberClick?:
                     {u.avgMinutes}
                   </>
                 ) : (
-                  "—"
+                  "-"
                 )}
               </span>
               <span className="text-sm text-muted-foreground tabular-nums text-right">
-                {u.p90Minutes !== null ? u.p90Minutes : "—"}
+                {u.p90Minutes !== null ? u.p90Minutes : "-"}
               </span>
               <span
                 className={cn(
@@ -516,10 +516,10 @@ function UnitTable({ units, onMemberClick }: { units: UnitKpi[]; onMemberClick?:
                   defectTone ? TONE_TEXT[defectTone] : "text-muted-foreground",
                 )}
               >
-                {u.defectRate !== null ? `${u.defectRate}%` : "—"}
+                {u.defectRate !== null ? `${u.defectRate}%` : "-"}
               </span>
               <span className="text-sm text-muted-foreground tabular-nums text-right">
-                {u.totalDailyTarget > 0 ? u.totalDailyTarget : "—"}
+                {u.totalDailyTarget > 0 ? u.totalDailyTarget : "-"}
               </span>
               <span
                 className={cn(
@@ -527,7 +527,7 @@ function UnitTable({ units, onMemberClick }: { units: UnitKpi[]; onMemberClick?:
                   u.totalDailyTarget > 0 ? TONE_TEXT[effTone] : "text-muted-foreground",
                 )}
               >
-                {u.totalDailyTarget > 0 ? `${eff}%` : "—"}
+                {u.totalDailyTarget > 0 ? `${eff}%` : "-"}
               </span>
             </div>
 
@@ -580,7 +580,7 @@ function UnitTable({ units, onMemberClick }: { units: UnitKpi[]; onMemberClick?:
                 <div className="text-right shrink-0">
                   <span className="text-base font-medium tabular-nums">{u.completed}</span>
                   <div className="text-xs text-muted-foreground tabular-nums">
-                    {u.avgMinutes !== null ? `${u.avgMinutes} min avg` : "—"}
+                    {u.avgMinutes !== null ? `${u.avgMinutes} min avg` : "-"}
                   </div>
                 </div>
               </div>
@@ -671,9 +671,9 @@ function RedoImpactCard({ rows, isLoading }: { rows: RedoImpactRow[]; isLoading:
           <p className="text-xs text-muted-foreground pt-2 mt-2 border-t border-border/60">
             Factory rows (production, QC) count against performance; external rows
             carry the material cost but no blanket factory penalty. Customer-fabric
-            redos have no material cost. Redone pieces are double-classified — the
+            redos have no material cost. Redone pieces are double-classified: the
             production labor counts toward capacity, the material is a failed-quality
-            cost — and the two are never netted against each other.
+            cost, and the two are never netted against each other.
           </p>
         </div>
       )}
@@ -863,7 +863,7 @@ function PerformancePage() {
       tone: (u.defectRate ?? 0) > 25 ? "bad" : "warn",
       icon: RotateCcw,
       title: `${STAGE_LABELS[u.stage] ?? u.stage} defect rate ${u.defectRate}%`,
-      detail: `${u.name} — QC routed work back from this stage`,
+      detail: `${u.name}, QC routed work back from this stage`,
       action: {
         label: "View",
         run: () => {
@@ -885,7 +885,7 @@ function PerformancePage() {
       tone: "warn",
       icon: Recycle,
       title: `${internalRedoCount} factory redo${internalRedoCount === 1 ? "" : "s"} this period`,
-      detail: `${internalRedoCost.toFixed(2)} material scrapped — production / QC attributable`,
+      detail: `${internalRedoCost.toFixed(2)} material scrapped, production / QC attributable`,
       action: { label: "Breakdown", run: () => scrollToId("perf-redo") },
     });
   }
@@ -961,7 +961,7 @@ function PerformancePage() {
             <KpiCard
               icon={CalendarClock}
               label="On-time delivery"
-              value={summary.onTimePct === null ? "—" : `${summary.onTimePct}%`}
+              value={summary.onTimePct === null ? "-" : `${summary.onTimePct}%`}
               tone={rateTone(summary.onTimePct)}
               subtitle={
                 summary.onTimePct === null
@@ -974,7 +974,7 @@ function PerformancePage() {
             <KpiCard
               icon={ShieldCheck}
               label="First-pass yield"
-              value={summary.qcPassRate === null ? "—" : `${summary.qcPassRate}%`}
+              value={summary.qcPassRate === null ? "-" : `${summary.qcPassRate}%`}
               tone={rateTone(summary.qcPassRate)}
               subtitle={
                 summary.qcPassRate === null
@@ -989,7 +989,7 @@ function PerformancePage() {
             <KpiCard
               icon={ThumbsUp}
               label="Customer accept"
-              value={summary.acceptRate === null ? "—" : `${summary.acceptRate}%`}
+              value={summary.acceptRate === null ? "-" : `${summary.acceptRate}%`}
               tone={rateTone(summary.acceptRate)}
               subtitle={summary.acceptRate === null ? "no trials yet" : "at trial / collection"}
             />
@@ -1011,7 +1011,7 @@ function PerformancePage() {
             {findings.length === 0 ? (
               <div className="flex items-center gap-2.5 px-4 py-4 text-sm text-muted-foreground">
                 <CheckCircle2 className="w-4 h-4 text-[var(--status-ok)] shrink-0" />
-                Everything is tracking well this period — no flags.
+                Everything is tracking well this period, no flags.
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -1042,7 +1042,7 @@ function PerformancePage() {
               index={2}
               icon={Recycle}
               label="Redo cost"
-              value={redoTotalCost > 0 ? redoTotalCost.toFixed(2) : "—"}
+              value={redoTotalCost > 0 ? redoTotalCost.toFixed(2) : "-"}
               hint={redoTotalCount > 0 ? `${redoTotalCount} redo${redoTotalCount === 1 ? "" : "s"}` : "no redos"}
             />
             <SecondaryStat

@@ -26,6 +26,7 @@ import { Textarea } from "@repo/ui/textarea";
 import { Combobox } from "@repo/ui/combobox";
 import { MeasurementTable } from "./MeasurementTable";
 import { useAutoNavigation } from "./useAutoNavigation";
+import { ShoulderSlopeSelect, type ShoulderSlopeValue } from "@repo/ui/shoulder-slope";
 
 import {
   customerMeasurementsDefaults,
@@ -704,6 +705,30 @@ export function CustomerMeasurementsForm({
             getFieldRef={getFieldRef}
             getEnterHandler={getEnterHandler}
           />
+        </div>
+
+        {/* ---- Shoulder Slope (categorical, required) ---- */}
+        <div className="space-y-3 pt-2">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Shoulder Slope</h3>
+          <div className="bg-card rounded-lg border border-border p-3">
+            <FormField
+              control={form.control}
+              name="shoulder_slope"
+              render={({ field, fieldState }) => (
+                <FormItem>
+                  <FormControl>
+                    <ShoulderSlopeSelect
+                      value={field.value as ShoulderSlopeValue | null | undefined}
+                      onChange={field.onChange}
+                      disabled={!isEditing}
+                      invalid={fieldState.invalid}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
         </div>
 
         {/* ---- Manual Measurements ---- */}

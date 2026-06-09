@@ -224,7 +224,7 @@ function TerminalGarmentPage() {
                     : `Alteration ${altNum}`}
                 {isAltOut && (
                   <span className="font-normal">
-                    {" "}— customer-brought garment, only flagged cells need work
+                    {" "}(customer-brought garment, only flagged cells need work)
                   </span>
                 )}
               </p>

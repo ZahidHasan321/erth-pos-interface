@@ -183,6 +183,9 @@ function NewWorkOrder() {
     const resetWorkOrder = useCurrentWorkOrderStore((s) => s.resetWorkOrder);
     // Track loading state when fetching order data
     const [isLoadingOrderData, setIsLoadingOrderData] = React.useState(false);
+    // Kept true through a redirect to the read-only view so the loader covers the
+    // hop instead of flashing the empty editor for a frame before unmount.
+    const [isRedirecting, setIsRedirecting] = React.useState(false);
     const loadingOrderIdRef = React.useRef<number | null>(null);
 
     // Appointment context (when started from appointment detail)
@@ -464,8 +467,27 @@ function NewWorkOrder() {
 
             if (response.status === "success" && response.data) {
                 const orderData = response.data;
-                const isConfirmed = orderData.checkout_status === "confirmed";
 
+                // A closed order (confirmed/cancelled) is not editable — send it to
+                // the dedicated read-only view instead of loading it into this
+                // create/edit shell (which would drag along stock checks, draft
+                // prompts and navigation guards that don't apply to a settled
+                // order). Bail before touching the store; keep the loader up via
+                // isRedirecting so the editor never flashes during the hop. Past
+                // this point the order is always still open/editable.
+                if (
+                    orderData.checkout_status === "confirmed" ||
+                    orderData.checkout_status === "cancelled"
+                ) {
+                    setIsRedirecting(true);
+                    navigate({
+                        to: "/$main/orders/view-work-order",
+                        params: { main: main || "erth" },
+                        search: { orderId: orderData.id },
+                        replace: true,
+                    });
+                    return;
+                }
 
                 // 1. Load Customer
                 if (orderData.customer) {
@@ -478,8 +500,7 @@ function NewWorkOrder() {
                     // from cache instead of refetching. Reloading an order never
                     // completes the measurement step on its own — a reused past
                     // measurement needs an explicit Continue, a saved one
-                    // auto-completes (CLAUDE.md §7.10). Confirmed orders mark every
-                    // step complete below, since the order itself is finalized.
+                    // auto-completes (CLAUDE.md §7.10).
                     const custId = Number(orderData.customer.id);
                     void queryClient.prefetchQuery({
                         queryKey: ["measurements", custId],
@@ -523,11 +544,6 @@ function NewWorkOrder() {
                         unit_price: Number(si.unit_price),
                     }));
                     shelfForm.reset({ products: mappedShelfProducts });
-
-                    // Only mark Shelf step as saved if the order is already confirmed
-                    if (isConfirmed) {
-                        addSavedStep(3);
-                    }
                 } else {
                     shelfForm.reset({ products: [] });
                 }
@@ -543,15 +559,6 @@ function NewWorkOrder() {
                     OrderForm.reset(mappedOrder);
                     setOrder(mappedOrder);
                     setOrderId(orderData.id);
-
-                    // If order is confirmed, ensure every step is marked as complete
-                    if (isConfirmed) {
-                        addSavedStep(0);
-                        addSavedStep(1);
-                        addSavedStep(2);
-                        addSavedStep(3);
-                        addSavedStep(4);
-                    }
                 } else {
                     OrderForm.reset({ ...orderDefaults, order_taker_id: user?.id ?? undefined });
                 }
@@ -560,60 +567,54 @@ function NewWorkOrder() {
                 setMountedSections(new Set([1, 2, 3, 4]));
 
                 // Offer to restore unsaved in-form edits buffered locally for THIS
-                // order. A confirmed order is finalized — any leftover draft is
-                // stale (§7.10). Otherwise content-diff the draft against the
-                // freshly DB-loaded form values: equal => nothing new (e.g. crash
-                // right after save), differ => genuine unsaved edits worth a prompt.
-                // Capture + clear immediately so a dismissed prompt can't nag on the
-                // next load. Restore re-fills field values only — step completion
-                // stays earned by an explicit Save/Continue (§7.10).
-                // Resolve keys from the loaded order id directly — the store's
-                // orderId / keyRef are not render-synced inside this async fn yet.
+                // order. Content-diff the draft against the freshly DB-loaded form
+                // values: equal => nothing new (e.g. crash right after save), differ
+                // => genuine unsaved edits worth a prompt. Capture + clear
+                // immediately so a dismissed prompt can't nag on the next load.
+                // Restore re-fills field values only — step completion stays earned
+                // by an explicit Save/Continue (§7.10). Resolve keys from the loaded
+                // order id directly — the store's orderId / keyRef are not
+                // render-synced inside this async fn yet.
                 const mKey = workOrderDraftKey(orderData.id, "measurements");
                 const gKey = workOrderDraftKey(orderData.id, "garments");
-                if (isConfirmed) {
-                    clearFormDraft(mKey);
-                    clearFormDraft(gKey);
-                } else {
-                    const mEnv = readFormDraft(mKey);
-                    const gEnv = readFormDraft(gKey);
-                    const mDiffers =
-                        !!mEnv &&
-                        JSON.stringify(mEnv.values) !==
-                            JSON.stringify(measurementsForm.getValues());
-                    const gDiffers =
-                        !!gEnv &&
-                        JSON.stringify(gEnv.values) !==
-                            JSON.stringify(fabricSelectionForm.getValues());
-                    if (mEnv) clearFormDraft(mKey);
-                    if (gEnv) clearFormDraft(gKey);
-                    if (mDiffers || gDiffers) {
-                        const what = [
-                            mDiffers && "measurements",
-                            gDiffers && "garments",
-                        ]
-                            .filter(Boolean)
-                            .join(" and ");
-                        const savedAt = (gDiffers ? gEnv : mEnv)!.savedAt;
-                        openDialog(
-                            "Restore unsaved changes?",
-                            `Unsaved ${what} changes from a previous session (${format(
-                                new Date(savedAt),
-                                "d MMM, HH:mm",
-                            )}) were found for this order. Restore them?`,
-                            () => {
-                                if (mDiffers && mEnv)
-                                    measurementsForm.reset(mEnv.values as z.infer<typeof customerMeasurementsSchema>);
-                                if (gDiffers && gEnv)
-                                    fabricSelectionForm.reset(gEnv.values as { garments: GarmentSchema[]; signature: string });
-                                closeDialog();
-                            },
-                        );
-                    }
+                const mEnv = readFormDraft(mKey);
+                const gEnv = readFormDraft(gKey);
+                const mDiffers =
+                    !!mEnv &&
+                    JSON.stringify(mEnv.values) !==
+                        JSON.stringify(measurementsForm.getValues());
+                const gDiffers =
+                    !!gEnv &&
+                    JSON.stringify(gEnv.values) !==
+                        JSON.stringify(fabricSelectionForm.getValues());
+                if (mEnv) clearFormDraft(mKey);
+                if (gEnv) clearFormDraft(gKey);
+                if (mDiffers || gDiffers) {
+                    const what = [
+                        mDiffers && "measurements",
+                        gDiffers && "garments",
+                    ]
+                        .filter(Boolean)
+                        .join(" and ");
+                    const savedAt = (gDiffers ? gEnv : mEnv)!.savedAt;
+                    openDialog(
+                        "Restore unsaved changes?",
+                        `Unsaved ${what} changes from a previous session (${format(
+                            new Date(savedAt),
+                            "d MMM, HH:mm",
+                        )}) were found for this order. Restore them?`,
+                        () => {
+                            if (mDiffers && mEnv)
+                                measurementsForm.reset(mEnv.values as z.infer<typeof customerMeasurementsSchema>);
+                            if (gDiffers && gEnv)
+                                fabricSelectionForm.reset(gEnv.values as { garments: GarmentSchema[]; signature: string });
+                            closeDialog();
+                        },
+                    );
                 }
 
-                // Navigate to review step if confirmed, otherwise to measurements
-                setCurrentStep(isConfirmed ? 4 : 1);
+                // Pending order — land on the measurements step.
+                setCurrentStep(1);
 
             } else {
                 toast.error("Failed to load order details");
@@ -624,7 +625,7 @@ function NewWorkOrder() {
         } finally {
             setIsLoadingOrderData(false);
         }
-    }, [resetWorkOrder, demographicsForm, setCustomerDemographics, addSavedStep, fabricSelectionForm, setFabricSelections, shelfForm, setStitchPrice, OrderForm, setOrder, setOrderId, setCurrentStep, user?.id, measurementsForm, openDialog, closeDialog]);
+    }, [resetWorkOrder, demographicsForm, setCustomerDemographics, addSavedStep, fabricSelectionForm, setFabricSelections, shelfForm, setStitchPrice, OrderForm, setOrder, setOrderId, setCurrentStep, user?.id, measurementsForm, openDialog, closeDialog, navigate, main]);
 
     const loadCustomerFresh = React.useCallback((customer: Customer) => {
         resetWorkOrder();
@@ -704,7 +705,7 @@ function NewWorkOrder() {
                     return;
                 }
             }
-            toast.info("Appointment loaded — please select or create a customer");
+            toast.info("Appointment loaded, please select or create a customer");
         })();
     }, [searchAppointmentId, loadCustomerFresh]);
 
@@ -1182,7 +1183,7 @@ function NewWorkOrder() {
     return (
         <>
             <ScrollProgress />
-            {(isLoadingOrderData || createOrderMutation.isPending || completeWorkOrderMutation.isPending) && (
+            {(isLoadingOrderData || isRedirecting || createOrderMutation.isPending || completeWorkOrderMutation.isPending) && (
                 <FullScreenLoader
                     title={
                         createOrderMutation.isPending
@@ -1208,7 +1209,7 @@ function NewWorkOrder() {
                     <CalendarClock className="h-4 w-4 text-primary shrink-0" />
                     <span>
                         From appointment: <span className="font-bold">{linkedAppointment.customer_name}</span>
-                        {" — "}
+                        {" · "}
                         {format(new Date(linkedAppointment.appointment_date + "T00:00:00"), "EEE d MMM")}
                         {linkedAppointment.people_count && <>, {linkedAppointment.people_count} people</>}
                         {linkedAppointment.estimated_pieces && <>, ~{linkedAppointment.estimated_pieces} pieces</>}

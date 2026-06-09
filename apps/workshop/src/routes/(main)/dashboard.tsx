@@ -187,7 +187,7 @@ function DashboardPage() {
         key: "overdue",
         label: "Overdue orders",
         count: exceptions.overdueOrders,
-        desc: "Past delivery date — still at workshop",
+        desc: "Past delivery date, still at workshop",
         href: "/assigned",
         search: { overdue: true },
         icon: AlertTriangle,
@@ -220,9 +220,9 @@ function DashboardPage() {
     if (exceptions.stuckFinals > 0) {
       cards.push({
         key: "stuck-finals",
-        label: "Finals stuck — all brovas rejected",
+        label: "Finals stuck, all brovas rejected",
         count: exceptions.stuckFinals,
-        desc: "Parked indefinitely — manual intervention needed",
+        desc: "Parked indefinitely, manual intervention needed",
         href: "/parking",
         icon: Lock,
         tone: "warn",

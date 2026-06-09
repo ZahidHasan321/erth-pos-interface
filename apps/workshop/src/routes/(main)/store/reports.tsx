@@ -1,12 +1,11 @@
 import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart, ArrowDownToLine, Send, AlertTriangle, Settings2, Package } from "lucide-react";
-import { Card, CardContent } from "@repo/ui/card";
+import { BarChart, ArrowDownToLine, ArrowDownLeft, Send, AlertTriangle, Settings2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shared/table";
 import { cn } from "@/lib/utils";
-import { getMovements, getMovementAggregates, getTopItemsByMovement } from "@/api/stockMovements";
+import { getMovements, getMovementAggregates } from "@/api/stockMovements";
 import { MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_COLORS, getWasteReasonLabel } from "@/lib/inventory";
 import { PageHeader, SectionCard, EmptyState } from "@/components/shared/PageShell";
 import type { StockMovementType } from "@repo/database";
@@ -49,29 +48,21 @@ function ReportsPage() {
   const [range, setRange] = useState<Range>("30d");
   const { from, to } = useMemo(() => rangeToDates(range), [range]);
 
+  // The workshop holds only accessories, so every report is scoped to its own
+  // side (location='workshop'); fabric/shelf movements are shop-side (§4).
   const { data: agg, isLoading: aggLoading } = useQuery({
-    queryKey: ["mv_agg", from, to],
-    queryFn: () => getMovementAggregates({ from, to }),
-    staleTime: 60_000,
-  });
-  const { data: topConsumed = [] } = useQuery({
-    queryKey: ["top_consumed", from, to],
-    queryFn: () => getTopItemsByMovement({ movementType: "consumption", from, to, limit: 10 }),
-    staleTime: 60_000,
-  });
-  const { data: topRestocked = [] } = useQuery({
-    queryKey: ["top_restocked", from, to],
-    queryFn: () => getTopItemsByMovement({ movementType: "restock", from, to, limit: 10 }),
+    queryKey: ["mv_agg", "workshop", from, to],
+    queryFn: () => getMovementAggregates({ from, to, location: "workshop" }),
     staleTime: 60_000,
   });
   const { data: recentAdjustments = [] } = useQuery({
-    queryKey: ["recent_adjustments", from, to],
-    queryFn: () => getMovements({ movementType: "adjustment", fromDate: from, toDate: to, limit: 20 }),
+    queryKey: ["recent_adjustments", "workshop", from, to],
+    queryFn: () => getMovements({ movementType: "adjustment", location: "workshop", fromDate: from, toDate: to, limit: 20 }),
     staleTime: 60_000,
   });
   const { data: wasteMovements = [] } = useQuery({
-    queryKey: ["waste_movements", from, to],
-    queryFn: () => getMovements({ movementType: "waste", fromDate: from, toDate: to, limit: 500 }),
+    queryKey: ["waste_movements", "workshop", from, to],
+    queryFn: () => getMovements({ movementType: "waste", location: "workshop", fromDate: from, toDate: to, limit: 500 }),
     staleTime: 60_000,
   });
 
@@ -95,9 +86,9 @@ function ReportsPage() {
 
   const totals = agg?.totals ?? {};
   const restocked = totals.restock ?? 0;
-  const consumed = totals.consumption ?? 0;
+  const received = totals.transfer_in ?? 0;
+  const sentOut = totals.transfer_out ?? 0;
   const lost = totals.waste ?? 0;
-  const net = restocked - consumed;
 
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10">
@@ -113,18 +104,21 @@ function ReportsPage() {
         </Select>
       </PageHeader>
 
-      {/* KPI cards */}
+      {/* KPI cards — accessory flows only; the workshop holds no fabric, so
+          there is no consumption here (§4). */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <KpiTile label="Restocked"      value={restocked} icon={ArrowDownToLine} color="green"   trend="+ inflow"   loading={aggLoading} />
-        <KpiTile label="Consumed"       value={consumed}  icon={Send}            color="blue"    trend="outflow"    loading={aggLoading} />
-        <KpiTile label="Net change"     value={net}       icon={BarChart}        color={net >= 0 ? "green" : "red"} trend={net >= 0 ? "growth" : "draw down"} loading={aggLoading} showSign />
-        <KpiTile label="Lost in transit" value={lost}     icon={AlertTriangle}   color="amber"   trend={lost > 0 ? "investigate" : "clean"} loading={aggLoading} dimOnZero />
+        <KpiTile label="Restocked" value={restocked} icon={ArrowDownToLine} color="green" trend="+ inflow"  loading={aggLoading} />
+        <KpiTile label="Received"  value={received}  icon={ArrowDownLeft}   color="blue"  trend="from shop" loading={aggLoading} dimOnZero />
+        <KpiTile label="Sent out"  value={sentOut}   icon={Send}            color="blue"  trend="to shop"   loading={aggLoading} dimOnZero />
+        <KpiTile label="Lost"      value={lost}      icon={AlertTriangle}   color="amber" trend={lost > 0 ? "investigate" : "clean"} loading={aggLoading} dimOnZero />
       </div>
 
       {/* By-type breakdown */}
       <SectionCard title="Movements by type" className="mb-6">
         <div className="space-y-2">
-          {(Object.entries(MOVEMENT_TYPE_LABELS) as [StockMovementType, string][]).map(([type, label]) => {
+          {(Object.entries(MOVEMENT_TYPE_LABELS) as [StockMovementType, string][])
+            .filter(([type]) => type !== "consumption")
+            .map(([type, label]) => {
             const v = totals[type] ?? 0;
             const max = Math.max(...Object.values(totals as Record<string, number>), 1);
             const pct = (v / max) * 100;
@@ -173,12 +167,6 @@ function ReportsPage() {
         )}
       </SectionCard>
 
-      {/* Top items */}
-      <div className="grid lg:grid-cols-2 gap-4 mb-6">
-        <TopItemsCard title="Top consumed" rows={topConsumed} icon={Send} tone="info" />
-        <TopItemsCard title="Top restocked" rows={topRestocked} icon={ArrowDownToLine} tone="ok" />
-      </div>
-
       {/* Recent adjustments */}
       <SectionCard
         title="Recent adjustments"
@@ -206,8 +194,8 @@ function ReportsPage() {
                     <TableCell className={`text-right tabular-nums font-medium ${Number(m.qty_delta) >= 0 ? "text-[var(--status-ok)]" : "text-[var(--status-bad)]"}`}>
                       {Number(m.qty_delta) >= 0 ? "+" : ""}{Number(m.qty_delta).toFixed(1)}
                     </TableCell>
-                    <TableCell className="text-sm">{m.reason ?? "—"}</TableCell>
-                    <TableCell className="text-sm">{m.user?.name ?? "—"}</TableCell>
+                    <TableCell className="text-sm">{m.reason ?? "-"}</TableCell>
+                    <TableCell className="text-sm">{m.user?.name ?? "-"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -265,31 +253,3 @@ function KpiTile({ label, value, icon, color, trend, loading, showSign, dimOnZer
   );
 }
 
-function TopItemsCard({ title, rows, icon: Icon, tone }: { title: string; rows: any[]; icon: any; tone: "ok" | "info" }) {
-  const iconColor = tone === "ok" ? "text-[var(--status-ok)]" : "text-[var(--status-info)]";
-  return (
-    <Card>
-      <CardContent className="py-4">
-        <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-          <Icon className={cn("h-4 w-4", iconColor)} /> {title}
-        </h3>
-        {rows.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border py-8 text-center">
-            <Package className="h-6 w-6 mx-auto mb-2 text-muted-foreground/40" />
-            <p className="text-xs text-muted-foreground">No data in this period</p>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {rows.map((r, i) => (
-              <div key={`${r.item_type}-${r.item_id}`} className="flex items-center gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50 text-sm">
-                <span className="w-6 text-xs text-muted-foreground tabular-nums">{i + 1}.</span>
-                <span className="flex-1 truncate">{r.name ?? `#${r.item_id}`} <span className="text-xs text-muted-foreground">({r.item_type})</span></span>
-                <span className="font-medium tabular-nums">{Number(r.total).toFixed(1)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}

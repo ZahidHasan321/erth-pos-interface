@@ -7,8 +7,6 @@ import {
   getHistoryGarments,
   getBoardGarments,
   getCompletedTodayGarments,
-  getRedoReplacementsPending,
-  getParkedRedos,
   getGarmentById,
   getOrderGarments,
   getAssignedOverview,
@@ -35,8 +33,6 @@ export const COMPLETED_TODAY_KEY = ['completed-today-garments'] as const;
 export const ASSIGNED_OVERVIEW_KEY = ['assigned-overview'] as const;
 export const ASSIGNED_PAGE_KEY = ['assigned-page'] as const;
 export const COMPLETED_VIEW_KEY = ['completed-view-garments'] as const;
-export const PARKED_REDOS_KEY = ['parked-redos'] as const;
-export const REDO_PENDING_KEY = ['redo-replacements-pending'] as const;
 
 // Legacy shared cache key. Still used by pages that have not been
 // scope-converted (parking, receiving, dispatch, dashboard, quality-check,
@@ -212,28 +208,6 @@ export function useCompletedTodayGarments() {
   return useQuery({
     queryKey: COMPLETED_TODAY_KEY,
     queryFn: getCompletedTodayGarments,
-    staleTime: LIST_STALE_TIME,
-  });
-}
-
-/** Reject-Redo discarded originals without a replacement row yet. Slim
- *  query — used by the dashboard exception card. */
-export function useRedoReplacementsPending() {
-  return useQuery({
-    queryKey: REDO_PENDING_KEY,
-    queryFn: getRedoReplacementsPending,
-    staleTime: LIST_STALE_TIME,
-  });
-}
-
-/** Parked redo replacements (in_production=false, redo_priority='parked').
- *  Drives the scheduler's "Parked redos — needs manager decision" section.
- *  Separate from useSchedulerGarments because parked rows fall outside its
- *  in_production=true filter. */
-export function useParkedRedos() {
-  return useQuery({
-    queryKey: PARKED_REDOS_KEY,
-    queryFn: getParkedRedos,
     staleTime: LIST_STALE_TIME,
   });
 }

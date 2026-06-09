@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getQcAnalytics, type QcAspectStat } from "@/api/qcAnalytics";
-import { QC_QUALITY } from "@/lib/qc-spec";
+import { QC_QUALITY, QC_OPTIONS } from "@/lib/qc-spec";
+import { MEASUREMENTS_SPEC } from "@repo/database";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { Skeleton } from "@repo/ui/skeleton";
 import { PageHeader, SectionCard, EmptyState } from "@/components/shared/PageShell";
@@ -37,6 +38,19 @@ const STAGE_LABEL: Record<string, string> = {
   soaking: "Soaking", cutting: "Cutting", sewing: "Sewing",
   finishing: "Finishing", ironing: "Ironing", quality_check: "QC",
 };
+
+// Field-key → proper label maps for the measurement/option defect lists.
+// Reused from the canonical specs — no new label set invented (same approach
+// as ASPECT_LABEL). Keys are the measurement/option column names the QC eval
+// stores in failed_measurements / failed_options. Measurements pull from
+// MEASUREMENTS_SPEC (Title Case) rather than QC_MEASUREMENTS (uppercased for the
+// operator spec sheet) so all four lists read in consistent Title Case.
+const MEASUREMENT_LABEL: Record<string, string> = Object.fromEntries(
+  MEASUREMENTS_SPEC.map((m) => [m.key, m.label]),
+);
+const OPTION_LABEL: Record<string, string> = Object.fromEntries(
+  QC_OPTIONS.map((o) => [o.key, o.label]),
+);
 
 function getDateRange(preset: string): { from: string; to: string } {
   const today = new Date();
@@ -189,7 +203,7 @@ function QcAnalyticsPage() {
             <KpiCard
               icon={ShieldCheck}
               label="QC pass rate (per inspection)"
-              value={passRate === null ? "—" : `${passRate}%`}
+              value={passRate === null ? "-" : `${passRate}%`}
               subtitle={passRate === null ? "no inspections" : passRate >= 90 ? "Strong" : passRate >= 75 ? "Watch" : "Needs attention"}
             />
             <KpiCard icon={ClipboardList} label="Inspections" value={data.total_attempts} subtitle={presetLabel} />
@@ -276,12 +290,14 @@ function QcAnalyticsPage() {
               title="Measurement defects"
               icon={Ruler}
               data={data.measurement_defects}
+              labelFor={(k) => MEASUREMENT_LABEL[k] ?? k}
               emptyMsg="No measurement defects"
             />
             <DefectList
               title="Option defects"
               icon={ListChecks}
               data={data.option_defects}
+              labelFor={(k) => OPTION_LABEL[k] ?? k}
               emptyMsg="No option defects"
             />
             <DefectList

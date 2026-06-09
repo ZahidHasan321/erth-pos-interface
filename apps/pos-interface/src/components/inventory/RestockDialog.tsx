@@ -161,7 +161,7 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
             </Section>
 
             {/* Supplier */}
-            <Section label="Supplier" hint="Optional — skip if delivered internally">
+            <Section label="Supplier" hint="Optional, skip if delivered internally">
               <SupplierCombobox value={supplierId} onChange={setSupplierId} />
             </Section>
 

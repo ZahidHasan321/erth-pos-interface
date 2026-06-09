@@ -74,7 +74,7 @@ export const MeasurementInput = forwardRef<
               <div className="text-sm font-semibold text-foreground/70 tabular-nums h-10 flex items-center">
                 {typeof field.value === "number" && field.value !== 0
                   ? `${field.value} ${unit}`
-                  : <span className="text-muted-foreground/40">—</span>
+                  : <span className="text-muted-foreground/40">-</span>
                 }
               </div>
             ) : (

@@ -26,7 +26,7 @@ export function ConfirmedDatePicker({
 }: Props) {
   const [pending, setPending] = useState<Date | null>(null);
 
-  const currentStr = value ? formatDate(typeof value === "string" ? value : value.toISOString()) : "—";
+  const currentStr = value ? formatDate(typeof value === "string" ? value : value.toISOString()) : "-";
   const nextStr = pending ? formatDate(pending.toISOString()) : "";
 
   return (

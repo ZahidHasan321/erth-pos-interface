@@ -10,7 +10,7 @@ export const Route = createFileRoute("/$main/cashier/$orderId")({
     },
     component: CashierOrderDetailPage,
     head: () => ({
-        meta: [{ title: "Cashier — Order" }],
+        meta: [{ title: "Cashier: Order" }],
     }),
 });
 

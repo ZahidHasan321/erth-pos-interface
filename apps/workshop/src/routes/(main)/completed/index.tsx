@@ -57,7 +57,7 @@ function CompletedOrderCard({ group, onClick }: { group: CompletedOrderGroup; on
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <span className="font-mono text-base tabular-nums">#{group.order_id}</span>
-            <span className="text-base truncate">{group.customer_name ?? "—"}</span>
+            <span className="text-base truncate">{group.customer_name ?? "-"}</span>
             {group.brands.map((b) => <BrandBadge key={b} brand={b} />)}
             {group.express && <ExpressBadge />}
             {group.home_delivery && (
@@ -131,7 +131,7 @@ function CompletedOrderTable({
               </TableCell>
               <TableCell className="text-base">
                 <div className="flex flex-col gap-0.5">
-                  <span>{group.customer_name ?? "—"}</span>
+                  <span>{group.customer_name ?? "-"}</span>
                   {group.customer_mobile && (
                     <span className="text-xs font-mono text-muted-foreground tabular-nums">{group.customer_mobile}</span>
                   )}
@@ -160,7 +160,7 @@ function CompletedOrderTable({
               </TableCell>
               <TableCell>
                 <span className="text-sm text-muted-foreground tabular-nums">
-                  {group.delivery_date ? formatDate(group.delivery_date) : "—"}
+                  {group.delivery_date ? formatDate(group.delivery_date) : "-"}
                 </span>
               </TableCell>
               <TableCell className="text-right">

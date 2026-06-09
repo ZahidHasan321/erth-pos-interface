@@ -28,8 +28,9 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 
 // API and Types
 import { getOrdersForDispatch, dispatchOrder, getInTransitToWorkshopOrders, getDispatchHistory, getBrand, type DispatchHistoryRow } from "@/api/orders";
-import { getGarmentsForRedispatch, dispatchGarmentToWorkshop } from "@/api/garments";
+import { getGarmentsForRedispatch, dispatchGarmentToWorkshop, resumeRedoReplacement } from "@/api/garments";
 import type { Order, Customer, Garment } from "@repo/database";
+import { isMeasurementFlagged } from "@repo/database";
 import type { ApiResponse } from "@/types/api";
 import { cn, getKuwaitMidnight, getLocalDateStr, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import {
@@ -64,6 +65,12 @@ interface OrderCardProps {
 const isParkedFinal = (g: { garment_type?: string | null; piece_stage?: string | null }) =>
     g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance";
 
+// A redo replacement still WAITING IN DISPATCH (§2.5): on the customer's fabric
+// (customer_decision) or a restock (waiting_material). Not dispatchable until the
+// staff resumes it from here; never selectable for dispatch.
+const isWaitingReplacement = (g: { redo_parked_reason?: string | null }) =>
+    g.redo_parked_reason != null;
+
 function FabricChip({ source, name }: { source?: string | null; name?: string | null }) {
     if (source === "IN") {
         return <span className="text-xs text-muted-foreground">{name || "In-house fabric"}</span>;
@@ -80,10 +87,15 @@ function OrderListItem({ order, onDispatch, isUpdating, hasReturning, onGoToTab 
     const garments = order.garments || [];
     const numGarments = garments.length || order.num_of_fabrics || 0;
 
-    // Everything selected by default — parked finals are dispatched
-    // alongside brovas and stay parked at the workshop (spec §2.4).
+    const queryClient = useQueryClient();
+    const [resumingId, setResumingId] = useState<string | null>(null);
+
+    // Everything dispatchable selected by default — parked finals are dispatched
+    // alongside brovas and stay parked at the workshop (spec §2.4). A redo
+    // replacement still waiting in dispatch (§2.5) is excluded until resumed.
+    const dispatchable = garments.filter(g => !isWaitingReplacement(g));
     const [selectedIds, setSelectedIds] = useState<Set<string>>(
-        () => new Set(garments.map(g => g.id))
+        () => new Set(dispatchable.map(g => g.id))
     );
 
     const toggleGarment = (id: string, checked: boolean) => {
@@ -94,9 +106,22 @@ function OrderListItem({ order, onDispatch, isUpdating, hasReturning, onGoToTab 
         });
     };
 
-    const allSelected = garments.length > 0 && selectedIds.size === garments.length;
+    const allSelected = dispatchable.length > 0 && selectedIds.size === dispatchable.length;
     const toggleAll = (checked: boolean) => {
-        setSelectedIds(checked ? new Set(garments.map(g => g.id)) : new Set());
+        setSelectedIds(checked ? new Set(dispatchable.map(g => g.id)) : new Set());
+    };
+
+    const handleResume = async (e: React.MouseEvent, gid: string) => {
+        e.stopPropagation();
+        setResumingId(gid);
+        try {
+            const res = await resumeRedoReplacement(gid);
+            if (res.status === "error") { toast.error(res.message); return; }
+            toast.success("Replacement ready to dispatch.");
+            await queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+        } finally {
+            setResumingId(null);
+        }
     };
 
     const brovaCount = garments.filter(g => g.garment_type === "brova").length;
@@ -107,7 +132,7 @@ function OrderListItem({ order, onDispatch, isUpdating, hasReturning, onGoToTab 
         e.stopPropagation();
         if (!isUpdating && selectedIds.size > 0) {
             const ids = [...selectedIds];
-            await onDispatch(order.id, ids.length < garments.length ? ids : undefined);
+            await onDispatch(order.id, ids.length < dispatchable.length ? ids : undefined);
         }
     };
 
@@ -122,7 +147,7 @@ function OrderListItem({ order, onDispatch, isUpdating, hasReturning, onGoToTab 
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
             ) : (
                 <>
-                    <span>Dispatch{selectedIds.size < garments.length ? ` (${selectedIds.size})` : ""}</span>
+                    <span>Dispatch{selectedIds.size < dispatchable.length ? ` (${selectedIds.size})` : ""}</span>
                     <ChevronRight className="w-3 h-3 ml-1" />
                 </>
             )}
@@ -150,7 +175,7 @@ function OrderListItem({ order, onDispatch, isUpdating, hasReturning, onGoToTab 
                     className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                     <RotateCcw className="w-3 h-3" />
-                    This order also has garment(s) returning — see Return to Workshop
+                    This order also has garment(s) returning. See Return to Workshop
                     <ChevronRight className="w-3 h-3" />
                 </button>
             ) : undefined}
@@ -165,18 +190,21 @@ function OrderListItem({ order, onDispatch, isUpdating, hasReturning, onGoToTab 
                         {garments.map((g) => {
                             const isSelected = selectedIds.has(g.id);
                             const parked = isParkedFinal(g);
+                            const waiting = isWaitingReplacement(g);
                             return (
                                 <div
                                     key={g.id}
                                     className={cn(
-                                        "flex items-start gap-2.5 rounded-md border bg-background p-3 cursor-pointer hover:bg-muted/20 transition-colors",
-                                        !isSelected && "opacity-50"
+                                        "flex items-start gap-2.5 rounded-md border bg-background p-3 transition-colors",
+                                        waiting ? "border-amber-300 bg-amber-50/40" : "cursor-pointer hover:bg-muted/20",
+                                        !waiting && !isSelected && "opacity-50"
                                     )}
-                                    onClick={() => toggleGarment(g.id, !isSelected)}
+                                    onClick={() => { if (!waiting) toggleGarment(g.id, !isSelected); }}
                                 >
                                     <Checkbox
-                                        checked={isSelected}
-                                        onCheckedChange={(checked) => toggleGarment(g.id, !!checked)}
+                                        checked={!waiting && isSelected}
+                                        disabled={waiting}
+                                        onCheckedChange={(checked) => { if (!waiting) toggleGarment(g.id, !!checked); }}
                                         onClick={(e) => e.stopPropagation()}
                                         className="mt-0.5 shrink-0"
                                     />
@@ -190,12 +218,30 @@ function OrderListItem({ order, onDispatch, isUpdating, hasReturning, onGoToTab 
                                             {parked && (
                                                 <span className="text-xs text-muted-foreground">Parked</span>
                                             )}
+                                            {waiting && (
+                                                <span className="text-xs font-medium text-amber-700">
+                                                    {g.redo_parked_reason === "customer_decision" ? "Waiting on customer fabric" : "Waiting on restock"}
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
                                             <span>{g.style || "Kuwaiti"}</span>
                                             <FabricChip source={g.fabric_source} name={g.fabric?.name} />
                                             {g.notes && <span className="truncate max-w-[120px] italic">"{g.notes}"</span>}
                                         </div>
+                                        {waiting && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 mt-2 text-xs"
+                                                disabled={resumingId === g.id}
+                                                onClick={(e) => handleResume(e, g.id)}
+                                            >
+                                                {resumingId === g.id
+                                                    ? <RefreshCw className="w-3 h-3 animate-spin" />
+                                                    : (g.redo_parked_reason === "customer_decision" ? "Customer brought fabric: resume" : "Restocked: resume")}
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -228,9 +274,11 @@ interface RedispatchGarment extends Garment {
   }>;
 }
 
-// Count measurement + style changes recorded on a feedback row so the shop
-// staff dispatching the return sees the scope of work, matching the workshop
-// detail page's "N measurement changes · M style fixes" summary.
+// Count flagged measurements + style fixes recorded on a feedback row so the
+// shop staff dispatching the return sees the scope of work, matching the
+// workshop detail page's summary. A measurement counts when its value changed
+// OR a fault reason was recorded against it (reason-only flags included, §2.5)
+// — shared with the workshop terminal via isMeasurementFlagged.
 function countFeedbackChanges(
   fb: { measurement_diffs: string | null; options_checklist: string | null } | null,
 ): { measurements: number; styles: number } {
@@ -241,10 +289,11 @@ function countFeedbackChanges(
     const diffs = fb.measurement_diffs ? JSON.parse(fb.measurement_diffs) : null;
     if (Array.isArray(diffs)) {
       for (const d of diffs) {
-        const orig = d?.original_value;
-        const next = d?.actual_value == null || d.actual_value === "" ? null : Number(d.actual_value);
-        if (orig == null || next == null) continue;
-        if (Number(orig) !== next) measurements += 1;
+        if (isMeasurementFlagged({
+          originalValue: d?.original_value,
+          newValue: d?.actual_value,
+          reason: d?.reason,
+        })) measurements += 1;
       }
     }
   } catch {
@@ -419,7 +468,7 @@ function ReturnToWorkshopTab({
                         )}
                       </div>
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">-</span>
                     )}
                     {alsoNew && (
                       <button
@@ -479,7 +528,7 @@ function InTransitOrderRow({ order }: { order: OrderWithDetails }) {
             <span className="font-medium text-sm">{order.id}</span>
           </div>
         </td>
-        <td className="py-2.5 px-4 text-sm text-muted-foreground">{order.invoice_number ?? '—'}</td>
+        <td className="py-2.5 px-4 text-sm text-muted-foreground">{order.invoice_number ?? '-'}</td>
         <td className="py-2.5 px-4">
           <div className="font-medium text-sm">{order.customer?.name ?? 'Unknown'}</div>
           {order.customer?.phone && <div className="text-sm text-muted-foreground">{order.customer.phone}</div>}
@@ -784,7 +833,7 @@ function HistoryOrderGroupRows({ group }: { group: HistoryOrderGroup }) {
             <span className="font-medium text-sm">{group.orderId}</span>
           </div>
         </td>
-        <td className="py-2.5 px-4 text-xs text-muted-foreground">{group.invoiceNumber ?? '—'}</td>
+        <td className="py-2.5 px-4 text-xs text-muted-foreground">{group.invoiceNumber ?? '-'}</td>
         <td className="py-2.5 px-4">
           <div className="font-medium text-xs">{group.customerName ?? 'Unknown'}</div>
           {group.customerPhone && <div className="text-[10px] text-muted-foreground">{group.customerPhone}</div>}
@@ -842,7 +891,7 @@ function HistoryOrderGroupRows({ group }: { group: HistoryOrderGroup }) {
                         <div className="space-y-1">
                           <div className="flex justify-between items-center">
                             <span className="text-muted-foreground text-xs">Trip</span>
-                            <span className="text-xs">{r.trip_number ?? '—'}</span>
+                            <span className="text-xs">{r.trip_number ?? '-'}</span>
                           </div>
                           <div className="flex justify-between items-center">
                             <span className="text-muted-foreground text-xs">Time</span>
@@ -923,7 +972,7 @@ function DispatchHistoryTab() {
 
       {/* Print header (only visible when printing) */}
       <div className="hidden print:block mb-4">
-        <h1 className="text-xl font-medium">Dispatch history — {period === 'today' ? 'Today' : period === 'week' ? 'This week' : 'This month'}</h1>
+        <h1 className="text-xl font-medium">Dispatch history: {period === 'today' ? 'Today' : period === 'week' ? 'This week' : 'This month'}</h1>
         <p className="text-sm text-muted-foreground">
           Shop → workshop · {periodLabel} · {rows.length} record{rows.length === 1 ? '' : 's'}
         </p>
@@ -993,7 +1042,7 @@ function DispatchHistoryTab() {
                       </td>
                       <td className="py-2 px-4 font-medium">{r.order_id}</td>
                       <td className="py-2 px-4 text-xs text-muted-foreground">
-                        {r.invoice_number ?? '—'}
+                        {r.invoice_number ?? '-'}
                       </td>
                       <td className="py-2 px-4">
                         <div className="font-medium text-xs">{r.customer_name ?? 'Unknown'}</div>
@@ -1009,7 +1058,7 @@ function DispatchHistoryTab() {
                           </span>
                         )}
                       </td>
-                      <td className="py-2 px-4 text-xs">{r.trip_number ?? '—'}</td>
+                      <td className="py-2 px-4 text-xs">{r.trip_number ?? '-'}</td>
                     </tr>
                   );
                 })}

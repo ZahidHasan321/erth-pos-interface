@@ -52,7 +52,7 @@ function StocktakeHistoryPage() {
                 <span className="font-medium">
                   {h.validated_at
                     ? new Date(h.validated_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
-                    : "—"}
+                    : "-"}
                 </span>
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                   Validated <ChevronRight className="h-4 w-4" aria-hidden="true" />

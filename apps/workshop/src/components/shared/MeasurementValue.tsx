@@ -15,7 +15,7 @@ export function MeasurementValue({ raw, degree = 0, className, correction }: Mea
   if (!p) return null;
 
   const tooltip = correction
-    ? `Workshop mistake — original: ${correction.original ?? "—"}${correction.note ? ` (${correction.note})` : ""}`
+    ? `Workshop mistake, original: ${correction.original ?? "-"}${correction.note ? ` (${correction.note})` : ""}`
     : undefined;
 
   return (

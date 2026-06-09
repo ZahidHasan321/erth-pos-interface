@@ -164,10 +164,10 @@ const DEPARTMENT_OPTIONS = [
 ] as const;
 
 function describeAccess(role: Role, department: Department, jobFunctions: JobFunction[]): { label: string; detail: string } {
-  if (role === "super_admin") return { label: "Full access — all apps", detail: "Full access to all pages across all apps. Can manage everything." };
+  if (role === "super_admin") return { label: "Full access: all apps", detail: "Full access to all pages across all apps. Can manage everything." };
   if (role === "admin") return { label: "Full access", detail: "Full access to all pages. Can manage users, schedules, pricing, and operations." };
   if (role === "manager" && department === "workshop") return { label: "Workshop manager", detail: "Full workshop operations: scheduling, receiving, dispatch, team, performance." };
-  if (role === "manager" && department === "shop") return { label: "Shop manager — workshop view-only", detail: "View-only access to workshop data. Dashboard, tracker, performance." };
+  if (role === "manager" && department === "shop") return { label: "Shop manager: workshop view-only", detail: "View-only access to workshop data. Dashboard, tracker, performance." };
   if (role === "staff" && department === "shop") return { label: "Shop staff", detail: "Shop-only access. No workshop pages." };
   // staff + workshop
   if (jobFunctions.length === 0) return { label: "Office staff", detail: "Dashboard / tracker / performance access. No terminals." };
@@ -392,7 +392,7 @@ export function UserForm({
                 })}
               </div>
               {form.job_functions.length === 0 && (
-                <p className="text-xs text-muted-foreground pt-1">No stations — office staff.</p>
+                <p className="text-xs text-muted-foreground pt-1">No stations, office staff.</p>
               )}
               {/* One explicit, required team picker per selected operational
                   station (Q4 / §6). Soaking has no picker (auto-assigned). */}
@@ -525,7 +525,7 @@ function UnitPicker({
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" className="max-w-xs">
-            Which team this worker belongs to for this station. Pick it explicitly — it is never defaulted, so editing the worker won't silently move them to another team.
+            Which team this worker belongs to for this station. Pick it explicitly. It is never defaulted, so editing the worker won't silently move them to another team.
           </TooltipContent>
         </Tooltip>
       </div>
@@ -536,7 +536,7 @@ function UnitPicker({
             onValueChange={(v) => onChange(v || null)}
           >
             <SelectTrigger>
-              <SelectValue placeholder={stageUnits.length === 0 ? "No teams — create one" : "Select team"} />
+              <SelectValue placeholder={stageUnits.length === 0 ? "No teams, create one" : "Select team"} />
             </SelectTrigger>
             <SelectContent>
               {stageUnits.map((u) => (

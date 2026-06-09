@@ -351,7 +351,15 @@ export interface OptionCheck {
   hashwa_rejected?: boolean;
   hashwa_new_value?: string | null;
   notes?: string | null;
+  // Per-style attachments saved beside this option in the feedback JSONB.
+  photo_urls?: string[] | null;
+  voice_note_urls?: string[] | null;
 }
+
+const optPhotoLinks = (o: OptionCheck): string[] =>
+  Array.isArray(o.photo_urls) ? o.photo_urls.filter((v): v is string => typeof v === "string") : [];
+const optVoiceLinks = (o: OptionCheck): string[] =>
+  Array.isArray(o.voice_note_urls) ? o.voice_note_urls.filter((v): v is string => typeof v === "string") : [];
 
 function parseTripHistory(raw: unknown): TripHistoryEntry[] {
   if (!raw) return [];
@@ -363,7 +371,7 @@ function parseTripHistory(raw: unknown): TripHistoryEntry[] {
 function StyleOptionChip({ styleKey }: { styleKey: string | null | undefined }) {
   const key = String(styleKey ?? "");
   const mapped = key ? STYLE_IMAGE_MAP[key] : null;
-  const label = mapped?.label ?? key ?? "—";
+  const label = mapped?.label ?? key ?? "-";
   return (
     <span className="inline-flex items-center gap-1">
       {mapped?.image ? (
@@ -512,6 +520,17 @@ function FeedbackFlat({ ctx }: { ctx: ReworkContext }) {
   });
   const photoUrls = ctx.photoUrls ?? [];
   const voiceNoteUrls = ctx.voiceNoteUrls ?? [];
+  // Per-style attachments render inline beside their option below. The flat
+  // top-level list is an aggregate, so the bottom block shows only what isn't
+  // already pinned to a rejected style (avoids duplication; media on a
+  // non-rejected style still surfaces here).
+  const inlineUrls = new Set<string>();
+  for (const o of rejectedOptions) {
+    for (const u of optPhotoLinks(o)) inlineUrls.add(u);
+    for (const u of optVoiceLinks(o)) inlineUrls.add(u);
+  }
+  const unfiledPhotos = photoUrls.filter((u) => !inlineUrls.has(u));
+  const unfiledVoices = voiceNoteUrls.filter((u) => !inlineUrls.has(u));
 
   return (
     <div className={cn("rounded-md border px-3 py-2.5 space-y-2", tone)}>
@@ -543,12 +562,12 @@ function FeedbackFlat({ ctx }: { ctx: ReworkContext }) {
               return (
                 <li key={`${d.field}-${i}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className="text-foreground flex-1 min-w-0">{fieldLabel}</span>
-                  <span className="tabular-nums text-muted-foreground">{d.original_value ?? "—"}</span>
+                  <span className="tabular-nums text-muted-foreground">{d.original_value ?? "-"}</span>
                   <ArrowRight className="w-3 h-3 shrink-0" />
-                  <span className="tabular-nums text-foreground">{d.actual_value ?? "—"}</span>
+                  <span className="tabular-nums text-foreground">{d.actual_value ?? "-"}</span>
                   {diff && <span className="tabular-nums">({diff})</span>}
                   {d.reason && <span className="text-muted-foreground italic">{d.reason.replace(/_/g, " ")}</span>}
-                  {d.notes && <span className="text-muted-foreground basis-full pl-2">— {d.notes}</span>}
+                  {d.notes && <span className="text-muted-foreground basis-full pl-2">{d.notes}</span>}
                 </li>
               );
             })}
@@ -593,7 +612,25 @@ function FeedbackFlat({ ctx }: { ctx: ReworkContext }) {
                       </span>
                     </span>
                   )}
-                  {o.notes && <span className="text-muted-foreground basis-full pl-2">— {o.notes}</span>}
+                  {o.notes && <span className="text-muted-foreground basis-full pl-2">{o.notes}</span>}
+                  {(optPhotoLinks(o).length > 0 || optVoiceLinks(o).length > 0) && (
+                    <div className="basis-full pl-2 flex flex-wrap items-center gap-1.5">
+                      {optPhotoLinks(o).map((url, j) => (
+                        <a
+                          key={`${url}-${j}`}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block w-10 h-10 rounded-md overflow-hidden border border-border bg-card hover:opacity-80"
+                        >
+                          <img src={url} alt={`${label} ${j + 1}`} className="w-full h-full object-cover" />
+                        </a>
+                      ))}
+                      {optVoiceLinks(o).map((url, j) => (
+                        <VoiceNotePlayer key={`${url}-${j}`} url={url} />
+                      ))}
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -601,14 +638,14 @@ function FeedbackFlat({ ctx }: { ctx: ReworkContext }) {
         </div>
       )}
 
-      {(photoUrls.length > 0 || voiceNoteUrls.length > 0) && (
+      {(unfiledPhotos.length > 0 || unfiledVoices.length > 0) && (
         <div>
           <div className="flex items-center gap-1.5 mb-1 text-muted-foreground">
             <ImageIcon className="w-3 h-3" />
             <span className="text-sm">Attachments</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {photoUrls.map((url, i) => (
+            {unfiledPhotos.map((url, i) => (
               <a
                 key={`${url}-${i}`}
                 href={url}
@@ -619,7 +656,7 @@ function FeedbackFlat({ ctx }: { ctx: ReworkContext }) {
                 <img src={url} alt={`Feedback ${i + 1}`} className="w-full h-full object-cover" />
               </a>
             ))}
-            {voiceNoteUrls.map((url, i) => (
+            {unfiledVoices.map((url, i) => (
               <VoiceNotePlayer key={`${url}-${i}`} url={url} />
             ))}
           </div>

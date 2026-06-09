@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import type { Card2PaymentMethod, Card2PdfData } from '../types'
 import checkboxIcon from '../assets/checkbox.svg'
 import checkboxMarkedIcon from '../assets/checkbox_marked.svg'
-import { formatValue } from '../formatters/card2Formatters'
+import { formatKd } from '../formatters/card2Formatters'
 import { card2Layout } from '../layout'
 
 export interface Card2PricingPaymentStripHtmlProps {
@@ -20,21 +20,21 @@ const paymentMethodOptions: readonly PaymentMethodOption[] = [
   { id: 'cash', label: 'Cash' },
 ]
 
-const resolvePriceColumnStartPercent = (): number => {
+const resolveFabricColumnStartPercent = (): number => {
   const fixedColumns = card2Layout.lineItemsTable.fixedColumns
-  const priceColumnIndex = fixedColumns.findIndex((column) => column.id === 'price')
+  const fabricColumnIndex = fixedColumns.findIndex((column) => column.id === 'fabric')
 
-  if (priceColumnIndex < 0) {
+  if (fabricColumnIndex < 0) {
     return 0
   }
 
   return fixedColumns
-    .slice(0, priceColumnIndex)
+    .slice(0, fabricColumnIndex)
     .reduce((totalWidth, column) => totalWidth + column.widthPercent, 0)
 }
 
 const pricingStripLayoutStyle = {
-  '--card2-pricing-price-start': `${resolvePriceColumnStartPercent()}%`,
+  '--card2-pricing-price-start': `${resolveFabricColumnStartPercent()}%`,
 } as CSSProperties
 
 export function Card2PricingPaymentStripHtml({
@@ -49,7 +49,7 @@ export function Card2PricingPaymentStripHtml({
           <div className="card2-pricing-strip__field card2-pricing-strip__field--fabric-total">
             <span className="card2-pricing-strip__label">Fabric Total Price</span>
             <span className="card2-pricing-strip__value">
-              {formatValue(data.pricing?.fabricTotalPrice)}
+              {formatKd(data.pricing?.fabricTotalPrice)}
             </span>
           </div>
         </div>
@@ -58,17 +58,17 @@ export function Card2PricingPaymentStripHtml({
           <div className="card2-pricing-strip__totals">
             <div className="card2-pricing-strip__field">
               <span className="card2-pricing-strip__label">Paid</span>
-              <span className="card2-pricing-strip__value">{formatValue(data.pricing?.paid)}</span>
+              <span className="card2-pricing-strip__value">{formatKd(data.pricing?.paid)}</span>
             </div>
 
             <div className="card2-pricing-strip__field">
               <span className="card2-pricing-strip__label">Remaining</span>
-              <span className="card2-pricing-strip__value">{formatValue(data.pricing?.remaining)}</span>
+              <span className="card2-pricing-strip__value">{formatKd(data.pricing?.remaining)}</span>
             </div>
 
             <div className="card2-pricing-strip__field">
               <span className="card2-pricing-strip__label">Grand Total</span>
-              <span className="card2-pricing-strip__value">{formatValue(data.pricing?.grandTotal)}</span>
+              <span className="card2-pricing-strip__value">{formatKd(data.pricing?.grandTotal)}</span>
             </div>
           </div>
         </div>

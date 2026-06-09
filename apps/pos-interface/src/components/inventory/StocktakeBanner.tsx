@@ -47,7 +47,7 @@ export function StocktakeBanner({ main }: { main: string }) {
             <AlertTriangle className={cn("h-4 w-4 shrink-0", tier3 ? "text-red-600" : "text-amber-600")} />
             <p className={cn("text-sm font-medium min-w-0", tier3 ? "text-red-900" : "text-amber-900")}>
               {tier3
-                ? `Stocktake is ${days} day${days !== 1 ? "s" : ""} overdue — please run a physical count.`
+                ? `Stocktake is ${days} day${days !== 1 ? "s" : ""} overdue. Please run a physical count.`
                 : "The monthly stocktake is due."}
             </p>
           </div>
@@ -72,7 +72,7 @@ export function StocktakeBanner({ main }: { main: string }) {
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            The monthly physical count is {days} day{days !== 1 ? "s" : ""} overdue. Regular counts keep stock accurate — please run one when you can.
+            The monthly physical count is {days} day{days !== 1 ? "s" : ""} overdue. Regular counts keep stock accurate. Please run one when you can.
           </p>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={dismissModal}>Later</Button>

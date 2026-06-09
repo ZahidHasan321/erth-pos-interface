@@ -60,7 +60,7 @@ export const MOVEMENT_TYPE_COLORS: Record<StockMovementType, string> = {
 };
 
 export const ADJUSTMENT_REASONS_ADD = [
-  { value: "recount_up", label: "Recount — found more" },
+  { value: "recount_up", label: "Recount: found more" },
   { value: "found", label: "Found / misplaced" },
   { value: "returned_from_customer", label: "Returned from customer" },
   { value: "other_add", label: "Other (specify)" },
@@ -69,7 +69,7 @@ export const ADJUSTMENT_REASONS_ADD = [
 // Adjust is for count corrections only. Damaged / lost stock goes through the
 // dedicated Damage/Waste action (WASTE_REASONS below) — see CLAUDE.md §4.
 export const ADJUSTMENT_REASONS_REMOVE = [
-  { value: "recount_down", label: "Recount — short" },
+  { value: "recount_down", label: "Recount: short" },
   { value: "expired", label: "Expired" },
   { value: "returned_to_supplier", label: "Returned to supplier" },
   { value: "other_remove", label: "Other (specify)" },

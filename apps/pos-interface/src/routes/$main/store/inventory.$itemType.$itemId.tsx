@@ -842,7 +842,7 @@ function MetadataCard({
               </Field>
               <Field
                 label="Unit of measure"
-                hint={unitLocked ? "Locked — already used in stock movements" : undefined}
+                hint={unitLocked ? "Locked, already used in stock movements" : undefined}
               >
                 <select
                   disabled={!canEdit || unitLocked}
@@ -890,7 +890,7 @@ function MetadataCard({
             disabled={!canEdit}
             value={draft.description}
             onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-            placeholder="Anything worth remembering about this item — care notes, sourcing quirks, etc."
+            placeholder="Anything worth remembering about this item: care notes, sourcing quirks, etc."
           />
         </Field>
 
@@ -1068,7 +1068,7 @@ function MovementsTab({
                         m.supplier?.name,
                         m.movement_type === "waste" ? getWasteReasonLabel(m.reason ?? "") : m.reason,
                         m.notes,
-                      ].filter(Boolean).join(" · ") || "—"}
+                      ].filter(Boolean).join(" · ") || "-"}
                       {m.image_url && (
                         <a
                           href={m.image_url}
@@ -1145,14 +1145,14 @@ function RestocksTab({
               {entries.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()}</TableCell>
-                  <TableCell className="text-sm">{e.supplier?.name ?? "—"}</TableCell>
+                  <TableCell className="text-sm">{e.supplier?.name ?? "-"}</TableCell>
                   <TableCell className="text-right tabular-nums font-semibold text-green-700">
                     +{formatQty(itemType, e.qty, unit)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {e.unit_cost == null ? "—" : e.unit_cost.toFixed(3)}
+                    {e.unit_cost == null ? "-" : e.unit_cost.toFixed(3)}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{e.notes ?? "—"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{e.notes ?? "-"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

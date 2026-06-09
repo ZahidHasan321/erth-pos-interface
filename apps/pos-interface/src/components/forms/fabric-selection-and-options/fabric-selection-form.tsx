@@ -129,8 +129,12 @@ export function FabricSelectionForm({
     const [tempStockUsage, setTempStockUsage] = React.useState<
         Map<string, number>
     >(new Map());
+    // Live stock validation only makes sense while the order can still be saved.
+    // A closed order (confirmed OR cancelled) is read-only, so re-counting its
+    // committed fabric against already-reduced stock would only raise a phantom
+    // "Insufficient Stock" warning. Gate on isOrderClosed, not just "confirmed".
     const [stockValidationActive, setStockValidationActive] = React.useState(
-        checkoutStatus !== "confirmed"
+        !isOrderClosed
     );
 
     const printAllRef = React.useRef<HTMLDivElement>(null);
@@ -389,7 +393,7 @@ export function FabricSelectionForm({
         }
 
         if (styles.length === 0) {
-            toast.error("Style pricing not loaded yet — please retry in a moment");
+            toast.error("Style pricing not loaded yet, please retry in a moment");
             return;
         }
 

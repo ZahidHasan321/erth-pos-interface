@@ -70,6 +70,30 @@ export function formatMeasurement(raw: unknown, degree = 0): string {
 }
 
 /**
+ * Decides whether a measurement row should surface as a flagged alteration/QC
+ * item. A field is flagged when its value changed from the prior spec OR a
+ * fault reason was recorded against it — even with no new value entered.
+ *
+ * §2.5: a reason on its own (e.g. "Workshop Error" with no corrected number)
+ * still tells the workshop to re-check that measurement against the unchanged
+ * spec. Shared by the shop feedback recorder and the workshop alteration filter
+ * so both agree on what counts as "flagged".
+ */
+export function isMeasurementFlagged(args: {
+  originalValue: number | null | undefined;
+  newValue: number | string | null | undefined;
+  reason: string | null | undefined;
+}): boolean {
+  if (typeof args.reason === "string" && args.reason.trim() !== "") return true;
+  const orig = args.originalValue;
+  if (orig == null) return false;
+  const next =
+    args.newValue == null || args.newValue === "" ? null : Number(args.newValue);
+  if (next == null || !Number.isFinite(next)) return false;
+  return Number(orig) !== next;
+}
+
+/**
  * Unified alteration rule: any return to workshop (trip >= 2) is an alteration,
  * regardless of garment type. alt# = trip - 1.
  *

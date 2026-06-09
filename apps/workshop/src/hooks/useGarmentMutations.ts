@@ -19,8 +19,6 @@ import {
   updateGarmentDetails,
   updateOrderDeliveryDate,
   updateOrderAssignedDate,
-  createReplacementGarment,
-  resumeParkedRedo,
 } from '@/api/garments';
 import {
   WORKSHOP_GARMENTS_KEY,
@@ -32,11 +30,9 @@ import {
   ASSIGNED_OVERVIEW_KEY,
   ASSIGNED_PAGE_KEY,
   COMPLETED_VIEW_KEY,
-  PARKED_REDOS_KEY,
-  REDO_PENDING_KEY,
 } from './useWorkshopGarments';
 import { SIDEBAR_COUNTS_KEY } from './useSidebarCounts';
-import type { WorkshopGarment, RootCause, RedoPriority, Location } from '@repo/database';
+import type { WorkshopGarment, Location } from '@repo/database';
 import type { PieceStage } from '@repo/database';
 import type { QcInputs } from '@/lib/qc-spec';
 
@@ -56,8 +52,6 @@ function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ASSIGNED_OVERVIEW_KEY });
   qc.invalidateQueries({ queryKey: ASSIGNED_PAGE_KEY });
   qc.invalidateQueries({ queryKey: COMPLETED_VIEW_KEY });
-  qc.invalidateQueries({ queryKey: PARKED_REDOS_KEY });
-  qc.invalidateQueries({ queryKey: REDO_PENDING_KEY });
   qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'garment' });
   qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'order-garments' });
 }
@@ -521,54 +515,4 @@ export function useUpdateOrderAssignedDate() {
       updateOrderAssignedDate(args.orderId, args.date),
     'Failed to update assigned date',
   );
-}
-
-/**
- * Reject-Redo / final Needs-Redo: create the replacement via the
- * create_replacement_garment RPC (CLAUDE.md §2.5/§4). The RPC owns fabric
- * accounting (auto-consume, scrap waste annotation, park on short/OUT fabric);
- * the caller passes root cause, priority, and a client idempotency key. Error
- * surfacing is left to the caller so it can show the parked outcome.
- */
-export function useCreateReplacementGarment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (args: {
-      replacesGarmentId: string;
-      rootCause: RootCause;
-      redoPriority: RedoPriority;
-      userId: string | null;
-      idempotencyKey: string;
-    }) =>
-      createReplacementGarment(args.replacesGarmentId, {
-        rootCause: args.rootCause,
-        redoPriority: args.redoPriority,
-        userId: args.userId,
-        idempotencyKey: args.idempotencyKey,
-      }),
-    onSettled: () => invalidateAll(qc),
-  });
-}
-
-/**
- * Resume a parked redo replacement (CLAUDE.md §6) once material is available or
- * the customer-fabric decision is made. Re-runs the fabric consume; a still-short
- * fabric makes the RPC raise (handled by the caller's onError).
- */
-export function useResumeParkedRedo() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (args: {
-      garmentId: string;
-      priority: RedoPriority;
-      userId: string | null;
-      idempotencyKey: string;
-    }) =>
-      resumeParkedRedo(args.garmentId, {
-        priority: args.priority,
-        userId: args.userId,
-        idempotencyKey: args.idempotencyKey,
-      }),
-    onSettled: () => invalidateAll(qc),
-  });
 }

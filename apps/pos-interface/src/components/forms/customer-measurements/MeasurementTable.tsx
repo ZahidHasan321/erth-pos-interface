@@ -107,7 +107,7 @@ function CellDropdown({
                   "disabled:opacity-100 disabled:cursor-not-allowed",
                 )}
               >
-                <SelectValue placeholder="—" />
+                <SelectValue placeholder="-" />
               </SelectTrigger>
               <SelectContent>
                 {options.map((opt) => {
@@ -170,7 +170,7 @@ const CellInput = forwardRef<
               {typeof field.value === "number" && field.value !== 0 ? (
                 field.value
               ) : (
-                <span className="text-muted-foreground">—</span>
+                <span className="text-muted-foreground">-</span>
               )}
             </div>
           );
@@ -205,7 +205,7 @@ const CellInput = forwardRef<
                 "disabled:cursor-not-allowed disabled:bg-muted/20 disabled:opacity-100 disabled:text-foreground",
               )}
               disabled={isDisabled}
-              placeholder="—"
+              placeholder="-"
             />
           </FormControl>
         );

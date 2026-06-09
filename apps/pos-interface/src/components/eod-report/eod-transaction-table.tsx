@@ -349,7 +349,7 @@ export function EodTransactionTable({
                       )}
                     </TableCell>
                     <TableCell className="text-xs truncate max-w-[140px]">
-                      {tx.customer_name || "—"}
+                      {tx.customer_name || "-"}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -367,10 +367,10 @@ export function EodTransactionTable({
                       {fmt(Math.abs(tx.amount))} KWD
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground truncate max-w-[100px]">
-                      {tx.payment_ref_no || "—"}
+                      {tx.payment_ref_no || "-"}
                     </TableCell>
                     <TableCell className="text-xs">
-                      {tx.cashier_name || "—"}
+                      {tx.cashier_name || "-"}
                     </TableCell>
                     <TableCell>
                       <Button

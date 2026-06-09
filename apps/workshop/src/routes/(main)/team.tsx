@@ -342,7 +342,7 @@ function WorkerRow({
               {w.resource_type}
             </span>
           ) : (
-            <span className="text-sm text-muted-foreground">—</span>
+            <span className="text-sm text-muted-foreground">-</span>
           )}
 
           {w.rating != null ? (
@@ -351,7 +351,7 @@ function WorkerRow({
               {w.rating}
             </span>
           ) : (
-            <span className="text-sm text-muted-foreground">—</span>
+            <span className="text-sm text-muted-foreground">-</span>
           )}
 
           <div className="flex items-center justify-end gap-0.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors">
@@ -461,10 +461,10 @@ function WorkerRow({
             {w.resource_type}
           </span>
         ) : (
-          <span className="text-sm text-muted-foreground">—</span>
+          <span className="text-sm text-muted-foreground">-</span>
         )}
 
-        <span className="text-sm tabular-nums text-muted-foreground">{target > 0 ? target : "—"}</span>
+        <span className="text-sm tabular-nums text-muted-foreground">{target > 0 ? target : "-"}</span>
         <span className="text-base font-medium tabular-nums">{actual}</span>
 
         {target > 0 ? (
@@ -488,7 +488,7 @@ function WorkerRow({
             </span>
           </div>
         ) : (
-          <span className="text-sm text-muted-foreground">—</span>
+          <span className="text-sm text-muted-foreground">-</span>
         )}
 
         <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -903,9 +903,9 @@ function EditWorkerDialog({
                 value={form.resource_type ?? "none"}
                 onValueChange={(v) => setForm((p) => ({ ...p, resource_type: v === "none" ? null : v }))}
               >
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="-" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
+                  <SelectItem value="none">-</SelectItem>
                   <SelectItem value="Senior">Senior</SelectItem>
                   <SelectItem value="Junior">Junior</SelectItem>
                 </SelectContent>

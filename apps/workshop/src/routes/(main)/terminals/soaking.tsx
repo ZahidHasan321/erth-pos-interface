@@ -366,7 +366,7 @@ function SoakSection({
                   </TableCell>
                   <TableCell className="px-3 py-3 text-sm">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-base">{g.customer_name ?? "—"}</span>
+                      <span className="text-base">{g.customer_name ?? "-"}</span>
                       {g.customer_mobile && (
                         <span className="text-xs font-mono text-muted-foreground">
                           {g.customer_mobile}
@@ -454,7 +454,7 @@ function StartedBadge({
   hours: number | null | undefined;
   now: number;
 }) {
-  if (!startedAt) return <span className="text-xs text-muted-foreground">—</span>;
+  if (!startedAt) return <span className="text-xs text-muted-foreground">-</span>;
   const startedMs = new Date(startedAt).getTime();
   const elapsedHrs = (now - startedMs) / 3_600_000;
   const targetHrs = hours ?? null;

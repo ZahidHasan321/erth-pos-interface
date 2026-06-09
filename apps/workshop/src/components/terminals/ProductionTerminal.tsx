@@ -352,7 +352,7 @@ function GarmentRow({
       </TableCell>
       <TableCell className="px-3 py-3 text-sm">
         <div className="flex flex-col gap-0.5">
-          <span className="text-base">{garment.customer_name ?? "—"}</span>
+          <span className="text-base">{garment.customer_name ?? "-"}</span>
           {garment.customer_mobile && (
             <span className="text-xs font-mono text-muted-foreground">
               {garment.customer_mobile}
@@ -376,7 +376,7 @@ function GarmentRow({
       </TableCell>
       <TableCell className="px-3 py-3 text-sm">
         <span className="truncate block max-w-[160px]">
-          {garment.style_name ?? garment.style ?? "—"}
+          {garment.style_name ?? garment.style ?? "-"}
         </span>
       </TableCell>
       <TableCell className="px-3 py-3">
@@ -396,7 +396,7 @@ function GarmentRow({
               {assignee}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">—</span>
+            <span className="text-xs text-muted-foreground">-</span>
           )}
         </TableCell>
       )}

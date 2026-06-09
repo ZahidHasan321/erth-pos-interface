@@ -29,6 +29,101 @@ import type { CellContext } from "@tanstack/react-table";
 import type { GarmentSchema } from "../fabric-selection/garment-form.schema";
 import { calculateGarmentStylePrice } from "@/lib/utils/style-utils";
 
+/**
+ * Compact Yes / No segmented control for a present-or-absent option (§2.11).
+ * Unanswered renders in a "not filled" state (dashed amber, or red when the
+ * field is invalid) so the order-taker must pick rather than leave a silent
+ * default. `value` is `undefined`/`null` until answered.
+ */
+function YesNoSegment({
+  value,
+  onChange,
+  disabled,
+  invalid,
+}: {
+  value: boolean | null | undefined;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  invalid?: boolean;
+}) {
+  const answered = value === true || value === false;
+  return (
+    <div
+      className={cn(
+        "inline-flex rounded-md border p-0.5 text-xs",
+        disabled && "opacity-50",
+        !answered ? (invalid ? "border-red-400" : "border-dashed border-amber-400") : "border-border",
+      )}
+    >
+      {([true, false] as const).map((opt) => (
+        <button
+          key={String(opt)}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(opt)}
+          className={cn(
+            "px-2 py-0.5 rounded-[4px] font-semibold transition-colors",
+            value === opt
+              ? opt
+                ? "bg-primary text-primary-foreground"
+                : "bg-foreground text-background"
+              : "text-muted-foreground hover:bg-muted",
+            disabled && "cursor-not-allowed",
+          )}
+        >
+          {opt ? "Yes" : "No"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Up / Down / Standard picker for collar position (§2.11). Unanswered renders
+ *  "not filled"; "standard" persists as null (no DB migration). */
+function CollarPositionSegment({
+  value,
+  onChange,
+  disabled,
+  invalid,
+}: {
+  value: string | null | undefined;
+  onChange: (v: "up" | "down" | "standard") => void;
+  disabled?: boolean;
+  invalid?: boolean;
+}) {
+  const answered = value === "up" || value === "down" || value === "standard";
+  const opts: { v: "up" | "down" | "standard"; l: string }[] = [
+    { v: "up", l: "Up" },
+    { v: "down", l: "Down" },
+    { v: "standard", l: "Std" },
+  ];
+  return (
+    <div
+      className={cn(
+        "inline-flex rounded-md border p-0.5 text-xs",
+        disabled && "opacity-50",
+        !answered ? (invalid ? "border-red-400" : "border-dashed border-amber-400") : "border-border",
+      )}
+    >
+      {opts.map((o) => (
+        <button
+          key={o.v}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(o.v)}
+          className={cn(
+            "px-1.5 py-0.5 rounded-[4px] font-semibold transition-colors",
+            value === o.v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+            disabled && "cursor-not-allowed",
+          )}
+        >
+          {o.l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export const GarmentIdCell = ({
   row,
 }: CellContext<GarmentSchema, unknown>) => {
@@ -184,7 +279,7 @@ export const CollarCell = ({
   const isFormDisabled = meta?.isFormDisabled || false;
 
   return (
-    <div className="flex flex-row space-x-2">
+    <div className="flex flex-row space-x-3 items-center [&>*]:shrink-0">
       <Controller
         name={`garments.${row.index}.collar_type`}
         control={control}
@@ -268,56 +363,37 @@ export const CollarCell = ({
       <Controller
         name={`garments.${row.index}.small_tabaggi`}
         control={control}
-        render={({ field }) => (
-          <div className="flex items-center space-x-2 min-w-[60px]">
-            <Checkbox
-              id={`small_tabaggi-${row.index}`}
-              checked={field.value || false}
-              onCheckedChange={field.onChange}
-              disabled={isFormDisabled}
-            />
-            <label htmlFor={`small_tabaggi-${row.index}`} className="flex flex-col items-center">
+        render={({ field, fieldState }) => (
+          <div className="flex flex-col items-center gap-1">
+            <div className="flex items-center gap-1">
               <img
                 src={smallTabaggiImage}
                 alt="Small Tabaggi"
-                className="min-w-8 h-8 object-contain"
+                className="h-4 w-4 object-contain shrink-0"
               />
-              <span className="text-xs text-muted-foreground leading-tight">small tabbagi</span>
-            </label>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">small tabbagi</span>
+            </div>
+            <YesNoSegment
+              value={field.value}
+              onChange={field.onChange}
+              disabled={isFormDisabled}
+              invalid={fieldState.invalid}
+            />
           </div>
         )}
       />
       <Controller
         name={`garments.${row.index}.collar_position`}
         control={control}
-        render={({ field }) => (
+        render={({ field, fieldState }) => (
           <div className="flex flex-col gap-1 min-w-[64px]">
-            <div className="flex items-center space-x-1.5">
-              <Checkbox
-                id={`collar_up-${row.index}`}
-                checked={field.value === "up"}
-                onCheckedChange={(checked) =>
-                  field.onChange(checked ? "up" : null)
-                }
-                disabled={isFormDisabled}
-              />
-              <label htmlFor={`collar_up-${row.index}`} className="text-xs leading-none">
-                UP
-              </label>
-            </div>
-            <div className="flex items-center space-x-1.5">
-              <Checkbox
-                id={`collar_down-${row.index}`}
-                checked={field.value === "down"}
-                onCheckedChange={(checked) =>
-                  field.onChange(checked ? "down" : null)
-                }
-                disabled={isFormDisabled}
-              />
-              <label htmlFor={`collar_down-${row.index}`} className="text-xs leading-none">
-                DOWN
-              </label>
-            </div>
+            <span className="text-xs text-muted-foreground leading-none">Position</span>
+            <CollarPositionSegment
+              value={field.value}
+              onChange={field.onChange}
+              disabled={isFormDisabled}
+              invalid={fieldState.invalid}
+            />
           </div>
         )}
       />
@@ -631,71 +707,32 @@ export const AccessoriesCell = ({
   };
   const isFormDisabled = meta?.isFormDisabled || false;
 
+  const accessories: { name: keyof GarmentSchema; icon: string; alt: string }[] = [
+    { name: "wallet_pocket", icon: walletIcon, alt: "Wallet Pocket" },
+    { name: "pen_holder", icon: penIcon, alt: "Pen Holder" },
+    { name: "mobile_pocket", icon: phoneIcon, alt: "Mobile Pocket" },
+  ];
+
   return (
-    <div className="flex flex-row space-x-3 items-center">
-      <Controller
-        name={`garments.${row.index}.wallet_pocket`}
-        control={control}
-        render={({ field }) => (
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id={`wallet-${row.index}`}
-              checked={field.value || false}
-              onCheckedChange={(value) => field.onChange(value)}
-              disabled={isFormDisabled}
-            />
-            <label htmlFor={`wallet-${row.index}`}>
-              <img
-                src={walletIcon}
-                alt="Wallet Pocket"
-                className="min-w-10 h-10 object-contain"
+    <div className="flex flex-row space-x-3 items-start">
+      {accessories.map((a) => (
+        <Controller
+          key={a.name}
+          name={`garments.${row.index}.${a.name}`}
+          control={control}
+          render={({ field, fieldState }) => (
+            <div className="flex flex-col items-center gap-1">
+              <img src={a.icon} alt={a.alt} className="min-w-10 h-10 object-contain" />
+              <YesNoSegment
+                value={field.value as boolean | null | undefined}
+                onChange={field.onChange}
+                disabled={isFormDisabled}
+                invalid={fieldState.invalid}
               />
-            </label>
-          </div>
-        )}
-      />
-      <Controller
-        name={`garments.${row.index}.pen_holder`}
-        control={control}
-        render={({ field }) => (
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id={`pen_holder-${row.index}`}
-              checked={field.value || false}
-              onCheckedChange={(value) => field.onChange(value)}
-              disabled={isFormDisabled}
-            />
-            <label htmlFor={`pen_holder-${row.index}`}>
-              <img
-                src={penIcon}
-                alt="Pen Holder"
-                className="min-w-10 h-10 object-contain"
-              />
-            </label>
-          </div>
-        )}
-      />
-      <Controller
-        name={`garments.${row.index}.mobile_pocket`}
-        control={control}
-        render={({ field }) => (
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id={`mobile_pocket-${row.index}`}
-              checked={field.value || false}
-              onCheckedChange={(value) => field.onChange(value)}
-              disabled={isFormDisabled}
-            />
-            <label htmlFor={`mobile_pocket-${row.index}`}>
-              <img
-                src={phoneIcon}
-                alt="Mobile Pocket"
-                className="min-w-10 h-10 object-contain"
-              />
-            </label>
-          </div>
-        )}
-      />
+            </div>
+          )}
+        />
+      ))}
     </div>
   );
 };

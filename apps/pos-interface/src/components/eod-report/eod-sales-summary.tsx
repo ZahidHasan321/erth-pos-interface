@@ -16,7 +16,7 @@ export function EodSalesSummary({ data }: EodSalesSummaryProps) {
             <div className="mb-4 pb-3 border-b border-border">
                 <h2 className="text-base font-semibold">Sales summary</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                    Accrual basis — orders booked in this period
+                    Accrual basis: orders booked in this period
                 </p>
             </div>
 

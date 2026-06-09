@@ -34,6 +34,7 @@ import { Route as MainStoreStocktakeRouteImport } from './routes/$main/store/sto
 import { Route as MainStoreReportsRouteImport } from './routes/$main/store/reports'
 import { Route as MainStoreInventoryRouteImport } from './routes/$main/store/inventory'
 import { Route as MainStoreEndOfDayReportRouteImport } from './routes/$main/store/end-of-day-report'
+import { Route as MainOrdersViewWorkOrderRouteImport } from './routes/$main/orders/view-work-order'
 import { Route as MainOrdersOrdersAtShowroomRouteImport } from './routes/$main/orders/orders-at-showroom'
 import { Route as MainOrdersOrderHistoryRouteImport } from './routes/$main/orders/order-history'
 import { Route as MainOrdersNewWorkOrderRouteImport } from './routes/$main/orders/new-work-order'
@@ -181,6 +182,11 @@ const MainStoreEndOfDayReportRoute = MainStoreEndOfDayReportRouteImport.update({
   id: '/end-of-day-report',
   path: '/end-of-day-report',
   getParentRoute: () => MainStoreRouteRoute,
+} as any)
+const MainOrdersViewWorkOrderRoute = MainOrdersViewWorkOrderRouteImport.update({
+  id: '/orders/view-work-order',
+  path: '/orders/view-work-order',
+  getParentRoute: () => MainRouteRoute,
 } as any)
 const MainOrdersOrdersAtShowroomRoute =
   MainOrdersOrdersAtShowroomRouteImport.update({
@@ -331,6 +337,7 @@ export interface FileRoutesByFullPath {
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/orders/order-history': typeof MainOrdersOrderHistoryRoute
   '/$main/orders/orders-at-showroom': typeof MainOrdersOrdersAtShowroomRoute
+  '/$main/orders/view-work-order': typeof MainOrdersViewWorkOrderRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/inventory': typeof MainStoreInventoryRouteWithChildren
   '/$main/store/reports': typeof MainStoreReportsRoute
@@ -378,6 +385,7 @@ export interface FileRoutesByTo {
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/orders/order-history': typeof MainOrdersOrderHistoryRoute
   '/$main/orders/orders-at-showroom': typeof MainOrdersOrdersAtShowroomRoute
+  '/$main/orders/view-work-order': typeof MainOrdersViewWorkOrderRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/reports': typeof MainStoreReportsRoute
   '/$main/store/stocktake': typeof MainStoreStocktakeRoute
@@ -427,6 +435,7 @@ export interface FileRoutesById {
   '/$main/orders/new-work-order': typeof MainOrdersNewWorkOrderRoute
   '/$main/orders/order-history': typeof MainOrdersOrderHistoryRoute
   '/$main/orders/orders-at-showroom': typeof MainOrdersOrdersAtShowroomRoute
+  '/$main/orders/view-work-order': typeof MainOrdersViewWorkOrderRoute
   '/$main/store/end-of-day-report': typeof MainStoreEndOfDayReportRoute
   '/$main/store/inventory': typeof MainStoreInventoryRouteWithChildren
   '/$main/store/reports': typeof MainStoreReportsRoute
@@ -478,6 +487,7 @@ export interface FileRouteTypes {
     | '/$main/orders/new-work-order'
     | '/$main/orders/order-history'
     | '/$main/orders/orders-at-showroom'
+    | '/$main/orders/view-work-order'
     | '/$main/store/end-of-day-report'
     | '/$main/store/inventory'
     | '/$main/store/reports'
@@ -525,6 +535,7 @@ export interface FileRouteTypes {
     | '/$main/orders/new-work-order'
     | '/$main/orders/order-history'
     | '/$main/orders/orders-at-showroom'
+    | '/$main/orders/view-work-order'
     | '/$main/store/end-of-day-report'
     | '/$main/store/reports'
     | '/$main/store/stocktake'
@@ -573,6 +584,7 @@ export interface FileRouteTypes {
     | '/$main/orders/new-work-order'
     | '/$main/orders/order-history'
     | '/$main/orders/orders-at-showroom'
+    | '/$main/orders/view-work-order'
     | '/$main/store/end-of-day-report'
     | '/$main/store/inventory'
     | '/$main/store/reports'
@@ -788,6 +800,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainStoreEndOfDayReportRouteImport
       parentRoute: typeof MainStoreRouteRoute
     }
+    '/$main/orders/view-work-order': {
+      id: '/$main/orders/view-work-order'
+      path: '/orders/view-work-order'
+      fullPath: '/$main/orders/view-work-order'
+      preLoaderRoute: typeof MainOrdersViewWorkOrderRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
     '/$main/orders/orders-at-showroom': {
       id: '/$main/orders/orders-at-showroom'
       path: '/orders/orders-at-showroom'
@@ -1000,6 +1019,7 @@ interface MainRouteRouteChildren {
   MainOrdersNewWorkOrderRoute: typeof MainOrdersNewWorkOrderRoute
   MainOrdersOrderHistoryRoute: typeof MainOrdersOrderHistoryRoute
   MainOrdersOrdersAtShowroomRoute: typeof MainOrdersOrdersAtShowroomRoute
+  MainOrdersViewWorkOrderRoute: typeof MainOrdersViewWorkOrderRoute
   MainAppointmentsIndexRoute: typeof MainAppointmentsIndexRoute
   MainCashierIndexRoute: typeof MainCashierIndexRoute
   MainCustomersIndexRoute: typeof MainCustomersIndexRoute
@@ -1027,6 +1047,7 @@ const MainRouteRouteChildren: MainRouteRouteChildren = {
   MainOrdersNewWorkOrderRoute: MainOrdersNewWorkOrderRoute,
   MainOrdersOrderHistoryRoute: MainOrdersOrderHistoryRoute,
   MainOrdersOrdersAtShowroomRoute: MainOrdersOrdersAtShowroomRoute,
+  MainOrdersViewWorkOrderRoute: MainOrdersViewWorkOrderRoute,
   MainAppointmentsIndexRoute: MainAppointmentsIndexRoute,
   MainCashierIndexRoute: MainCashierIndexRoute,
   MainCustomersIndexRoute: MainCustomersIndexRoute,

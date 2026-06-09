@@ -1,4 +1,5 @@
 import type { Measurement, MeasurementIssue } from "@repo/database";
+import { ShoulderSlopeDisplay } from "@repo/ui/shoulder-slope";
 import { MeasurementValue } from "./MeasurementValue";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,17 @@ export function MeasurementGrid({ measurement, corrections }: MeasurementGridPro
 
   return (
     <div className="space-y-3">
+      {measurement.shoulder_slope && (
+        <div>
+          <h4 className="text-sm font-medium text-muted-foreground mb-1.5">
+            Shoulder slope
+          </h4>
+          <div className="flex items-center justify-between rounded-md bg-muted px-2 py-1 w-fit gap-3">
+            <span className="text-xs text-muted-foreground">Slope</span>
+            <ShoulderSlopeDisplay value={measurement.shoulder_slope} />
+          </div>
+        </div>
+      )}
       {MEASUREMENT_GROUPS.map((group) => {
         const filled = group.fields.filter((f) => measurement[f.key] || corrections?.has(f.key as string));
         if (filled.length === 0) return null;

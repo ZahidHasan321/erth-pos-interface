@@ -478,8 +478,8 @@ function LoginComponent() {
             </h2>
             <p>
               {isErth
-                ? "Manage measurements, fittings, alterations and customer flow — from the floor of the Erth atelier in Kuwait."
-                : "Home orders, deliveries and on-site fittings — orchestrate the Sakkba service from a single console."}
+                ? "Manage measurements, fittings, alterations and customer flow, from the floor of the Erth atelier in Kuwait."
+                : "Home orders, deliveries and on-site fittings. Orchestrate the Sakkba service from a single console."}
             </p>
           </div>
         </aside>

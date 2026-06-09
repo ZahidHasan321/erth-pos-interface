@@ -157,7 +157,7 @@ export function DamageWasteDialog({
       return;
     }
     if (blockedByApproval) {
-      toast.error("This waste is above the approval threshold — a manager must record it");
+      toast.error("This waste is above the approval threshold. A manager must record it");
       return;
     }
     mut.mutate();
@@ -169,7 +169,7 @@ export function DamageWasteDialog({
         <DialogHeader className="px-6 pt-5 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2 text-base min-w-0">
             <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--status-bad)]" aria-hidden="true" />
-            <span className="truncate">Damage / waste — {itemName}</span>
+            <span className="truncate">Damage / waste: {itemName}</span>
           </DialogTitle>
         </DialogHeader>
 

@@ -250,7 +250,7 @@ function NewAlterationOrder() {
     const active = garments[activeTab] ?? garments[0]!;
 
     const customerLabel = selectedCustomer
-        ? `${selectedCustomer.name ?? "—"}`
+        ? `${selectedCustomer.name ?? "-"}`
         : "No customer selected";
 
     return (
@@ -327,14 +327,14 @@ function NewAlterationOrder() {
                                     !customerId
                                         ? "Select customer first"
                                         : customerMeasurements.length === 0
-                                            ? "No measurement records — create one in Measurements"
+                                            ? "No measurement records. Create one in Measurements"
                                             : "Pick reference record"
                                 } />
                             </SelectTrigger>
                             <SelectContent>
                                 {customerMeasurements.map((m) => (
                                     <SelectItem key={m.id} value={m.id}>
-                                        {m.measurement_id ?? m.id.slice(0, 8)} · {m.type ?? "—"} · {m.reference ?? "—"}
+                                        {m.measurement_id ?? m.id.slice(0, 8)} · {m.type ?? "-"} · {m.reference ?? "-"}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

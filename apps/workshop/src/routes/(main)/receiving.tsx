@@ -127,7 +127,7 @@ function GarmentRow({
       )}
       <TableCell className="px-3 py-3 text-sm">
         <div className="flex flex-col gap-0.5 max-w-[180px]">
-          <span className="text-base tracking-tight truncate" title={garment.customer_name ?? undefined}>{garment.customer_name ?? "—"}</span>
+          <span className="text-base tracking-tight truncate" title={garment.customer_name ?? undefined}>{garment.customer_name ?? "-"}</span>
           {garment.customer_mobile && (
             <span className="text-sm font-mono text-muted-foreground">{garment.customer_mobile}</span>
           )}
@@ -152,7 +152,7 @@ function GarmentRow({
               {formatDate(garment.delivery_date_order)}
             </span>
           ) : (
-            <span className="text-sm text-muted-foreground">—</span>
+            <span className="text-sm text-muted-foreground">-</span>
           )}
           {garment.home_delivery && (
             <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
@@ -166,7 +166,7 @@ function GarmentRow({
           {actionVariant === "found" ? (
             <Button size="sm-touch" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs">
               {receivePending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-              Found — Receive
+              Found: Receive
             </Button>
           ) : actionVariant === "receive-only" ? (
             <Button size="sm-touch" variant="outline" onClick={onReceive} disabled={rowBusy} className="text-xs">

@@ -150,6 +150,11 @@ export const QC_OPTIONS: QcOptionSpec[] = [
   { key: "jabzour_2",              label: "Jabzour 2",               type: "text" },
   { key: "jabzour_thickness",      label: "Jabzour Thickness",       type: "text" },
   { key: "lines",                  label: "Lines",                   type: "number" },
+  // Shoulder slope is a categorical body measurement (stored on the measurement
+  // snapshot, not the garment). It rides the option machinery here because QC
+  // verifies it by equality "both ways", not numeric tolerance — the expected
+  // value is injected from the measurement in QualityCheckForm.
+  { key: "shoulder_slope",         label: "Shoulder Slope",          type: "text" },
 ];
 
 /** 6 quality aspects, scored 1-5. */
@@ -187,6 +192,40 @@ export function normalizeExpectedJabzour(
   }
   return { jabzour_1: null, jabzour_2: null };
 }
+
+/** The three collar positions. `standard` is the neutral choice, stored as the
+ *  absence of up/down (null) — see §2.11. */
+export type CollarPosition = "up" | "down" | "standard";
+export const COLLAR_POSITIONS: { value: CollarPosition; label: string }[] = [
+  { value: "up", label: "Up" },
+  { value: "down", label: "Down" },
+  { value: "standard", label: "Standard" },
+];
+
+/** Map any stored/entered collar value to one of the three positions. A
+ *  null/empty value (legacy "absence of up/down") reads as Standard. */
+export function normalizeCollarPosition(v: unknown): CollarPosition {
+  return v === "up" || v === "down" ? v : "standard";
+}
+
+/** Serialize a picker choice back to storage: Standard persists as null so the
+ *  column stays up/down/null (no migration). Unanswered (undefined) stays
+ *  undefined so it can't be saved past the required gate. */
+export function serializeCollarPosition(v: unknown): "up" | "down" | null | undefined {
+  if (v === "up" || v === "down") return v;
+  if (v === "standard") return null;
+  return undefined;
+}
+
+/** Option keys that are required explicit Yes/No (or Up/Down/Standard) choices
+ *  with no silent default — see §2.11. */
+export const QC_TOGGLE_OPTION_KEYS = [
+  "wallet_pocket",
+  "pen_holder",
+  "mobile_pocket",
+  "small_tabaggi",
+  "collar_position",
+] as const;
 
 /** Compare option values. Booleans treat false === null === undefined. */
 export function optionEquals(spec: QcOptionSpec, a: unknown, b: unknown): boolean {
@@ -237,16 +276,33 @@ export function evaluateQc(
   const failed_options = QC_OPTIONS
     .filter((o) => enabledKeys.has(o.key))
     .filter((o) => {
-      // collar_position: all 3 values matter (up / down / standard). Blank
-      // input means "Standard" — compare normally so a spec of "up" with a
-      // blank operator entry is flagged as a mismatch (garment likely built
-      // as Standard instead of Up).
-      if (o.key === "collar_position") {
-        const input = inputs.options[o.key] ?? null;
-        const exp = expectedOptions[o.key] ?? null;
-        return (input || null) !== (exp || null);
+      const input = inputs.options[o.key];
+      const expected = expectedOptions[o.key];
+      // Toggle fields (§2.11): an UNANSWERED input (null/undefined) is
+      // incomplete, not a failure — the completeness gate forces an answer
+      // before submit, so an untouched control never flashes red (the old
+      // false-default-vs-true-spec auto-flag bug). Once answered we compare
+      // both directions: Yes-spec built absent OR No-spec built present both fail.
+      if (o.type === "boolean") {
+        if (input == null) return false;
+        return Boolean(input) !== Boolean(expected);
       }
-      return !optionEquals(o, inputs.options[o.key], expectedOptions[o.key]);
+      // collar_position: up / down / standard — 'standard' and a null/'' spec
+      // are the same neutral position. Unanswered input is incomplete, not a
+      // mismatch; once answered, all three values are checked against the spec.
+      if (o.key === "collar_position") {
+        if (input == null) return false;
+        return normalizeCollarPosition(input) !== normalizeCollarPosition(expected);
+      }
+      // shoulder_slope: categorical, null-tolerant like collar_position. An
+      // unanswered input is incomplete (not a fail); a measurement with no slope
+      // on file (legacy) has no spec to verify against. Once both present, equality.
+      if (o.key === "shoulder_slope") {
+        if (input == null || input === "") return false;
+        if (expected == null || expected === "") return false;
+        return input !== expected;
+      }
+      return !optionEquals(o, input, expected);
     })
     .map((o) => o.key);
 

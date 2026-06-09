@@ -825,6 +825,48 @@ export const saveWorkOrderGarments = async (
 };
 
 /**
+ * Persist a brova-trial per-final style reprice (SPEC §2.5). The client has
+ * already recomputed each changed garment's `style_price_snapshot` with the same
+ * `calculateGarmentStylePrice` used at order creation; this RPC just writes the
+ * absolute snapshots + the new aggregate `style_charge` + new `order_total`
+ * atomically (serialized on the order row), never touching `orders.paid`.
+ *
+ * Idempotent server-side (absolute assignment + idem key), so the same bounded
+ * write-retry as saveWorkOrderGarments is safe on a dropped response.
+ */
+export const repriceOrderStyles = async (params: {
+    orderId: number;
+    garments: { garment_id: string; style_price_snapshot: number }[];
+    newStyleCharge: number;
+    newOrderTotal: number;
+    actor?: string | null;
+    reason?: string | null;
+    idempotencyKey?: string | null;
+}): Promise<ApiResponse<unknown>> => {
+    for (let attempt = 1; ; attempt++) {
+        const { data, error } = await db.rpc('reprice_order_styles', {
+            p_order_id: params.orderId,
+            p_garments: params.garments,
+            p_new_style_charge: params.newStyleCharge,
+            p_new_order_total: params.newOrderTotal,
+            p_actor: params.actor ?? null,
+            p_reason: params.reason ?? null,
+            p_idempotency_key: params.idempotencyKey ?? null,
+        });
+
+        if (!error) return { status: 'success', data };
+
+        if (isTransientNetworkError(error) && attempt < WRITE_RETRY_ATTEMPTS) {
+            await sleep(WRITE_RETRY_BASE_MS * attempt);
+            continue;
+        }
+
+        console.error('repriceOrderStyles: failed to reprice order styles:', error);
+        return { status: 'error', message: error.message };
+    }
+};
+
+/**
  * Fetch all orders that are currently linked to another order.
  * Returns the child orders with their primary order information.
  */

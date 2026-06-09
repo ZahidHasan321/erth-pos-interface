@@ -217,10 +217,10 @@ export function AlterationGarmentForm({
                             <SelectValue placeholder={customerId ? (priorGarments.length === 0 ? "No prior garments" : "Optional") : "Select customer first"} />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="__none">— None —</SelectItem>
+                            <SelectItem value="__none">(None)</SelectItem>
                             {priorGarments.map((g: PriorGarmentForLink) => (
                                 <SelectItem key={g.id} value={g.id}>
-                                    #{g.order_id} · {g.garment_id ?? g.id.slice(0, 8)} · {g.garment_type ?? "—"}
+                                    #{g.order_id} · {g.garment_id ?? g.id.slice(0, 8)} · {g.garment_type ?? "-"}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -260,7 +260,7 @@ export function AlterationGarmentForm({
                         <SelectContent>
                             {measurements.map((m) => (
                                 <SelectItem key={m.id} value={m.id}>
-                                    {m.measurement_id ?? m.id.slice(0, 8)} · {m.type ?? "—"} · {m.reference ?? "—"}
+                                    {m.measurement_id ?? m.id.slice(0, 8)} · {m.type ?? "-"} · {m.reference ?? "-"}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -552,7 +552,7 @@ function ImagePickerField({
                     )}
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="__clear">— None —</SelectItem>
+                    <SelectItem value="__clear">(None)</SelectItem>
                     {options.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                             <div className="flex items-center space-x-2">
@@ -596,7 +596,7 @@ function ThicknessField({
                     <SelectValue placeholder="Thickness" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="__clear">— None —</SelectItem>
+                    <SelectItem value="__clear">(None)</SelectItem>
                     {thicknessOptions.map((opt) => (
                         <SelectItem
                             key={opt.value}

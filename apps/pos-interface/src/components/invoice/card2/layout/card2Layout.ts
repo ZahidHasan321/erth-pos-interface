@@ -6,7 +6,7 @@ import { mmToPt } from './units'
 type Card2LineItemStyleGroupId = Exclude<keyof Card2LineItemStyle, 'jabzoor2' | 'collarPosition'>
 
 interface Card2LineItemsFixedColumn {
-  id: 'garmentId' | 'measurementId' | 'meters' | 'price' | 'fabricSource' | 'shopOrFabric' | 'type' | 'line'
+  id: 'idPair' | 'fabric' | 'fabricSource' | 'typeLine'
   title: string
   widthPercent: number
 }
@@ -335,14 +335,10 @@ const measurementAnchors: Readonly<Record<string, PdfPoint>> = {
 }
 
 const lineItemsFixedColumns: readonly Card2LineItemsFixedColumn[] = [
-  { id: 'garmentId', title: 'Garment ID', widthPercent: 3.6 },
-  { id: 'measurementId', title: 'Meas. ID', widthPercent: 3.4 },
-  { id: 'meters', title: 'Meters', widthPercent: 2.8 },
-  { id: 'price', title: 'Price', widthPercent: 2.8 },
-  { id: 'fabricSource', title: 'Source', widthPercent: 3.0 },
-  { id: 'shopOrFabric', title: 'Shop / Fabric', widthPercent: 4.5 },
-  { id: 'type', title: 'Type', widthPercent: 2.5 },
-  { id: 'line', title: 'Line', widthPercent: 2.0 },
+  { id: 'idPair', title: 'ID', widthPercent: 5.0 },
+  { id: 'fabric', title: 'Fabric / Shop', widthPercent: 10.0 },
+  { id: 'fabricSource', title: 'Src', widthPercent: 2.8 },
+  { id: 'typeLine', title: 'Type', widthPercent: 2.6 },
 ]
 
 const lineItemsStyleGroups: readonly Card2LineItemsStyleGroup[] = [

@@ -4,7 +4,7 @@ import checkboxMarkedIcon from '../assets/checkbox_marked.svg'
 import customerCopyHeaderSvg from '../assets/customer_copy_header.svg'
 import logoSvg from '../assets/logo.svg'
 import { card2ArabicTerms } from '../content/card2ArabicTerms'
-import { formatValue } from '../formatters/card2Formatters'
+import { formatKd, formatValue } from '../formatters/card2Formatters'
 
 export interface Card2CustomerCopySectionHtmlProps {
   data: Card2PdfData
@@ -184,21 +184,21 @@ export function Card2CustomerCopySectionHtml({
           <div className="card2-customer-copy__totals-row">
             <div className="card2-customer-copy__amount-field">
               <span className="card2-customer-copy__amount-value">
-                {formatValue(paymentSummary?.total ?? data.pricing?.grandTotal)}
+                {formatKd(paymentSummary?.total ?? data.pricing?.grandTotal)}
               </span>
               <span className="card2-customer-copy__amount-label">Total</span>
             </div>
 
             <div className="card2-customer-copy__amount-field">
               <span className="card2-customer-copy__amount-value">
-                {formatValue(paymentSummary?.paid ?? data.pricing?.paid)}
+                {formatKd(paymentSummary?.paid ?? data.pricing?.paid)}
               </span>
               <span className="card2-customer-copy__amount-label">Paid</span>
             </div>
 
             <div className="card2-customer-copy__amount-field">
               <span className="card2-customer-copy__amount-value">
-                {formatValue(paymentSummary?.remaining ?? data.pricing?.remaining)}
+                {formatKd(paymentSummary?.remaining ?? data.pricing?.remaining)}
               </span>
               <span className="card2-customer-copy__amount-label">Remaining</span>
             </div>

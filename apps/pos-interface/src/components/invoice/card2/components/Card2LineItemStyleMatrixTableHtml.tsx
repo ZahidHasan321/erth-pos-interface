@@ -200,17 +200,8 @@ const buildStyleGroupColumns = (
     }
   })
 
-const TickRow = ({ label, checked }: { label: string; checked: boolean }) => (
-  <span className="card2-style-matrix__tick-row">
-    <img
-      className="card2-style-matrix__checkbox-icon"
-      src={checked ? checkboxMarkedIcon : checkboxIcon}
-      alt=""
-      aria-hidden
-    />
-    <span className="card2-style-matrix__tick-label">{label}</span>
-  </span>
-)
+const hasValue = (value: unknown): boolean =>
+  value !== null && value !== undefined && String(value).trim().length > 0
 
 const renderFixedColumnValue = (
   lineItem: Card2LineItem,
@@ -219,32 +210,45 @@ const renderFixedColumnValue = (
   const fabric = lineItem.fabric
 
   switch (columnId) {
-    case 'garmentId':
-      return formatValue(lineItem.garmentId)
-    case 'measurementId':
-      return formatValue(lineItem.measurementId)
-    case 'meters':
-      return formatValue(fabric?.meters)
-    case 'price':
-      return formatValue(fabric?.price)
+    case 'idPair':
+      return (
+        <span className="card2-style-matrix__stack-cell">
+          <span className="card2-style-matrix__stack-line">
+            <span className="card2-style-matrix__stack-tag">G</span>
+            {formatValue(lineItem.garmentId)}
+          </span>
+          <span className="card2-style-matrix__stack-line">
+            <span className="card2-style-matrix__stack-tag">M</span>
+            {formatValue(lineItem.measurementId)}
+          </span>
+        </span>
+      )
+    case 'fabric': {
+      const metersText = hasValue(fabric?.meters) ? `${formatValue(fabric?.meters)} m` : undefined
+      const priceText = hasValue(fabric?.price) ? `KD ${formatValue(fabric?.price)}` : undefined
+      const detail = [metersText, priceText].filter(Boolean).join(' · ')
+      return (
+        <span className="card2-style-matrix__stack-cell">
+          <span className="card2-style-matrix__stack-name">
+            {formatValue(fabric?.shopOrFabric)}
+          </span>
+          {detail ? (
+            <span className="card2-style-matrix__stack-detail">{detail}</span>
+          ) : null}
+        </span>
+      )
+    }
     case 'fabricSource':
+      return fabric?.source === 'in-house' ? 'IN' : fabric?.source === 'out' ? 'OUT' : '-'
+    case 'typeLine':
       return (
-        <span className="card2-style-matrix__tick-stack">
-          <TickRow label="IN" checked={fabric?.source === 'in-house'} />
-          <TickRow label="OUT" checked={fabric?.source === 'out'} />
+        <span className="card2-style-matrix__stack-cell">
+          <span className="card2-style-matrix__stack-line">{formatValue(fabric?.type)}</span>
+          <span className="card2-style-matrix__stack-detail">
+            {fabric?.line ? `L${fabric.line}` : '-'}
+          </span>
         </span>
       )
-    case 'shopOrFabric':
-      return formatValue(fabric?.shopOrFabric)
-    case 'type':
-      return (
-        <span className="card2-style-matrix__tick-stack">
-          <TickRow label="K" checked={fabric?.type === 'K'} />
-          <TickRow label="D" checked={fabric?.type === 'D'} />
-        </span>
-      )
-    case 'line':
-      return formatValue(fabric?.line)
     default:
       return '-'
   }

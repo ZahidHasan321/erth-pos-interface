@@ -350,7 +350,7 @@ function LoginPage() {
                 color: "rgba(240,235,225,0.55)",
                 maxWidth: 240, margin: 0,
               }}>
-                Cutting, sewing, finishing —<br />every stage, in one place.
+                Cutting, sewing, finishing,<br />every stage, in one place.
               </p>
             </div>
 

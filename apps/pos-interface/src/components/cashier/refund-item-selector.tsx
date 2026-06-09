@@ -433,7 +433,7 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
 
             {totalPaid !== undefined && refundTotal > totalPaid && (
                 <p className="pt-2 text-[11px] text-red-600 font-medium border-t border-red-200">
-                    Exceeds total paid ({fmt(totalPaid)} KWD) — amount will need to be adjusted
+                    Exceeds total paid ({fmt(totalPaid)} KWD), amount will need to be adjusted
                 </p>
             )}
         </div>

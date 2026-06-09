@@ -1,4 +1,5 @@
 import type { GarmentFeedback } from "@repo/database";
+import { isMeasurementFlagged } from "@repo/database";
 import {
   collarTypes,
   collarButtons,
@@ -116,17 +117,19 @@ export function buildAlterationFilter(
   const fieldReasons = new Map<string, AlterationReason>();
   for (const d of diffs) {
     if (!d?.field) continue;
-    // Only keep rows where the value actually changed from the prior trip.
-    const orig = d.original_value;
-    const next = d.actual_value == null || d.actual_value === ""
-      ? null
-      : Number(d.actual_value);
-    if (orig == null || next == null) continue;
-    if (Number(orig) !== next) {
-      measurementKeys.add(d.field);
-      if (d.reason && REASON_LABELS.has(d.reason as AlterationReason)) {
-        fieldReasons.set(d.field, d.reason as AlterationReason);
-      }
+    // Keep a row when its value changed from the prior trip OR a fault reason
+    // was recorded against it (even with no new value) — §2.5: a reason-only
+    // flag still tells the workshop to re-check that measurement. Shared with
+    // the shop feedback recorder via isMeasurementFlagged.
+    const flagged = isMeasurementFlagged({
+      originalValue: d.original_value,
+      newValue: d.actual_value,
+      reason: d.reason,
+    });
+    if (!flagged) continue;
+    measurementKeys.add(d.field);
+    if (d.reason && REASON_LABELS.has(d.reason as AlterationReason)) {
+      fieldReasons.set(d.field, d.reason as AlterationReason);
     }
   }
 
@@ -197,7 +200,7 @@ const OPTION_VALUE_LIST: Record<string, BaseOption[]> = {
 
 /** Friendly value lookup for picker / sentinel fields. Falls back to raw. */
 function resolveValueText(optName: string, value: unknown): string {
-  if (value == null || value === "") return "—";
+  if (value == null || value === "") return "-";
   const list = OPTION_VALUE_LIST[optName];
   if (list) {
     const found = list.find((o) => o.value === value || o.displayText === value);

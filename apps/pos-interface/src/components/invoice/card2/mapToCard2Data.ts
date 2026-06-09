@@ -86,7 +86,7 @@ const buildLineItem = (
 
   const shopOrFabric = garment.fabric_source === 'OUT'
     ? (garment.shop_name?.trim() || undefined)
-    : (fabric?.name ? truncate(fabric.name, 18) : undefined)
+    : (fabric?.name ? truncate(fabric.name, 28) : undefined)
 
   const fabricStyleType = garment.style === 'kuwaiti' ? 'K' : garment.style === 'design' ? 'D' : undefined
 
@@ -117,7 +117,10 @@ const buildLineItem = (
             },
           }
         : undefined,
-      collarPosition: garment.collar_position ?? undefined,
+      // 'standard' (and unfilled) is the neutral position — no up/down annotation.
+      collarPosition: garment.collar_position === 'up' || garment.collar_position === 'down'
+        ? garment.collar_position
+        : undefined,
       button: garment.collar_button ? { id: garment.collar_button } : undefined,
       jabzoor: garment.jabzour_1
         ? { id: garment.jabzour_1, properties: { hashwa: toHashwa(garment.jabzour_thickness) } }

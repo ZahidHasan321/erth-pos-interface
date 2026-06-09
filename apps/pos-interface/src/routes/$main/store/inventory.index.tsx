@@ -140,7 +140,7 @@ function InventoryPage() {
                 <button
                   type="button"
                   onClick={() => setRestockOpen(true)}
-                  aria-label={`${s.value} items low on stock — show the restock list`}
+                  aria-label={`${s.value} items low on stock, show the restock list`}
                   className="w-full text-left focus:outline-none"
                 >
                   {inner}
@@ -583,8 +583,8 @@ function FabricsTab({ search, sort, status, canEdit, canRestock, canAdjust, canD
                           {archived ? <ArchivedBadge /> : out ? <OutBadge /> : low && <LowStockBadge />}
                         </div>
                       </TableCell>
-                      <TableCell>{f.color ?? "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{f.price_per_meter ?? "—"}</TableCell>
+                      <TableCell>{f.color ?? "-"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{f.price_per_meter ?? "-"}</TableCell>
                       <TableCell className={cn("text-right tabular-nums", low && !archived && "text-red-600 font-semibold")}>{formatQty("fabric", ws)}</TableCell>
                       <TableCell>
                         <RowActions
@@ -813,8 +813,8 @@ function ShelfTab({ search, sort, status, canEdit, canRestock, canAdjust, canDel
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">{s.type}{archived ? <ArchivedBadge /> : out ? <OutBadge /> : low && <LowStockBadge />}</div>
                       </TableCell>
-                      <TableCell>{s.brand ?? "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{s.price ?? "—"}</TableCell>
+                      <TableCell>{s.brand ?? "-"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{s.price ?? "-"}</TableCell>
                       <TableCell className={cn("text-right tabular-nums", low && !archived && "text-red-600 font-semibold")}>{formatQty("shelf", ws)}</TableCell>
                       <TableCell>
                         <RowActions
@@ -1047,7 +1047,7 @@ function AccessoriesTab({ search, sort, status, canEdit, canRestock, canAdjust, 
                       </TableCell>
                       <TableCell className="capitalize">{a.category}</TableCell>
                       <TableCell>{UNIT_OF_MEASURE_LABELS[a.unit_of_measure] ?? a.unit_of_measure}</TableCell>
-                      <TableCell className="text-right tabular-nums">{a.price ?? "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{a.price ?? "-"}</TableCell>
                       <TableCell className={cn("text-right tabular-nums", low && !archived && "text-red-600 font-semibold")}>{formatQty("accessory", ws, a.unit_of_measure)}</TableCell>
                       <TableCell>
                         <RowActions

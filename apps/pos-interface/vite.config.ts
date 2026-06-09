@@ -30,7 +30,11 @@ export default defineConfig({
   build: {
     // minify:false,
     // sourcemap: true, // 🪄 lets you map the error to your original source
-    chunkSizeWarningLimit: 700,
+    // Eager react+radix core (~1MB) is irreducible; raise the limit past it so it
+    // stops false-alarming. The lazy 'react-pdf' chunk (~1.5MB) stays above this line
+    // on purpose — it's an on-demand vendor, and a warning surfaces it if it ever
+    // accidentally gets pulled into an eager chunk.
+    chunkSizeWarningLimit: 1100,
     commonjsOptions: {
       defaultIsModuleExports: true
     },
@@ -38,6 +42,10 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
+          // react-pdf (+ its yoga/fontkit deps) is a ~1.5MB lib reached only by the
+          // on-demand PDF path (2 importers). Isolate it into one shared lazy chunk so
+          // it never duplicates across those importers and caches apart from app code.
+          if (id.includes('@react-pdf') || id.includes('/yoga-layout') || id.includes('fontkit')) return 'react-pdf';
           if (id.includes('@radix-ui')) return 'react-ui';
           if (id.includes('react-dom') || id.includes('/react/') || id.includes('/scheduler/')) return 'react-ui';
           if (id.includes('@tanstack/react-router')) return 'tanstack-router';

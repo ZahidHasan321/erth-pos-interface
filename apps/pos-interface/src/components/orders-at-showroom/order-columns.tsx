@@ -19,7 +19,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-IN", {
 });
 
 function formatDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return dateFormatter.format(parsed);
@@ -79,7 +79,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
             )}
           </div>
           <span className="font-bold text-xs text-muted-foreground uppercase tracking-widest leading-none">
-            {row.original.fatoura ? `INV ${row.original.fatoura}` : "—"}
+            {row.original.fatoura ? `INV ${row.original.fatoura}` : "-"}
           </span>
         </div>
       );
@@ -111,7 +111,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
     size: 105,
     cell: ({ row }) => {
       const { showroomStatus, fatouraStage } = row.original;
-      let label = fatouraStage || "—";
+      let label = fatouraStage || "-";
       let colorClass = "bg-muted text-muted-foreground";
 
       switch (showroomStatus.label) {
@@ -192,7 +192,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
     cell: ({ row }) => {
       const garments = row.original.order.garments ?? [];
       const total = garments.length;
-      if (total === 0) return <span className="text-xs text-muted-foreground">—</span>;
+      if (total === 0) return <span className="text-xs text-muted-foreground">-</span>;
 
       const atShop = garments.filter((g) => g.location === "shop" && g.piece_stage !== "completed").length;
       const brovas = garments.filter((g) => g.garment_type === "brova");
@@ -302,7 +302,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-[180px] text-xs">
                     <p className="font-bold">Call: {formatDate(order.call_reminder_date instanceof Date ? order.call_reminder_date.toISOString() : (order.call_reminder_date as string | null | undefined) ?? "")}</p>
-                    <p>Status: {(order.call_status as string) || "—"}</p>
+                    <p>Status: {(order.call_status as string) || "-"}</p>
                     {order.call_notes && <p className="text-muted-foreground mt-0.5 break-words">{order.call_notes as string}</p>}
                   </TooltipContent>
                 </Tooltip>

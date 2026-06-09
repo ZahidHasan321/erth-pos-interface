@@ -1,5 +1,6 @@
-import { useFormContext } from "react-hook-form";
+import { useFormContext, Controller } from "react-hook-form";
 import { Input } from "@repo/ui/input";
+import { ShoulderSlopeSelect } from "@repo/ui/shoulder-slope";
 import { SectionCard } from "@/components/shared/PageShell";
 import { cn } from "@/lib/utils";
 import { MEASUREMENT_GROUPS } from "./constants";
@@ -8,7 +9,7 @@ import type { AddGarmentFormValues } from "./schema";
 // Column-oriented table: each group is one card with a label row and an
 // input row. Matches the POS new-work-order measurement layout.
 export function MeasurementFields() {
-  const { register } = useFormContext<AddGarmentFormValues>();
+  const { register, control, formState: { errors } } = useFormContext<AddGarmentFormValues>();
 
   return (
     <SectionCard
@@ -20,6 +21,26 @@ export function MeasurementFields() {
       }
       bodyClassName="space-y-3"
     >
+      {/* Shoulder slope — categorical, required choice (no silent default). */}
+      <div className="rounded-md border border-border bg-background/40 px-3 py-2 space-y-1.5">
+        <h4 className="text-sm font-medium text-muted-foreground">Shoulder slope</h4>
+        <Controller
+          control={control}
+          name="shoulder_slope"
+          render={({ field }) => (
+            <ShoulderSlopeSelect
+              value={field.value}
+              onChange={field.onChange}
+              invalid={!!errors.shoulder_slope}
+            />
+          )}
+        />
+        {errors.shoulder_slope && (
+          <p className="text-xs text-[color:var(--status-bad)]">
+            {errors.shoulder_slope.message as string}
+          </p>
+        )}
+      </div>
       {MEASUREMENT_GROUPS.map((group) => (
         <div
           key={group.title}
@@ -58,7 +79,7 @@ export function MeasurementFields() {
                       id={`m-${f.key}`}
                       type="number"
                       step="0.01"
-                      placeholder="—"
+                      placeholder="-"
                       className={cn(
                         "h-9 w-full text-center tabular-nums",
                         "bg-transparent border-0 shadow-none px-1",

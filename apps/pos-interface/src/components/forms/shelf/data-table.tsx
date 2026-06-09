@@ -120,8 +120,14 @@ export function DataTable<TData, TValue>({
                 className="h-32 text-center"
               >
                 <div className="flex flex-col items-center gap-1.5 text-muted-foreground">
-                  <span className="text-sm font-medium">No items added yet</span>
-                  <span className="text-sm opacity-60">Pick a product from the grid above</span>
+                  {isOrderDisabled ? (
+                    <span className="text-sm font-medium">No shelf products in this order</span>
+                  ) : (
+                    <>
+                      <span className="text-sm font-medium">No items added yet</span>
+                      <span className="text-sm opacity-60">Pick a product from the grid above</span>
+                    </>
+                  )}
                 </div>
               </TableCell>
             </TableRow>

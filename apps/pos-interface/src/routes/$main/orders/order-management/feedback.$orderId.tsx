@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, memo } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -17,6 +17,7 @@ import {
   PenTool,
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   ArrowUp,
   Mic,
   MicOff,
@@ -43,7 +44,7 @@ import {
 } from "@repo/ui/select";
 import { Label } from "@repo/ui/label";
 import { Checkbox } from "@repo/ui/checkbox";
-import { Switch } from "@repo/ui/switch";
+import { ShoulderSlopeSelect, ShoulderSlopeDisplay } from "@repo/ui/shoulder-slope";
 import { toast } from "sonner";
 import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
@@ -51,18 +52,49 @@ import { RadioGroup, RadioGroupItem } from "@repo/ui/radio-group";
 import { SignaturePad } from "@/components/forms/signature-pad";
 
 // API and Types
-import { getOrderById } from "@/api/orders";
-import { getMeasurementById, createMeasurement } from "@/api/measurements";
-import { updateGarment, bulkRepointMeasurement, bulkUpdateStyleFields } from "@/api/garments";
+import { getOrderById, repriceOrderStyles } from "@/api/orders";
+import { getMeasurementById, getMeasurementsByCustomer, createMeasurement } from "@/api/measurements";
+import { updateGarment, createRedoReplacement, redoPromoteFinalToBrova } from "@/api/garments";
+import { getFabrics } from "@/api/fabrics";
 import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip } from "@/api/feedback";
 import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
+import { usePricing } from "@/hooks/usePricing";
+import { useAuth } from "@/context/auth";
+import { computeStyleReprice, type RepriceGarmentInput } from "@/lib/feedback-reprice";
 import {
   buildFinalGarmentPayload,
   planMeasurementPropagation,
-  planStylePropagation,
-  MEASUREMENT_PROPAGATION_REASON,
+  reasonPropagates,
 } from "@/lib/feedback-payload";
-import type { Measurement, Order, Garment, Customer, GarmentFeedback, BrovaFeedback } from "@repo/database";
+import {
+  type StyleFields,
+  buildBrovaStyleUpdates,
+  pickStyleFields,
+  diffStyleFields,
+} from "@/lib/feedback-finals";
+import {
+  type StagedMeasurement,
+  type GarmentOverride,
+  type GarmentTag,
+  type MeasurementInPlay,
+  computeOverrideTargets,
+  computeSharedMeasurementGroup,
+  computeMeasurementsInPlay,
+  defaultMeasurementAssignments,
+  brovaResultingStyle,
+  orderFinalsInProduction,
+  brovaEditable,
+} from "@/lib/feedback-overrides";
+import { MeasurementOverrideSection, FinalsCardOverride, GarmentTagLabel } from "@/components/feedback/override-section";
+import { MeasurementSheet } from "@/components/feedback/measurement-sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@repo/ui/sheet";
+import type { Measurement, Order, Garment, Customer, GarmentFeedback, BrovaFeedback, ShoulderSlope } from "@repo/database";
 import { evaluateBrovaFeedback, getAlterationNumber } from "@repo/database";
 
 // Assets & Constants
@@ -148,18 +180,30 @@ const MEASUREMENT_GROUPS: Array<{ title: string; rows: readonly MeasurementRow[]
     ),
   },
   {
-    title: "Jabzour",
+    title: "Jabzour & Basma",
     rows: MEASUREMENT_ROWS.filter(r =>
-      ["jabzour_length", "jabzour_width", "second_button_distance"].includes(r.key)
-    ),
-  },
-  {
-    title: "Basma",
-    rows: MEASUREMENT_ROWS.filter(r =>
-      ["basma_length", "basma_width"].includes(r.key)
+      ["jabzour_length", "jabzour_width", "second_button_distance", "basma_length", "basma_width"].includes(r.key)
     ),
   },
 ];
+
+// Label + field column widths (px). LABEL_COL_W is the fixed label column;
+// FIELD_COL_W is the *minimum* a field column may shrink to before columns wrap
+// into a stacked block. Field columns stretch to fill the row but never past
+// FIELD_COL_MAX_W, so a group with only a couple of columns stays left-aligned
+// at a sane width instead of one column swallowing the whole row.
+const LABEL_COL_W = 110;
+const FIELD_COL_W = 96;
+const FIELD_COL_MAX_W = 160;
+// The measurement group card draws a 1px border on each side; subtract it so the
+// table fills the inner content width exactly without triggering a stray scroll.
+const GROUP_BORDER_W = 2;
+
+function chunkArray<T>(arr: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
 
 const SATISFACTION_LEVELS = [
   { value: "angry", label: "Angry", emoji: "\u{1F621}", numericValue: 1 },
@@ -172,8 +216,8 @@ const SATISFACTION_LEVELS = [
 const BROVA_FEEDBACK_OPTIONS = [
   { value: "accepted", label: "Accept", color: "peer-data-[state=checked]:border-emerald-600 peer-data-[state=checked]:text-emerald-700 peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-emerald-600" },
   { value: "needs_repair_accepted", label: "Accept with fix", color: "peer-data-[state=checked]:border-amber-500 peer-data-[state=checked]:text-amber-700 peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-amber-500" },
-  { value: "needs_repair_rejected", label: "Reject — repair", color: "peer-data-[state=checked]:border-amber-600 peer-data-[state=checked]:text-amber-800 peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-amber-600" },
-  { value: "needs_redo", label: "Reject — redo", color: "peer-data-[state=checked]:border-destructive peer-data-[state=checked]:text-destructive peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-destructive" },
+  { value: "needs_repair_rejected", label: "Reject: repair", color: "peer-data-[state=checked]:border-amber-600 peer-data-[state=checked]:text-amber-800 peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-amber-600" },
+  { value: "needs_redo", label: "Reject: redo", color: "peer-data-[state=checked]:border-destructive peer-data-[state=checked]:text-destructive peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-destructive" },
 ];
 
 const FINAL_FEEDBACK_OPTIONS = [
@@ -218,14 +262,24 @@ const STYLE_OPTION_LISTS: Record<string, BaseOption[] | undefined> = {
 
 interface GarmentFeedbackState {
   feedbackMeasurements: Record<string, number | "">;
+  // Categorical shoulder-slope correction (kept out of the numeric map above).
+  // Its reason/notes reuse differenceReasons["shoulder_slope"] / measurementNotes.
+  shoulderSlopeNew: ShoulderSlope | "";
   differenceReasons: Record<string, string>;
   measurementNotes: Record<string, string>;
   optionNotes: Record<string, string>;
   optionChecks: Record<string, boolean>;
   styleChanges: Record<string, string>;
   hashwaChanges: Record<string, string>;
-  sharedPhotos: Array<{ type: "photo" | "video"; url: string }>;
-  sharedVoiceNotes: string[];
+  // Per-style attachments, keyed by option id (collar, cuff, jabzour, …) so each
+  // style carries its own photos/voice notes instead of one shared bucket.
+  optionPhotos: Record<string, Array<{ type: "photo" | "video"; url: string }>>;
+  optionVoiceNotes: Record<string, string[]>;
+  // Read-only attachments from feedback saved before per-style attachments
+  // existed (stored flat with no style). Shown in an "Earlier attachments" box;
+  // never re-filed or written back.
+  legacyPhotos: Array<{ type: "photo" | "video"; url: string }>;
+  legacyVoiceNotes: string[];
   // Local cache of File/Blob for blob: preview URLs. Photos and voice notes
   // are uploaded to storage only on submit so abandoned drafts don't leave
   // orphan files in the bucket. Signatures take a separate path (data URL →
@@ -240,22 +294,33 @@ interface GarmentFeedbackState {
   submitted: boolean;
   existingFeedbackId: string | null;
   isEditing: boolean;
-  // When true, Customer Request measurement edits create a new measurement
-  // for THIS garment only, leaving siblings on their existing measurement.
-  // Default false → existing behavior (bulk repoint across all sharing garments).
-  measurementGarmentOnly: boolean;
+  // Staged measurement derived from the correction table (§2.5). One new
+  // measurement record staged locally and committed only on submit.
+  stagedMeasurement: StagedMeasurement | null;
+  // Per-garment override state for measurement assignment + style (§2.5).
+  // Keyed by garment id (finals + shared sibling brova).
+  garmentOverrides: Record<string, GarmentOverride>;
+  // Redo resolution (§2.5, brova + needs_redo only). An explicit required choice;
+  // seeded from the original's fabric source. replacement_in/out create a fresh
+  // replacement at the shop; promote discards + promotes a parked final to brova.
+  redoOutcome: "replacement_in" | "replacement_out" | "promote" | null;
+  redoReplacementFabricId: number | null; // for the customer-cloth → our-stock cross
+  redoPromoteFinalId: string | null;      // which parked final becomes the new brova
 }
 
 const createEmptyGarmentState = (): GarmentFeedbackState => ({
   feedbackMeasurements: {},
+  shoulderSlopeNew: "",
   differenceReasons: {},
   measurementNotes: {},
   optionNotes: {},
   optionChecks: {},
   styleChanges: {},
   hashwaChanges: {},
-  sharedPhotos: [],
-  sharedVoiceNotes: [],
+  optionPhotos: {},
+  optionVoiceNotes: {},
+  legacyPhotos: [],
+  legacyVoiceNotes: [],
   pendingUploads: {},
   satisfaction: null,
   feedbackAction: null,
@@ -266,7 +331,11 @@ const createEmptyGarmentState = (): GarmentFeedbackState => ({
   submitted: false,
   existingFeedbackId: null,
   isEditing: false,
-  measurementGarmentOnly: false,
+  stagedMeasurement: null,
+  garmentOverrides: {},
+  redoOutcome: null,
+  redoReplacementFabricId: null,
+  redoPromoteFinalId: null,
 });
 
 // --- Local draft persistence ---
@@ -283,8 +352,12 @@ const toDraftJson = (st: GarmentFeedbackState) => {
   // Blob URLs are tied to the page session and won't resolve after reload.
   const out = { ...st } as Partial<GarmentFeedbackState>;
   delete out.pendingUploads;
-  out.sharedPhotos = st.sharedPhotos.filter(p => !p.url.startsWith("blob:"));
-  out.sharedVoiceNotes = st.sharedVoiceNotes.filter(u => !u.startsWith("blob:"));
+  out.optionPhotos = Object.fromEntries(
+    Object.entries(st.optionPhotos ?? {}).map(([k, arr]) => [k, arr.filter(p => !p.url.startsWith("blob:"))]),
+  );
+  out.optionVoiceNotes = Object.fromEntries(
+    Object.entries(st.optionVoiceNotes ?? {}).map(([k, arr]) => [k, arr.filter(u => !u.startsWith("blob:"))]),
+  );
   return out;
 };
 
@@ -292,14 +365,17 @@ const toDraftJson = (st: GarmentFeedbackState) => {
 // keys for every garment the user merely clicked through.
 const isDraftMeaningful = (st: GarmentFeedbackState): boolean =>
   Object.keys(st.feedbackMeasurements).length > 0 ||
+  st.shoulderSlopeNew !== "" ||
   Object.keys(st.differenceReasons).length > 0 ||
   Object.keys(st.measurementNotes).length > 0 ||
   Object.keys(st.optionNotes).length > 0 ||
   Object.keys(st.optionChecks).length > 0 ||
   Object.keys(st.styleChanges).length > 0 ||
   Object.keys(st.hashwaChanges).length > 0 ||
-  st.sharedPhotos.some(p => !p.url.startsWith("blob:")) ||
-  st.sharedVoiceNotes.some(u => !u.startsWith("blob:")) ||
+  st.stagedMeasurement != null ||
+  Object.keys(st.garmentOverrides ?? {}).length > 0 ||
+  Object.values(st.optionPhotos ?? {}).some(arr => arr.some(p => !p.url.startsWith("blob:"))) ||
+  Object.values(st.optionVoiceNotes ?? {}).some(arr => arr.some(u => !u.startsWith("blob:"))) ||
   st.satisfaction !== null ||
   st.feedbackAction !== null ||
   st.distributionAction !== null ||
@@ -348,6 +424,43 @@ const KeyedTextField = memo(function KeyedTextField({
       {...rest}
       value={value}
       onChange={(e) => onChange(inputKey, e.target.value)}
+    />
+  );
+});
+
+// Note field that buffers its text locally and only commits upward on blur.
+// Notes have no live-derived UI (unlike measurement values, whose Delta badge
+// updates every keystroke), so committing on each character is pure waste — it
+// re-renders the whole feedback page. Buffering keeps typing local to this input.
+type BufferedNoteFieldProps = {
+  inputKey: string;
+  value: string;
+  onCommit: (key: string, value: string) => void;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">;
+
+const BufferedNoteField = memo(function BufferedNoteField({
+  inputKey,
+  value,
+  onCommit,
+  ...rest
+}: BufferedNoteFieldProps) {
+  const [local, setLocal] = useState(value);
+  const focusedRef = useRef(false);
+  // Re-sync when the value changes from outside (garment switch, draft load),
+  // but never while focused — that would clobber what's being typed.
+  useEffect(() => {
+    if (!focusedRef.current) setLocal(value);
+  }, [value]);
+  return (
+    <Input
+      {...rest}
+      value={local}
+      onFocus={() => { focusedRef.current = true; }}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        focusedRef.current = false;
+        if (local !== value) onCommit(inputKey, local);
+      }}
     />
   );
 });
@@ -487,10 +600,10 @@ function VoiceNotePlayer({ url, label, onRemove }: { url: string; label: string;
       </button>
       <div className="flex flex-col flex-1 min-w-0 gap-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium text-muted-foreground truncate">
+          <span className="text-xs font-medium text-muted-foreground truncate">
             {label}
           </span>
-          <span className="text-[11px] font-medium tabular-nums text-muted-foreground shrink-0">
+          <span className="text-xs font-medium tabular-nums text-muted-foreground shrink-0">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
         </div>
@@ -532,6 +645,329 @@ function VoiceNotePlayer({ url, label, onRemove }: { url: string; label: string;
   );
 }
 
+// --- Read-only previous-feedback detail (history) ---
+// Renders a full, read-only view of one past trip's feedback record (measurement
+// changes, style/option verdicts, attachments, signature, notes) — not just the
+// rating + action. Parses the same JSON shapes the save handler writes.
+
+const parseHistoryObjectArray = (raw: unknown): Record<string, unknown>[] => {
+  if (!raw) return [];
+  let v: unknown = raw;
+  if (typeof raw === "string") {
+    try { v = JSON.parse(raw); } catch { return []; }
+  }
+  return Array.isArray(v) ? (v.filter(x => x && typeof x === "object") as Record<string, unknown>[]) : [];
+};
+
+const parseHistoryStringArray = (raw: unknown): string[] => {
+  if (!raw) return [];
+  let v: unknown = raw;
+  if (typeof raw === "string") {
+    try { v = JSON.parse(raw); } catch { return []; }
+  }
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+};
+
+const MEASUREMENT_LABEL = new Map<string, string>(
+  MEASUREMENT_ROWS.map(r => [r.key as string, `${r.type} · ${r.subType}`]),
+);
+
+const OPTION_LABEL: Record<string, string> = {
+  collar: "Collar",
+  collarBtn: "Collar Button",
+  smallTabaggi: "Small Tabbagi",
+  jabzour: "Jabzour",
+  frontPocket: "Front Pocket",
+  cuff: "Cuff",
+  walletPocket: "Wallet Pocket",
+  penHolder: "Pen Holder",
+  mobilePocket: "Mobile Pocket",
+  collarPosition: "Collar Position",
+  lines: "Lines",
+};
+
+const ACTION_LABEL: Record<string, string> = {
+  accepted: "Accepted",
+  needs_repair_accepted: "Accept with fix",
+  needs_repair_rejected: "Reject: repair",
+  needs_repair: "Needs repair",
+  needs_redo: "Reject: redo",
+  collected: "Collected",
+  delivered: "Delivered",
+};
+
+const DISTRIBUTION_LABEL: Record<string, string> = {
+  pickup: "Customer pickup",
+  workshop: "To workshop",
+  shop: "Stay at shop",
+};
+
+const actionBadgeColor = (action: string | null | undefined): string =>
+  cn(
+    "text-sm font-medium",
+    (action === "accepted" || action === "collected") && "border-emerald-500/40 text-emerald-700",
+    action === "needs_repair_accepted" && "border-amber-500/40 text-amber-700",
+    (action === "needs_repair_rejected" || action === "needs_repair") && "border-amber-600/40 text-amber-800",
+    action === "needs_redo" && "border-destructive/40 text-destructive",
+    action === "delivered" && "border-primary/40 text-primary",
+  );
+
+function PreviousFeedbackDetail({ fb, index }: { fb: GarmentFeedback; index: number }) {
+  const diffs = parseHistoryObjectArray(fb.measurement_diffs);
+  const options = parseHistoryObjectArray(fb.options_checklist);
+  const topPhotos = parseHistoryStringArray(fb.photo_urls);
+  const topVoices = parseHistoryStringArray(fb.voice_note_urls);
+
+  // Per-style media lives inside options_checklist rows; the flat photo_urls /
+  // voice_note_urls is just their aggregate (or, for legacy records, the only
+  // copy). Show per-style media when present, otherwise fall back to the flat
+  // block — never both, to avoid showing every attachment twice.
+  const hasPerOptionMedia = options.some(
+    o => parseHistoryStringArray(o["photo_urls"]).length > 0 || parseHistoryStringArray(o["voice_note_urls"]).length > 0,
+  );
+
+  const sat = SATISFACTION_LEVELS.find(s => s.numericValue === fb.satisfaction_level);
+  const actionLabel = fb.action ? (ACTION_LABEL[fb.action] ?? fb.action.replace(/_/g, " ")) : "";
+  const distLabel = fb.distribution ? (DISTRIBUTION_LABEL[fb.distribution] ?? fb.distribution) : null;
+  const dateStr = fb.created_at
+    ? parseUtcTimestamp(fb.created_at).toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short", year: "numeric" })
+    : "";
+
+  const sectionLabel = "text-xs font-semibold uppercase tracking-wide text-muted-foreground";
+
+  // Collapsed summary: how many decisions of each kind this trip recorded, so the
+  // closed row still signals what changed without opening it.
+  const styleChangeCount = options.filter(o => o["rejected"] === true).length;
+  const hashwaChangeCount = options.filter(o => o["hashwa_rejected"] === true).length;
+  const summaryBits = [
+    diffs.length > 0 ? `${diffs.length} measurement${diffs.length > 1 ? "s" : ""}` : null,
+    styleChangeCount > 0 ? `${styleChangeCount} style` : null,
+    hashwaChangeCount > 0 ? `${hashwaChangeCount} hashwa` : null,
+  ].filter(Boolean) as string[];
+
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-clip">
+      {/* Trip header — click to expand the full recorded decision */}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        className={cn(
+          "w-full flex flex-wrap items-center gap-2 px-4 py-3 bg-muted/20 text-left hover:bg-muted/30 transition-colors",
+          open && "border-b",
+        )}
+      >
+        <Badge variant="outline" className="text-sm font-medium">
+          Trip {fb.trip_number || index + 1}
+        </Badge>
+        {actionLabel && (
+          <Badge variant="outline" className={actionBadgeColor(fb.action)}>{actionLabel}</Badge>
+        )}
+        {sat && (
+          <span className="text-sm text-foreground inline-flex items-center gap-1.5">
+            <span className="text-lg leading-none">{sat.emoji}</span>
+            {sat.label}
+          </span>
+        )}
+        {!open && summaryBits.length > 0 && (
+          <span className="text-sm text-muted-foreground truncate">· {summaryBits.join(" · ")}</span>
+        )}
+        <span className="ml-auto flex items-center gap-3 shrink-0">
+          {dateStr && <span className="text-sm font-medium text-muted-foreground">{dateStr}</span>}
+          <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+        </span>
+      </button>
+
+      {open && (
+      <div className="p-4 space-y-5">
+        {/* Distribution decision */}
+        {distLabel && (
+          <p className="text-sm text-muted-foreground">
+            Distribution: <span className="text-foreground font-medium">{distLabel}</span>
+          </p>
+        )}
+        {/* Measurement changes */}
+        {diffs.length > 0 && (
+          <div className="space-y-2">
+            <div className={cn(sectionLabel, "flex items-center gap-1.5")}>
+              <Ruler className="size-3.5" /> Measurement changes
+            </div>
+            <div className="overflow-x-auto rounded-md border border-border/60">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-muted/40 text-xs font-medium text-muted-foreground">
+                    <th className="text-left p-2 border-b border-border/60">Measurement</th>
+                    <th className="p-2 border-b border-border/60 text-center">Current</th>
+                    <th className="p-2 border-b border-border/60 text-center">New</th>
+                    <th className="p-2 border-b border-border/60 text-center">Δ</th>
+                    <th className="text-left p-2 border-b border-border/60">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diffs.map((d, di) => {
+                    const field = String(d["field"] ?? "");
+                    const reason = d["reason"] ? String(d["reason"]) : null;
+                    const reasonMeta = DIFFERENCE_REASONS.find(r => r.label === reason);
+                    const original = d["original_value"];
+                    const actual = d["actual_value"];
+                    const difference = d["difference"];
+                    const note = d["notes"] ? String(d["notes"]) : null;
+                    return (
+                      <tr key={di} className="border-b border-border/40 last:border-0 align-top">
+                        <td className="p-2 font-medium">
+                          {MEASUREMENT_LABEL.get(field) ?? field}
+                          {note && <div className="text-xs text-muted-foreground font-normal mt-0.5">{note}</div>}
+                        </td>
+                        <td className="p-2 text-center tabular-nums text-muted-foreground">
+                          {original != null ? String(original) : "-"}
+                        </td>
+                        <td className="p-2 text-center tabular-nums font-semibold">
+                          {actual != null ? String(actual) : "-"}
+                        </td>
+                        <td className="p-2 text-center tabular-nums">
+                          {typeof difference === "number" && difference !== 0
+                            ? <span className={cn("font-semibold", difference > 0 ? "text-emerald-700" : "text-destructive")}>
+                                {difference > 0 ? `+${difference}` : difference}
+                              </span>
+                            : <span className="text-muted-foreground/50">·</span>}
+                        </td>
+                        <td className="p-2">
+                          {reason ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className={cn("size-1.5 rounded-full shrink-0", reasonMeta?.dot ?? "bg-muted-foreground")} />
+                              {reason}
+                            </span>
+                          ) : <span className="text-muted-foreground/50">-</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Style / option verdicts */}
+        {options.length > 0 && (
+          <div className="space-y-2">
+            <div className={cn(sectionLabel, "flex items-center gap-1.5")}>
+              <MessageSquare className="size-3.5" /> Style verdicts
+            </div>
+            <div className="divide-y divide-border/50 rounded-md border border-border/60">
+              {options.map((o, oi) => {
+                const name = String(o["option_name"] ?? "");
+                const label = OPTION_LABEL[name] ?? name;
+                const correct = o["actual_correct"] === true;
+                const rejected = o["rejected"] === true;
+                const newValue = o["new_value"] ? String(o["new_value"]) : null;
+                const hashwaCorrect = o["hashwa_correct"] === true;
+                const hashwaRejected = o["hashwa_rejected"] === true;
+                const hashwaNew = o["hashwa_new_value"] ? String(o["hashwa_new_value"]) : null;
+                const note = o["notes"] ? String(o["notes"]) : null;
+                const photos = parseHistoryStringArray(o["photo_urls"]);
+                const voices = parseHistoryStringArray(o["voice_note_urls"]);
+                return (
+                  <div key={oi} className="p-2.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{label}</span>
+                      {rejected ? (
+                        <span className="inline-flex items-center gap-1.5 text-sm text-destructive">
+                          <X className="size-3.5" /> Rejected{newValue && <span className="text-muted-foreground">→ <span className="text-foreground font-medium">{newValue}</span></span>}
+                        </span>
+                      ) : correct ? (
+                        <span className="inline-flex items-center gap-1.5 text-sm text-emerald-700">
+                          <Check className="size-3.5" /> Correct
+                        </span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground/60">Not checked</span>
+                      )}
+                    </div>
+                    {(hashwaCorrect || hashwaRejected) && (
+                      <div className="text-xs text-muted-foreground pl-0.5">
+                        Hashwa: {hashwaRejected ? (
+                          <span className="text-destructive">Rejected{hashwaNew && ` → ${hashwaNew}`}</span>
+                        ) : (
+                          <span className="text-emerald-700">Correct</span>
+                        )}
+                      </div>
+                    )}
+                    {note && <p className="text-sm text-muted-foreground">{note}</p>}
+                    {photos.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {photos.map((url, pi) => (
+                          <div key={pi} className="size-16 rounded-md overflow-hidden border border-border">
+                            <img src={url} alt={`${label} ${pi + 1}`} className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {voices.length > 0 && (
+                      <div className="space-y-1.5">
+                        {voices.map((url, vi) => (
+                          <audio key={vi} src={url} controls preload="metadata" className="w-full h-9" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Flat attachments (legacy records / no per-style media) */}
+        {!hasPerOptionMedia && (topPhotos.length > 0 || topVoices.length > 0) && (
+          <div className="space-y-2">
+            <div className={cn(sectionLabel, "flex items-center gap-1.5")}>
+              <Camera className="size-3.5" /> Attachments
+            </div>
+            {topPhotos.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {topPhotos.map((url, pi) => (
+                  <div key={pi} className="size-20 rounded-md overflow-hidden border border-border">
+                    <img src={url} alt={`Attachment ${pi + 1}`} className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            )}
+            {topVoices.length > 0 && (
+              <div className="space-y-1.5">
+                {topVoices.map((url, vi) => (
+                  <audio key={vi} src={url} controls preload="metadata" className="w-full h-9" />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Customer signature */}
+        {fb.customer_signature && (
+          <div className="space-y-2">
+            <div className={cn(sectionLabel, "flex items-center gap-1.5")}>
+              <PenTool className="size-3.5" /> Customer signature
+            </div>
+            <div className="rounded-md border border-border bg-white p-2 w-fit">
+              <img src={fb.customer_signature} alt="Customer signature" className="h-20 object-contain" />
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
+        {fb.notes && (
+          <div className="space-y-1.5">
+            <div className={sectionLabel}>Notes</div>
+            <p className="text-sm text-foreground whitespace-pre-wrap">{fb.notes}</p>
+          </div>
+        )}
+      </div>
+      )}
+    </div>
+  );
+}
+
 // --- Main Component ---
 
 function UnifiedFeedbackInterface() {
@@ -540,6 +976,11 @@ function UnifiedFeedbackInterface() {
   const paramOrderId = Number(rawOrderId);
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  // Style catalogue + rules: a brova-trial style change reprices the order on
+  // submit using the SAME engine as order creation (§2.5), so flat-priced
+  // styles (qallabi/designer) keep their fixed price.
+  const { styles, stylePricingRules } = usePricing();
 
   // Active Data State
   const [activeOrder, setActiveOrder] = useState<OrderWithDetails | null>(null);
@@ -557,8 +998,26 @@ function UnifiedFeedbackInterface() {
   const chunksRef = useRef<Blob[]>([]);
   const [recordingOptionId, setRecordingOptionId] = useState<string | null>(null);
 
-  // Previous feedback history
-  const [historyOpen, setHistoryOpen] = useState(false);
+  // Previous feedback history — opened from the header button into a side sheet
+  const [historySheetOpen, setHistorySheetOpen] = useState(false);
+
+  // Measurement lineage sheet
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Measure the measurement-table area so field columns can wrap into stacked
+  // blocks once they no longer fit, instead of scrolling sideways.
+  const measurementAreaRef = useRef<HTMLDivElement>(null);
+  const [measurementAreaWidth, setMeasurementAreaWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = measurementAreaRef.current;
+    if (!el) return;
+    setMeasurementAreaWidth(el.clientWidth);
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) setMeasurementAreaWidth(e.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Helpers for per-garment state
   const getGarmentState = useCallback((id: string | null): GarmentFeedbackState => {
@@ -634,11 +1093,12 @@ function UnifiedFeedbackInterface() {
           if (typeof raw !== "string") return [];
           try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; }
         };
-        const photoEntries = parseJsonArray(fb.photo_urls)
-          .map((p: unknown) => (typeof p === "string" ? { type: "photo" as const, url: p } : p))
-          .filter((p): p is { type: "photo" | "video"; url: string } => {
-            return !!p && typeof p === "object" && "url" in p && typeof (p as { url: unknown }).url === "string";
-          });
+        const parsePhotoArray = (raw: unknown): Array<{ type: "photo" | "video"; url: string }> =>
+          parseJsonArray(raw)
+            .map((p: unknown) => (typeof p === "string" ? { type: "photo" as const, url: p } : p))
+            .filter((p): p is { type: "photo" | "video"; url: string } =>
+              !!p && typeof p === "object" && "url" in p && typeof (p as { url: unknown }).url === "string");
+        const photoEntries = parsePhotoArray(fb.photo_urls);
         const voiceEntries = parseJsonArray(fb.voice_note_urls).filter(
           (v): v is string => typeof v === "string",
         );
@@ -646,11 +1106,21 @@ function UnifiedFeedbackInterface() {
         // Rebuild measurement state from measurement_diffs JSON
         const feedbackMeasurements: Record<string, number | ""> = {};
         const measurementNotes: Record<string, string> = {};
+        let shoulderSlopeNew: ShoulderSlope | "" = "";
         for (const row of parseJsonArray(fb.measurement_diffs)) {
           if (!row || typeof row !== "object") continue;
           const d = row as Record<string, unknown>;
           if (!d["field"]) continue;
           const field = String(d["field"]);
+          // shoulder_slope is categorical — restore into its own field, never the
+          // numeric feedbackMeasurements map.
+          if (field === "shoulder_slope") {
+            if (typeof d["actual_value"] === "string") {
+              shoulderSlopeNew = d["actual_value"] as ShoulderSlope;
+            }
+            if (d["notes"]) measurementNotes[field] = String(d["notes"]);
+            continue;
+          }
           if (d["actual_value"] !== null && d["actual_value"] !== undefined) {
             feedbackMeasurements[field] = d["actual_value"] as number | "";
           }
@@ -662,6 +1132,8 @@ function UnifiedFeedbackInterface() {
         const styleChanges: Record<string, string> = {};
         const hashwaChanges: Record<string, string> = {};
         const optionNotes: Record<string, string> = {};
+        const optionPhotos: Record<string, Array<{ type: "photo" | "video"; url: string }>> = {};
+        const optionVoiceNotes: Record<string, string[]> = {};
         for (const row of parseJsonArray(fb.options_checklist)) {
           if (!row || typeof row !== "object") continue;
           const o = row as Record<string, unknown>;
@@ -675,7 +1147,20 @@ function UnifiedFeedbackInterface() {
           if (o["new_value"]) styleChanges[key] = String(o["new_value"]);
           if (o["hashwa_new_value"]) hashwaChanges[key] = String(o["hashwa_new_value"]);
           if (o["notes"]) optionNotes[key] = String(o["notes"]);
+          const rowPhotos = parsePhotoArray(o["photo_urls"]);
+          if (rowPhotos.length) optionPhotos[key] = rowPhotos;
+          const rowVoices = parseJsonArray(o["voice_note_urls"]).filter(
+            (v): v is string => typeof v === "string",
+          );
+          if (rowVoices.length) optionVoiceNotes[key] = rowVoices;
         }
+        // Old records stored attachments flat at the top level with no style.
+        // Surface them read-only only when this record predates per-style
+        // attachments (i.e. no per-option media was parsed).
+        const hasPerOptionMedia =
+          Object.keys(optionPhotos).length > 0 || Object.keys(optionVoiceNotes).length > 0;
+        const legacyPhotos = hasPerOptionMedia ? [] : photoEntries;
+        const legacyVoiceNotes = hasPerOptionMedia ? [] : voiceEntries;
 
         // difference_reasons stored as plain {field: reason} object
         let differenceReasons: Record<string, string> = {};
@@ -696,9 +1181,12 @@ function UnifiedFeedbackInterface() {
           satisfaction: satLevel?.value || null,
           notes: fb.notes || "",
           customerSignature: fb.customer_signature || null,
-          sharedPhotos: photoEntries,
-          sharedVoiceNotes: voiceEntries,
+          optionPhotos,
+          optionVoiceNotes,
+          legacyPhotos,
+          legacyVoiceNotes,
           feedbackMeasurements,
+          shoulderSlopeNew,
           measurementNotes,
           differenceReasons,
           optionChecks,
@@ -728,7 +1216,18 @@ function UnifiedFeedbackInterface() {
     } else if (action === "needs_redo" && currentState.distributionAction === "pickup") {
       updateGarmentState(selectedGarmentId, { distributionAction: null });
     }
-  }, [currentState.feedbackAction, currentState.distributionAction, selectedGarmentId, updateGarmentState]);
+    // Seed the redo outcome from the original's fabric source (the default; the
+    // staff may change it). Only for a brova being redone (§2.5).
+    if (
+      action === "needs_redo" &&
+      activeGarment?.garment_type === "brova" &&
+      currentState.redoOutcome == null
+    ) {
+      updateGarmentState(selectedGarmentId, {
+        redoOutcome: activeGarment.fabric_source === "OUT" ? "replacement_out" : "replacement_in",
+      });
+    }
+  }, [currentState.feedbackAction, currentState.distributionAction, currentState.redoOutcome, selectedGarmentId, activeGarment, updateGarmentState]);
 
   // 2. Measurement Query
   const measurementId = activeGarment?.measurement_id;
@@ -740,13 +1239,52 @@ function UnifiedFeedbackInterface() {
 
   const measurement = measurementData?.data;
 
-  // 3. Previous feedback history query
+  // 2b. Human-readable measurement ids keyed by customer — covers all measurements
+  // (including newly staged ones added during this session).
+  const customerId = activeOrder?.customer?.id;
+
+  const { data: measurementHumanIdsData } = useQuery({
+    queryKey: ["measurements-by-customer", customerId],
+    queryFn: () => getMeasurementsByCustomer(customerId!),
+    enabled: !!customerId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const measurementHumanIds = useMemo((): Map<string, string> => {
+    const map = new Map<string, string>();
+    for (const row of measurementHumanIdsData?.data ?? []) {
+      if (row.id && row.measurement_id) map.set(row.id, row.measurement_id);
+    }
+    return map;
+  }, [measurementHumanIdsData]);
+
+  // 2c. Fabrics list — only fetched for the redo sub-form's "from our stock"
+  // picker, and only in the cross case (a customer-cloth brova switched to our
+  // stock, where we have no catalogue fabric on file). Lazy via `enabled`.
+  const needsRedoFabricPicker =
+    activeGarment?.garment_type === "brova" &&
+    currentState.feedbackAction === "needs_redo" &&
+    currentState.redoOutcome === "replacement_in" &&
+    activeGarment.fabric_source === "OUT";
+  const { data: redoFabricsData } = useQuery({
+    queryKey: ["fabrics-for-redo"],
+    queryFn: () => getFabrics(),
+    enabled: !!needsRedoFabricPicker,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // 3. Feedback history query — this garment only, every trip. The history sheet
+  // lists each trip's full recorded decision (measurements, style, hashwa, …).
   const { data: feedbackHistoryData } = useQuery({
     queryKey: ["garment-feedback", selectedGarmentId],
     queryFn: () => getFeedbackByGarmentId(selectedGarmentId!),
     enabled: !!selectedGarmentId,
   });
-  const feedbackHistory = feedbackHistoryData?.data || [];
+  // Oldest trip first so the sheet reads as the garment's story (Trip 1 → N).
+  const feedbackHistory = useMemo(
+    () => [...(feedbackHistoryData?.data ?? [])].sort((a, b) => (a.trip_number ?? 0) - (b.trip_number ?? 0)),
+    [feedbackHistoryData],
+  );
 
   // Auto-load order from URL params
   useEffect(() => {
@@ -785,6 +1323,85 @@ function UnifiedFeedbackInterface() {
     return () => clearTimeout(t);
   }, [garmentStates, activeOrder?.garments]);
 
+  // Staged-measurement sync: keep stagedMeasurement in sync with the correction
+  // table. Runs on measurement-table edits for brovas only. (§2.5)
+  useEffect(() => {
+    if (!selectedGarmentId || !activeGarment || activeGarment.garment_type !== "brova") return;
+
+    // Build correctedFields from propagating rows that have a non-empty value.
+    const correctedFields: Record<string, number | string> = {};
+    for (const row of MEASUREMENT_ROWS) {
+      const fbVal = currentState.feedbackMeasurements[row.key];
+      if (reasonPropagates(currentState.differenceReasons[row.key]) && fbVal !== "" && fbVal !== undefined) {
+        correctedFields[row.key] = Number(fbVal);
+      }
+    }
+    // shoulder_slope is categorical — a spec-correcting reason re-points the slope
+    // on the new measurement just like the numeric tape fields.
+    if (
+      reasonPropagates(currentState.differenceReasons["shoulder_slope"]) &&
+      currentState.shoulderSlopeNew !== ""
+    ) {
+      correctedFields["shoulder_slope"] = currentState.shoulderSlopeNew;
+    }
+
+    const hasPropagating = Object.keys(correctedFields).length > 0;
+    const currentStaged = currentState.stagedMeasurement;
+
+    if (hasPropagating) {
+      if (currentStaged == null) {
+        // No-staged → staged transition: create localId, seed defaults.
+        const localId = `staged:${crypto.randomUUID()}`;
+        const allGarments = activeOrder?.garments ?? [];
+        const sharedGroup = computeSharedMeasurementGroup({ allGarments, brova: activeGarment });
+        const targets = computeOverrideTargets({ allGarments, brova: activeGarment });
+        const seedAssignments = defaultMeasurementAssignments({ targets, sharedGroup, stagedLocalId: localId });
+
+        // Build initial garmentOverrides: brova adopts its own new measurement,
+        // shared targets adopt it, others keep null.
+        const initOverrides: Record<string, GarmentOverride> = {
+          [activeGarment.id]: { measurementAssignment: localId, styleOverride: null },
+        };
+        for (const [gid, assignment] of Object.entries(seedAssignments)) {
+          initOverrides[gid] = { measurementAssignment: assignment, styleOverride: null };
+        }
+
+        updateGarmentState(selectedGarmentId, {
+          stagedMeasurement: {
+            localId,
+            derivedFromMeasurementId: activeGarment.measurement_id ?? null,
+            correctedFields,
+          },
+          garmentOverrides: initOverrides,
+        });
+      } else {
+        // Already staged: only update correctedFields, keep localId + overrides.
+        const nextCorrected = JSON.stringify(correctedFields);
+        const prevCorrected = JSON.stringify(currentStaged.correctedFields);
+        if (nextCorrected !== prevCorrected) {
+          updateGarmentState(selectedGarmentId, {
+            stagedMeasurement: { ...currentStaged, correctedFields },
+          });
+        }
+      }
+    } else if (currentStaged != null) {
+      // Propagating rows cleared: remove staged measurement and prune overrides.
+      const oldLocalId = currentStaged.localId;
+      const prunedOverrides: Record<string, GarmentOverride> = {};
+      for (const [gid, ov] of Object.entries(currentState.garmentOverrides)) {
+        prunedOverrides[gid] = {
+          ...ov,
+          measurementAssignment: ov.measurementAssignment === oldLocalId ? null : ov.measurementAssignment,
+        };
+      }
+      updateGarmentState(selectedGarmentId, {
+        stagedMeasurement: null,
+        garmentOverrides: prunedOverrides,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGarmentId, activeGarment, currentState.feedbackMeasurements, currentState.differenceReasons, currentState.shoulderSlopeNew]);
+
   // --- Handlers ---
 
   // Keyed handlers below use setGarmentStates(prev => ...) directly instead of
@@ -811,6 +1428,17 @@ function UnifiedFeedbackInterface() {
       differenceReasons: { ...currentState.differenceReasons, [key]: value },
     });
   };
+
+  const handleShoulderSlopeChange = useCallback((value: ShoulderSlope) => {
+    if (!selectedGarmentId) return;
+    setGarmentStates(prev => {
+      const cur = prev[selectedGarmentId] || createEmptyGarmentState();
+      return {
+        ...prev,
+        [selectedGarmentId]: { ...cur, shoulderSlopeNew: value },
+      };
+    });
+  }, [selectedGarmentId]);
 
   const handleMeasurementNoteChange = useCallback((key: string, value: string) => {
     if (!selectedGarmentId) return;
@@ -858,7 +1486,7 @@ function UnifiedFeedbackInterface() {
     });
   };
 
-  const handleAddPhoto = (file: File | null) => {
+  const handleAddOptionPhoto = (optId: string, file: File | null) => {
     if (!file) return;
     if (!selectedGarmentId) return;
     const previewUrl = URL.createObjectURL(file);
@@ -868,16 +1496,19 @@ function UnifiedFeedbackInterface() {
         ...prev,
         [selectedGarmentId]: {
           ...st,
-          sharedPhotos: [...st.sharedPhotos, { type: "photo", url: previewUrl }],
+          optionPhotos: {
+            ...st.optionPhotos,
+            [optId]: [...(st.optionPhotos[optId] ?? []), { type: "photo", url: previewUrl }],
+          },
           pendingUploads: { ...st.pendingUploads, [previewUrl]: { kind: "photo", blob: file } },
         },
       };
     });
   };
 
-  const handleRemovePhoto = (idx: number) => {
+  const handleRemoveOptionPhoto = (optId: string, idx: number) => {
     if (!selectedGarmentId) return;
-    const removed = currentState.sharedPhotos[idx];
+    const removed = currentState.optionPhotos[optId]?.[idx];
     setGarmentStates(prev => {
       const st = prev[selectedGarmentId];
       if (!st) return prev;
@@ -887,7 +1518,10 @@ function UnifiedFeedbackInterface() {
         ...prev,
         [selectedGarmentId]: {
           ...st,
-          sharedPhotos: st.sharedPhotos.filter((_, i) => i !== idx),
+          optionPhotos: {
+            ...st.optionPhotos,
+            [optId]: (st.optionPhotos[optId] ?? []).filter((_, i) => i !== idx),
+          },
           pendingUploads: nextPending,
         },
       };
@@ -895,7 +1529,7 @@ function UnifiedFeedbackInterface() {
     if (removed?.url.startsWith("blob:")) URL.revokeObjectURL(removed.url);
   };
 
-  const startRecording = async () => {
+  const startRecording = async (optId: string) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -919,7 +1553,10 @@ function UnifiedFeedbackInterface() {
             ...prev,
             [selectedGarmentId]: {
               ...st,
-              sharedVoiceNotes: [...st.sharedVoiceNotes, previewUrl],
+              optionVoiceNotes: {
+                ...st.optionVoiceNotes,
+                [optId]: [...(st.optionVoiceNotes[optId] ?? []), previewUrl],
+              },
               pendingUploads: { ...st.pendingUploads, [previewUrl]: { kind: "voice", blob } },
             },
           };
@@ -927,7 +1564,7 @@ function UnifiedFeedbackInterface() {
       };
 
       mediaRecorder.start();
-      setRecordingOptionId("shared");
+      setRecordingOptionId(optId);
     } catch {
       toast.error("Could not access microphone");
     }
@@ -939,9 +1576,9 @@ function UnifiedFeedbackInterface() {
     }
   };
 
-  const removeVoiceNote = (idx: number) => {
+  const removeOptionVoiceNote = (optId: string, idx: number) => {
     if (!selectedGarmentId) return;
-    const removed = currentState.sharedVoiceNotes[idx];
+    const removed = currentState.optionVoiceNotes[optId]?.[idx];
     setGarmentStates(prev => {
       const st = prev[selectedGarmentId];
       if (!st) return prev;
@@ -951,7 +1588,10 @@ function UnifiedFeedbackInterface() {
         ...prev,
         [selectedGarmentId]: {
           ...st,
-          sharedVoiceNotes: st.sharedVoiceNotes.filter((_, i) => i !== idx),
+          optionVoiceNotes: {
+            ...st.optionVoiceNotes,
+            [optId]: (st.optionVoiceNotes[optId] ?? []).filter((_, i) => i !== idx),
+          },
           pendingUploads: nextPending,
         },
       };
@@ -960,12 +1600,13 @@ function UnifiedFeedbackInterface() {
   };
 
   const onConfirmClick = () => {
+    if (isReadOnly) return;
     if (!currentState.satisfaction || !currentState.feedbackAction || !currentState.distributionAction) {
         toast.error("Please complete all feedback sections");
         return;
     }
     if (measurementId && isMeasurementLoading) {
-        toast.error("Measurements still loading — please wait before submitting");
+        toast.error("Measurements still loading, please wait before submitting");
         return;
     }
     // Any measurement change must have a reason picked — silently dropping
@@ -982,25 +1623,62 @@ function UnifiedFeedbackInterface() {
         missingReason.push(`${row.type} ${row.subType}`);
       }
     }
+    // shoulder_slope: a changed slope needs a reason too (same spec-correction gate).
+    {
+      const slopeOrig = (measurement?.shoulder_slope ?? null) as ShoulderSlope | null;
+      const slopeNew = currentState.shoulderSlopeNew;
+      if (
+        slopeNew !== "" &&
+        slopeNew !== slopeOrig &&
+        !currentState.differenceReasons["shoulder_slope"]
+      ) {
+        missingReason.push("Shoulder Slope");
+      }
+    }
     if (missingReason.length > 0) {
       toast.error(
-        `Pick a reason for: ${missingReason.join(", ")} — Customer Request / Workshop Error / Shop Error`,
+        `Pick a reason for: ${missingReason.join(", ")} (Customer Request / Workshop Error / Shop Error)`,
         { duration: 6000 },
       );
       return;
+    }
+    // Redo (brova) requires an explicit outcome + its sub-field (§2.5).
+    if (activeGarment?.garment_type === "brova" && currentState.feedbackAction === "needs_redo") {
+      if (!currentState.redoOutcome) {
+        toast.error("Pick how to redo: a replacement (our stock / customer fabric) or promote a final.");
+        return;
+      }
+      if (
+        currentState.redoOutcome === "replacement_in" &&
+        activeGarment.fabric_source === "OUT" &&
+        currentState.redoReplacementFabricId == null
+      ) {
+        toast.error("Pick the fabric to cut for the replacement.");
+        return;
+      }
+      if (currentState.redoOutcome === "promote") {
+        const parkedFinals = (activeOrder?.garments ?? []).filter(
+          g => g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance",
+        );
+        if (parkedFinals.length > 0 && !currentState.redoPromoteFinalId) {
+          toast.error("Pick which final becomes the new brova.");
+          return;
+        }
+      }
     }
     setIsConfirmDialogOpen(true);
   };
 
   const handleSave = async () => {
+    if (isReadOnly) return;
     if (!activeOrder || !selectedGarmentId || !activeGarment || !currentState.feedbackAction) return;
 
     setIsConfirmDialogOpen(false);
     setIsSubmitting(true);
 
-    // Fields that bulk propagation (bulkRepointMeasurement / bulkUpdateStyleFields)
-    // may mutate on sibling garments. Snapshot them now so we can detect which
-    // siblings shifted under the user and reset their in-memory feedback state.
+    // Snapshot sibling style/measurement now so we can detect any UNEXPECTED
+    // baseline shift after save (the per-final resolved finals are excluded —
+    // those changes are deliberate). Guards against surprise drift.
     const SIBLING_TRACKED_FIELDS = [
       "collar_type", "collar_button", "front_pocket_type", "cuffs_type",
       "jabzour_1", "jabzour_2", "small_tabaggi",
@@ -1025,11 +1703,17 @@ function UnifiedFeedbackInterface() {
                 activeGarment.id
             );
 
-            await updateGarment(activeGarment.id, {
-                piece_stage: result.newStage,
-                acceptance_status: result.acceptanceStatus,
-                feedback_status: result.feedbackStatus,
-            });
+            // needs_redo: the discard + outcome (replacement / promote) runs at the
+            // END of handleSave, after any spec correction is applied, so the cloned
+            // replacement / promoted final inherits it (§2.5). Other verdicts persist
+            // their stage now.
+            if (state.feedbackAction !== "needs_redo") {
+                await updateGarment(activeGarment.id, {
+                    piece_stage: result.newStage,
+                    acceptance_status: result.acceptanceStatus,
+                    feedback_status: result.feedbackStatus,
+                });
+            }
 
             if (result.message) {
                 toast.info(result.message);
@@ -1049,155 +1733,274 @@ function UnifiedFeedbackInterface() {
             await updateGarment(activeGarment.id, updatePayload);
         }
 
-        // Build measurement diffs JSON (logs all rows with feedback value, regardless of reason)
-        const measurementDiffs = MEASUREMENT_ROWS
+        // Build measurement diffs JSON. Logs a row when the shop entered a new
+        // value OR tagged a fault reason — a reason with no value is still a
+        // flagged error the workshop must re-check (§2.5). actual_value/difference
+        // stay null for reason-only rows (no number was entered).
+        const measurementDiffs: Array<Record<string, unknown>> = MEASUREMENT_ROWS
           .filter(row => {
             const orderVal = measurement ? (measurement[row.key as keyof Measurement] as number | null) : null;
             const fbVal = state.feedbackMeasurements[row.key];
-            return orderVal != null && fbVal !== "" && fbVal !== undefined;
+            const hasValue = fbVal !== "" && fbVal !== undefined;
+            const hasReason = !!state.differenceReasons[row.key];
+            return orderVal != null && (hasValue || hasReason);
           })
-          .map(row => ({
-            field: row.key,
-            original_value: measurement ? (measurement[row.key as keyof Measurement] as number | null) : null,
-            actual_value: state.feedbackMeasurements[row.key],
-            difference: getDifference(
-              measurement ? (measurement[row.key as keyof Measurement] as number | null) : null,
-              state.feedbackMeasurements[row.key]
-            ),
-            reason: state.differenceReasons[row.key] || null,
-            notes: state.measurementNotes[row.key] || null,
-          }));
+          .map(row => {
+            const orderVal = measurement ? (measurement[row.key as keyof Measurement] as number | null) : null;
+            const fbVal = state.feedbackMeasurements[row.key];
+            const hasValue = fbVal !== "" && fbVal !== undefined;
+            return {
+              field: row.key,
+              original_value: orderVal,
+              actual_value: hasValue ? fbVal : null,
+              difference: hasValue ? getDifference(orderVal, fbVal) : null,
+              reason: state.differenceReasons[row.key] || null,
+              notes: state.measurementNotes[row.key] || null,
+            };
+          });
 
-        // --- Measurement propagation (Customer Request only) ---
-        // Customer Request rows feed a new measurements row; Workshop Error rows stay
-        // logged in measurement_diffs only (original spec preserved — workshop just refixes).
-        // The reason gate + sibling fan-out scope are the §2.5 spec rules, factored
-        // into planMeasurementPropagation (see @/lib/feedback-payload) so they're
-        // unit-tested rather than buried here.
+        // Categorical shoulder_slope change rides the same audit trail (no numeric
+        // delta — difference stays null). Logged when the slope actually changes
+        // or a fault reason was tagged.
+        {
+          const slopeOrig = (measurement?.shoulder_slope ?? null) as ShoulderSlope | null;
+          const slopeNew = state.shoulderSlopeNew;
+          const slopeReason = state.differenceReasons["shoulder_slope"] || null;
+          const changed = slopeNew !== "" && slopeNew !== slopeOrig;
+          if (changed || slopeReason) {
+            measurementDiffs.push({
+              field: "shoulder_slope",
+              original_value: slopeOrig,
+              actual_value: slopeNew !== "" ? slopeNew : null,
+              difference: null,
+              reason: slopeReason,
+              notes: state.measurementNotes["shoulder_slope"] || null,
+            });
+          }
+        }
+
+        // --- Measurement propagation (spec-correcting reasons) ---
+        // Customer Request + Shop Error rows feed a new measurement row (the
+        // recorded spec was wrong); Workshop Error rows stay logged in
+        // measurement_diffs only (original spec preserved — workshop just refixes).
+        // planMeasurementPropagation (see @/lib/feedback-payload) is the reason
+        // gate unit-tested in garments.propagation.test.ts.
         let newMeasurementId: string | null = null;
         const previousMeasurementId = activeGarment.measurement_id || null;
-        const customerReqRows = MEASUREMENT_ROWS.filter(row => {
-          const fbVal = state.feedbackMeasurements[row.key];
-          return (
-            state.differenceReasons[row.key] === MEASUREMENT_PROPAGATION_REASON &&
-            fbVal !== "" &&
-            fbVal !== undefined
-          );
-        });
         const measurementPlan = planMeasurementPropagation({
-          rows: MEASUREMENT_ROWS.map(row => {
-            const fbVal = state.feedbackMeasurements[row.key];
-            return {
-              reason: state.differenceReasons[row.key] ?? null,
-              hasValue: fbVal !== "" && fbVal !== undefined,
-            };
-          }),
-          garmentType: activeGarment.garment_type,
-          prevMeasurementId: previousMeasurementId,
-          thisGarmentOnly: state.measurementGarmentOnly,
+          rows: [
+            ...MEASUREMENT_ROWS.map(row => {
+              const fbVal = state.feedbackMeasurements[row.key];
+              return {
+                reason: state.differenceReasons[row.key] ?? null,
+                hasValue: fbVal !== "" && fbVal !== undefined,
+              };
+            }),
+            // shoulder_slope participates in the propagation gate too.
+            {
+              reason: state.differenceReasons["shoulder_slope"] ?? null,
+              hasValue: state.shoulderSlopeNew !== "",
+            },
+          ],
         });
 
-        if (measurementPlan.createNewMeasurement && measurement && activeOrder.customer?.id) {
+        // Assert the plan agrees with stagedMeasurement presence (wiring guard).
+        const stagedPresent = state.stagedMeasurement != null;
+        console.assert(
+          measurementPlan.createNewMeasurement === stagedPresent,
+          "measurementPlan and stagedMeasurement must agree",
+        );
+
+        if (state.stagedMeasurement && measurement && activeOrder.customer?.id) {
           const baseRecord: Record<string, unknown> = { ...measurement };
           delete baseRecord["id"];
           delete baseRecord["created_at"];
           delete baseRecord["updated_at"];
           baseRecord["measurement_date"] = new Date().toISOString();
-          for (const row of customerReqRows) {
-            baseRecord[row.key] = state.feedbackMeasurements[row.key];
+          // Apply all corrected fields from the staged measurement.
+          for (const [key, val] of Object.entries(state.stagedMeasurement.correctedFields)) {
+            baseRecord[key] = val;
           }
+          baseRecord["idempotency_key"] = state.stagedMeasurement.localId;
+          // Assign the next human-readable measurement_id sequence for this customer.
+          const cm = await getMeasurementsByCustomer(activeOrder.customer.id);
+          const maxSeq = (cm.data ?? []).reduce((max, row) => {
+            if (!row.measurement_id) return max;
+            const parts = row.measurement_id.split("-");
+            const seq = parseInt(parts[parts.length - 1] ?? "", 10);
+            return isNaN(seq) ? max : Math.max(max, seq);
+          }, 0);
+          baseRecord["measurement_id"] = `${activeOrder.customer.id}-${maxSeq + 1}`;
           const base = baseRecord as Partial<Measurement>;
           const created = await createMeasurement(base);
           if (created.status === "success" && created.data) {
             newMeasurementId = created.data.id;
-
-            // "siblings" (a brova with a prior measurement, not scoped to this
-            // garment only) bulk-repoints all order garments sharing the old
-            // measurement so finals inherit the body correction; otherwise just
-            // this garment is repointed.
-            if (measurementPlan.scope === "siblings" && previousMeasurementId) {
-              await bulkRepointMeasurement(
-                activeOrder.id,
-                previousMeasurementId,
-                newMeasurementId,
-              );
-            } else {
-              await updateGarment(activeGarment.id, { measurement_id: newMeasurementId });
-            }
           }
         }
 
-        // --- Style propagation ---
-        // Brovas: bulk-update every garment in the order sharing style_id (so
-        // finals inherit the correction before they're produced). Finals and
-        // alteration-order garments update only the active garment — siblings
-        // may already be in a different production state and shouldn't shift.
-        {
-          const styleFieldUpdates: Partial<Garment> = {};
-          const hashwaFieldUpdates: Partial<Garment> = {};
-          for (const opt of optionRows) {
-            const mainRejected = state.optionChecks[`${opt.id}-main`] === false;
-            const mainNewValue = state.styleChanges[opt.id];
-            const hashwaRejected = state.optionChecks[`${opt.id}-hashwa`] === false;
-            const hashwaNewValue = state.hashwaChanges[opt.id];
+        // --- Garment override writes (§2.5) ---
+        // PRICING IS NOT TOUCHED HERE — a style change only updates the garment's
+        // spec; the order is repriced by the cashier at settlement.
 
-            if (mainRejected && mainNewValue) {
-              // Map option id → garment field
-              if (opt.id === "collar") styleFieldUpdates.collar_type = mainNewValue;
-              else if (opt.id === "collarBtn") styleFieldUpdates.collar_button = mainNewValue;
-              else if (opt.id === "frontPocket") styleFieldUpdates.front_pocket_type = mainNewValue;
-              else if (opt.id === "cuff") styleFieldUpdates.cuffs_type = mainNewValue;
-              else if (opt.id === "jabzour") {
-                // Shaab = ZIPPER (needs secondary jabzour_2). Non-shaab = BUTTON (actual style in jabzour_2).
-                if (mainNewValue === "JAB_SHAAB") {
-                  const secondary = state.styleChanges["jabzour_2"];
-                  styleFieldUpdates.jabzour_1 = "ZIPPER";
-                  if (secondary) styleFieldUpdates.jabzour_2 = secondary;
-                } else {
-                  styleFieldUpdates.jabzour_1 = "BUTTON";
-                  styleFieldUpdates.jabzour_2 = mainNewValue;
-                }
-              }
-              // Collar position: "__standard__" sentinel means null (no position set).
-              else if (opt.id === "collarPosition") {
-                styleFieldUpdates.collar_position =
-                  mainNewValue === "__standard__" ? null : (mainNewValue as "up" | "down");
-              }
-              // Lines: enum string ("1"/"2") → integer column.
-              else if (opt.id === "lines") {
-                const parsed = Number(mainNewValue);
-                if (parsed === 1 || parsed === 2) styleFieldUpdates.lines = parsed;
-              }
-            }
-            // Boolean accessory toggles — reject = flip current value (add if off, remove if on).
-            if (mainRejected) {
-              if (opt.id === "smallTabaggi") styleFieldUpdates.small_tabaggi = !activeGarment.small_tabaggi;
-              else if (opt.id === "penHolder") styleFieldUpdates.pen_holder = !activeGarment.pen_holder;
-              else if (opt.id === "walletPocket") styleFieldUpdates.wallet_pocket = !activeGarment.wallet_pocket;
-              else if (opt.id === "mobilePocket") styleFieldUpdates.mobile_pocket = !activeGarment.mobile_pocket;
-            }
-            if (hashwaRejected && hashwaNewValue) {
-              if (opt.id === "frontPocket") hashwaFieldUpdates.front_pocket_thickness = hashwaNewValue;
-              else if (opt.id === "cuff") hashwaFieldUpdates.cuffs_thickness = hashwaNewValue;
-              else if (opt.id === "jabzour") hashwaFieldUpdates.jabzour_thickness = hashwaNewValue;
-              else if (opt.id === "collar") hashwaFieldUpdates.collar_thickness = hashwaNewValue;
-            }
+        // Helper: resolve a local staged id to the real DB id (or passthrough).
+        const resolveAssignment = (a: string | null): string | null => {
+          if (a == null) return null;
+          if (state.stagedMeasurement && a === state.stagedMeasurement.localId) return newMeasurementId;
+          return a;
+        };
+
+        // 1. Active garment's own option-flow style edits (brova or final).
+        if (Object.keys(activeStyleUpdates).length > 0) {
+          await updateGarment(activeGarment.id, activeStyleUpdates as Partial<Garment>);
+        }
+
+        // 2. Per-garment override writes: measurement repoint + style overrides.
+        for (const [gid, ov] of Object.entries(state.garmentOverrides)) {
+          const garment = (activeOrder.garments ?? []).find(x => x.id === gid);
+          if (!garment) continue;
+          const patch: Partial<Garment> = {};
+          const resolvedMeasId = resolveAssignment(ov.measurementAssignment);
+          if (resolvedMeasId != null && resolvedMeasId !== garment.measurement_id) {
+            patch.measurement_id = resolvedMeasId;
           }
-          const combined = { ...styleFieldUpdates, ...hashwaFieldUpdates };
-          // Fan-out scope is the §2.5 spec rule, factored into planStylePropagation.
-          const stylePlan = planStylePropagation({
-            hasStyleChanges: Object.keys(combined).length > 0,
-            garmentType: activeGarment.garment_type,
-            styleId: activeGarment.style_id ?? null,
+          if (ov.styleOverride != null) {
+            Object.assign(patch, diffStyleFields(pickStyleFields(garment), ov.styleOverride));
+          }
+          if (Object.keys(patch).length > 0) {
+            await updateGarment(gid, patch);
+          }
+        }
+
+        // --- Reprice the order for style changes (§2.5) ---
+        // The spec writes above changed what the workshop will build; now move
+        // the style component of order_total to match, using the preview
+        // computed with the same engine as order creation (flat-priced
+        // qallabi/designer yield no delta). Skipped for needs_redo (its
+        // discard/replacement lifecycle owns its own pricing) and when no priced
+        // field moved. orders.paid is never touched here — collection stays the
+        // cashier's job at settlement.
+        if (state.feedbackAction !== "needs_redo" && repricePreview?.changed) {
+          const res = await repriceOrderStyles({
+            orderId: activeOrder.id,
+            garments: repricePreview.snapshots,
+            newStyleCharge: repricePreview.newStyleCharge,
+            newOrderTotal: repricePreview.newOrderTotal,
+            actor: user?.id ?? null,
+            reason: `Brova-trial style change (${state.feedbackAction})`,
+            idempotencyKey: crypto.randomUUID(),
           });
-          if (stylePlan === "siblings" && activeGarment.style_id != null) {
-            await bulkUpdateStyleFields(activeOrder.id, activeGarment.style_id, combined);
-          } else if (stylePlan === "single") {
-            await updateGarment(activeGarment.id, combined);
+          if (res.status === "error") {
+            toast.error(`Failed to update order price: ${res.message}`);
+            return;
           }
+          toast.success(
+            `Order total updated to KWD ${repricePreview.newOrderTotal.toFixed(3)} (${repricePreview.delta >= 0 ? "+" : ""}${repricePreview.delta.toFixed(3)}).`,
+          );
         }
 
-        // Build options checklist JSON (logs verdict + any replacement values)
+        // --- Redo outcome execution (§2.5) ---
+        // We deferred the brova discard so the corrected spec (style applied above,
+        // plus the new derived measurement) is in place before cloning / promoting.
+        if (activeGarment.garment_type === "brova" && state.feedbackAction === "needs_redo") {
+          if (state.redoOutcome === "promote") {
+            // The RPC discards the brova and (if chosen) promotes a parked final.
+            // The promoted final already carries any correction the staff assigned
+            // it through the override section above.
+            const res = await redoPromoteFinalToBrova(activeGarment.id, state.redoPromoteFinalId ?? null);
+            if (res.status === "error") { toast.error(res.message); return; }
+            toast.success(
+              state.redoPromoteFinalId
+                ? "Brova discarded. A final was promoted to the new brova."
+                : "Brova discarded for redo.",
+            );
+          } else {
+            // replacement_in / replacement_out: discard the brova (repointing it to
+            // the corrected measurement so the clone inherits it), then create the
+            // shop-side replacement. It waits in dispatch for the customer's fabric
+            // or a restock; otherwise it's ready to dispatch.
+            await updateGarment(activeGarment.id, {
+              piece_stage: "discarded",
+              acceptance_status: false,
+              feedback_status: "needs_redo",
+              ...(newMeasurementId ? { measurement_id: newMeasurementId } : {}),
+            });
+            const fabricSource: "IN" | "OUT" = state.redoOutcome === "replacement_out" ? "OUT" : "IN";
+            const res = await createRedoReplacement(activeGarment.id, {
+              fabricSource,
+              fabricId: fabricSource === "IN" ? (state.redoReplacementFabricId ?? null) : null,
+            });
+            if (res.status === "error") { toast.error(res.message); return; }
+            const data = res.data;
+            toast.success(
+              data?.parked
+                ? `Replacement created, waiting in dispatch (${data.parked_reason === "customer_decision" ? "customer fabric" : "restock"}).`
+                : "Replacement created, ready to dispatch.",
+            );
+          }
+          // New replacement / promoted brova affects the dispatch queue.
+          queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+        }
+
+        // Upload pending per-style photos/voice notes now. Files captured earlier
+        // sit in pendingUploads as blob: previews — they only become real URLs at
+        // submit time so abandoned drafts don't leave orphans. Each attachment is
+        // filed under its style option (collar, cuff, …).
+        const resolvedPhotos: Record<string, Array<{ type: "photo" | "video"; url: string }>> = {};
+        const resolvedVoiceNotes: Record<string, string[]> = {};
+        for (const opt of optionRows) {
+          const photos: Array<{ type: "photo" | "video"; url: string }> = [];
+          for (const entry of state.optionPhotos[opt.id] ?? []) {
+            if (!entry.url.startsWith("blob:")) { photos.push(entry); continue; }
+            const pending = state.pendingUploads[entry.url];
+            if (!pending || pending.kind !== "photo") continue;
+            try {
+              const { url } = await uploadFeedbackPhoto(
+                pending.blob, activeOrder.id, activeGarment.id, activeGarment.trip_number || 1,
+              );
+              photos.push({ type: entry.type, url });
+              URL.revokeObjectURL(entry.url);
+            } catch (err) {
+              toast.error(`Failed to upload photo: ${err instanceof Error ? err.message : String(err)}`);
+              return;
+            }
+          }
+          if (photos.length) resolvedPhotos[opt.id] = photos;
+
+          const voices: string[] = [];
+          for (const u of state.optionVoiceNotes[opt.id] ?? []) {
+            if (!u.startsWith("blob:")) { voices.push(u); continue; }
+            const pending = state.pendingUploads[u];
+            if (!pending || pending.kind !== "voice") continue;
+            try {
+              const { url } = await uploadFeedbackVoiceNote(
+                pending.blob, activeOrder.id, activeGarment.id, activeGarment.trip_number || 1,
+              );
+              voices.push(url);
+              URL.revokeObjectURL(u);
+            } catch (err) {
+              toast.error(`Failed to upload voice note: ${err instanceof Error ? err.message : String(err)}`);
+              return;
+            }
+          }
+          if (voices.length) resolvedVoiceNotes[opt.id] = voices;
+        }
+
+        // Reflect resolved URLs back into per-style state, drop consumed blobs.
+        setGarmentStates(prev => {
+          const st = prev[selectedGarmentId!];
+          if (!st) return prev;
+          return {
+            ...prev,
+            [selectedGarmentId!]: {
+              ...st,
+              optionPhotos: { ...st.optionPhotos, ...resolvedPhotos },
+              optionVoiceNotes: { ...st.optionVoiceNotes, ...resolvedVoiceNotes },
+              pendingUploads: {},
+            },
+          };
+        });
+
+        // Build options checklist JSON (verdict + replacement values + per-style attachments)
         const optionsChecklist = optionRows.map(opt => ({
           option_name: opt.id,
           expected_value: opt.mainValue,
@@ -1208,7 +2011,15 @@ function UnifiedFeedbackInterface() {
           hashwa_rejected: opt.hashwaValue ? state.optionChecks[`${opt.id}-hashwa`] === false : null,
           hashwa_new_value: opt.hashwaValue ? (state.hashwaChanges[opt.id] || null) : null,
           notes: state.optionNotes[opt.id] || null,
+          photo_urls: (resolvedPhotos[opt.id] ?? []).map(p => p.url),
+          voice_note_urls: resolvedVoiceNotes[opt.id] ?? [],
         }));
+
+        // Aggregate every per-style attachment into the flat top-level columns so
+        // the workshop QC views (which read photo_urls/voice_note_urls) still show
+        // them. Per-style detail lives in options_checklist above.
+        const persistedPhotos = Object.values(resolvedPhotos).flat();
+        const persistedVoiceNotes = Object.values(resolvedVoiceNotes).flat();
 
         // Get satisfaction numeric value
         const satLevel = SATISFACTION_LEVELS.find(s => s.value === state.satisfaction);
@@ -1234,74 +2045,6 @@ function UnifiedFeedbackInterface() {
           }
         }
 
-        // Upload any pending photos/voice notes to storage now. Files captured
-        // earlier sit in pendingUploads as blob: previews — they only become
-        // real URLs at submit time so abandoned drafts don't leave orphans.
-        const uploadedPhotos: Array<{ type: "photo" | "video"; url: string }> = [];
-        for (const entry of state.sharedPhotos) {
-          if (!entry.url.startsWith("blob:")) {
-            uploadedPhotos.push(entry);
-            continue;
-          }
-          const pending = state.pendingUploads[entry.url];
-          if (!pending || pending.kind !== "photo") continue;
-          try {
-            const { url } = await uploadFeedbackPhoto(
-              pending.blob,
-              activeOrder.id,
-              activeGarment.id,
-              activeGarment.trip_number || 1,
-            );
-            uploadedPhotos.push({ type: entry.type, url });
-            URL.revokeObjectURL(entry.url);
-          } catch (err) {
-            toast.error(`Failed to upload photo: ${err instanceof Error ? err.message : String(err)}`);
-            return;
-          }
-        }
-
-        const uploadedVoiceNotes: string[] = [];
-        for (const u of state.sharedVoiceNotes) {
-          if (!u.startsWith("blob:")) {
-            uploadedVoiceNotes.push(u);
-            continue;
-          }
-          const pending = state.pendingUploads[u];
-          if (!pending || pending.kind !== "voice") continue;
-          try {
-            const { url } = await uploadFeedbackVoiceNote(
-              pending.blob,
-              activeOrder.id,
-              activeGarment.id,
-              activeGarment.trip_number || 1,
-            );
-            uploadedVoiceNotes.push(url);
-            URL.revokeObjectURL(u);
-          } catch (err) {
-            toast.error(`Failed to upload voice note: ${err instanceof Error ? err.message : String(err)}`);
-            return;
-          }
-        }
-
-        // Reflect uploaded URLs back into garment state so subsequent edits see
-        // them, and drop the pending blob entries we just consumed.
-        setGarmentStates(prev => {
-          const st = prev[selectedGarmentId!];
-          if (!st) return prev;
-          return {
-            ...prev,
-            [selectedGarmentId!]: {
-              ...st,
-              sharedPhotos: uploadedPhotos,
-              sharedVoiceNotes: uploadedVoiceNotes,
-              pendingUploads: {},
-            },
-          };
-        });
-
-        const persistedPhotos = uploadedPhotos;
-        const persistedVoiceNotes = uploadedVoiceNotes;
-
         const feedbackPayload = {
           garment_id: activeGarment.id,
           order_id: activeOrder.id,
@@ -1324,13 +2067,20 @@ function UnifiedFeedbackInterface() {
           notes: state.notes || null,
           difference_reasons: (() => {
             const filtered = Object.fromEntries(
-              Object.entries(state.differenceReasons).filter(([key]) => {
-                const v = state.feedbackMeasurements[key];
-                return v !== "" && v !== undefined;
+              Object.entries(state.differenceReasons).filter(([key, reason]) => {
+                // Keep any reason set against a field with a spec value — covers
+                // both value changes AND reason-only flags (§2.5), so a reason
+                // with no entered value still round-trips. Drops orphan/empty
+                // reasons on fields the garment never had a value for.
+                if (!reason) return false;
+                const orig = measurement ? (measurement[key as keyof Measurement] as number | null) : null;
+                return orig != null;
               })
             );
             return Object.keys(filtered).length > 0 ? JSON.stringify(filtered) : null;
           })(),
+          // Pricing is handled by the cashier at settlement, not on this page.
+          price_adjustment: null,
         };
 
         // Upsert: update existing feedback or create new one
@@ -1354,14 +2104,17 @@ function UnifiedFeedbackInterface() {
         if (refreshed.status === 'success' && refreshed.data) {
           setActiveOrder(refreshed.data);
 
-          // Detect siblings whose baseline shifted via bulk propagation and
-          // reset their in-memory state so the rehydration effect re-runs from
-          // the new baseline. Without this, the user's typed-in feedback for B
-          // would be silently anchored to a stale measurement/style.
+          // Detect siblings whose baseline shifted UNEXPECTEDLY and reset their
+          // in-memory state so the rehydration effect re-runs from the new
+          // baseline. Garments we explicitly wrote overrides for are deliberate,
+          // so they're excluded — this only guards against surprise shifts on
+          // garments the user didn't explicitly act on.
+          const resolvedFinalIds = new Set(Object.keys(state.garmentOverrides));
           const affectedNames: string[] = [];
           const affectedIds = new Set<string>();
           for (const g of refreshed.data.garments || []) {
             if (g.id === activeGarment.id) continue;
+            if (resolvedFinalIds.has(g.id)) continue;
             const snap = preSaveSnapshot[g.id];
             if (!snap) continue;
             const measChanged = snap.measurement_id !== (g.measurement_id ?? null);
@@ -1389,7 +2142,7 @@ function UnifiedFeedbackInterface() {
               return mutated ? next : prev;
             });
             toast.warning(
-              `Baseline updated for ${affectedNames.join(", ")} — please re-verify before submitting.`,
+              `Baseline updated for ${affectedNames.join(", ")}, please re-verify before submitting.`,
               { duration: 6000 },
             );
           }
@@ -1401,14 +2154,44 @@ function UnifiedFeedbackInterface() {
           queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
         }
 
-        // Balance check for final collection
-        const balance = (Number(activeOrder?.order_total) || 0) - (Number(activeOrder?.paid) || 0);
+        // --- Payment guidance (non-blocking reminder) ---
+        // After the spec + reprice writes, surface the money situation so staff
+        // route the customer to the cashier. Collection AND refunds are always
+        // the cashier's manual job (§2.6 / §3) — this only reminds, it never
+        // charges or refunds anything. Uses the refreshed order so the balance
+        // reflects any reprice just applied.
+        const settledOrder = refreshed.status === "success" && refreshed.data ? refreshed.data : activeOrder;
+        const newBalance =
+          Math.round(((Number(settledOrder?.order_total) || 0) - (Number(settledOrder?.paid) || 0)) * 1000) / 1000;
+        const repriceDelta =
+          state.feedbackAction !== "needs_redo" && repricePreview && repricePreview.changed
+            ? repricePreview.delta
+            : 0;
+        const changeNote =
+          repriceDelta !== 0
+            ? `Style change ${repriceDelta > 0 ? "added" : "removed"} KWD ${Math.abs(repriceDelta).toFixed(3)}. `
+            : "";
+        const garmentLabel = activeGarment.garment_id || activeGarment.id.slice(0, 8);
 
-        if (state.feedbackAction === "accepted" &&
-            (activeGarment.garment_type === "final" || activeGarment.garment_type === "alteration")) {
-             if (balance > 0) {
-                 toast.info("Order has pending balance. Please collect payment.");
-             }
+        if (state.feedbackAction === "needs_redo") {
+          // Redo discarded the brova. Any refund the customer wants for it
+          // (instead of taking the replacement) is processed manually at the
+          // cashier — we only point them there.
+          toast.info(
+            `Brova ${garmentLabel} discarded for redo. Any refund the customer wants for it is processed manually at the cashier.`,
+            { duration: 7000 },
+          );
+        } else if (newBalance > 0.0005) {
+          toast.info(`${changeNote}Balance of KWD ${newBalance.toFixed(3)} due. Collect at the cashier.`, {
+            duration: 7000,
+          });
+        } else if (newBalance < -0.0005) {
+          toast.info(
+            `${changeNote}Order is overpaid by KWD ${Math.abs(newBalance).toFixed(3)}. The customer is due a refund at the cashier.`,
+            { duration: 7000 },
+          );
+        } else if (repriceDelta !== 0) {
+          toast.info(`${changeNote}Order is fully settled.`, { duration: 5000 });
         }
 
         // Stay on page - don't navigate away. User can submit other garments.
@@ -1519,7 +2302,7 @@ function UnifiedFeedbackInterface() {
         id: "smallTabaggi",
         label: "Small Tabbagi",
         mainValue: g.small_tabaggi ? "Yes" : "No",
-        displayText: g.small_tabaggi ? "Yes — Small Tabbagi present" : "No — Not applied",
+        displayText: g.small_tabaggi ? "Yes, Small Tabbagi present" : "No, Not applied",
         mainImage: smallTabaggiImage as string | null,
         hashwaLabel: null as string | null,
         hashwaValue: null as string | null,
@@ -1561,7 +2344,7 @@ function UnifiedFeedbackInterface() {
         id: "walletPocket",
         label: "Wallet Pocket",
         mainValue: g.wallet_pocket ? "Yes" : "No",
-        displayText: g.wallet_pocket ? "Yes — Wallet pocket present" : "No — Not applied",
+        displayText: g.wallet_pocket ? "Yes, Wallet pocket present" : "No, Not applied",
         mainImage: walletIcon as string | null,
         hashwaLabel: null as string | null,
         hashwaValue: null as string | null
@@ -1570,7 +2353,7 @@ function UnifiedFeedbackInterface() {
         id: "penHolder",
         label: "Pen Holder",
         mainValue: g.pen_holder ? "Yes" : "No",
-        displayText: g.pen_holder ? "Yes — Pen holder present" : "No — Not applied",
+        displayText: g.pen_holder ? "Yes, Pen holder present" : "No, Not applied",
         mainImage: penIcon as string | null,
         hashwaLabel: null as string | null,
         hashwaValue: null as string | null
@@ -1579,7 +2362,7 @@ function UnifiedFeedbackInterface() {
         id: "mobilePocket",
         label: "Mobile Pocket",
         mainValue: g.mobile_pocket ? "Yes" : "No",
-        displayText: g.mobile_pocket ? "Yes — Mobile pocket present" : "No — Not applied",
+        displayText: g.mobile_pocket ? "Yes, Mobile pocket present" : "No, Not applied",
         mainImage: phoneIcon as string | null,
         hashwaLabel: null as string | null,
         hashwaValue: null as string | null
@@ -1609,29 +2392,242 @@ function UnifiedFeedbackInterface() {
     return rows.filter(r => r.mainValue && r.mainValue !== "None");
   }, [activeGarment]);
 
+  // --- Brova-trial override section (§2.5) ---
+  const isBrova = activeGarment?.garment_type === "brova";
+
+  // The active garment's own style edits from the option flow (brova or final).
+  const activeStyleUpdates = useMemo(
+    () =>
+      activeGarment
+        ? buildBrovaStyleUpdates({
+            optionIds: optionRows.map(o => o.id),
+            optionChecks: currentState.optionChecks,
+            styleChanges: currentState.styleChanges,
+            hashwaChanges: currentState.hashwaChanges,
+            garment: activeGarment,
+          })
+        : {},
+    [activeGarment, optionRows, currentState.optionChecks, currentState.styleChanges, currentState.hashwaChanges],
+  );
+
+  // Override targets: parked finals + sibling brova sharing same measurement.
+  const overrideTargets = useMemo(
+    () =>
+      isBrova && activeGarment
+        ? computeOverrideTargets({ allGarments: activeOrder?.garments ?? [], brova: activeGarment })
+        : [],
+    [isBrova, activeGarment, activeOrder?.garments],
+  );
+
+  // Shared measurement group (those that default to adopting the staged measurement).
+  const sharedGroupIds = useMemo(
+    () =>
+      new Set(
+        (isBrova && activeGarment
+          ? computeSharedMeasurementGroup({ allGarments: activeOrder?.garments ?? [], brova: activeGarment })
+          : []
+        ).map(g => g.id),
+      ),
+    [isBrova, activeGarment, activeOrder?.garments],
+  );
+
+  // Finals only (style grid rows = parked finals).
+  const overrideFinals = useMemo(
+    () => overrideTargets.filter(g => g.garment_type === "final"),
+    [overrideTargets],
+  );
+
+  // The brova's resulting style (current + option-flow edits) — seeds "apply to all".
+  const brovaStyle = useMemo(
+    () =>
+      activeGarment
+        ? brovaResultingStyle({ brova: activeGarment, activeStyleUpdates })
+        : ({} as ReturnType<typeof brovaResultingStyle>),
+    [activeGarment, activeStyleUpdates],
+  );
+
+  // --- Style reprice preview (§2.5) ---
+  // A brova-trial style change reprices the order on submit. We recompute the
+  // style price for the garments whose style actually changed — the active
+  // garment (its option-flow edits) plus any parked finals the change was
+  // propagated to — with the same engine used at order creation, then roll the
+  // delta into order_total. Flat-priced styles (qallabi/designer) yield no delta
+  // unless flipped into or out of a flat style. needs_redo is excluded (its
+  // discard/replacement lifecycle owns its own pricing). null = nothing to reprice.
+  const repricePreview = useMemo(() => {
+    if (!activeOrder || !activeGarment) return null;
+    if (currentState.feedbackAction === "needs_redo") return null;
+    if (styles.length === 0) return null; // catalogue not loaded yet
+
+    const inputs: RepriceGarmentInput[] = [];
+
+    // 1. Active garment's own option-flow style edits.
+    if (Object.keys(activeStyleUpdates).length > 0) {
+      inputs.push({
+        garmentId: activeGarment.id,
+        oldSpec: activeGarment as unknown as RepriceGarmentInput["oldSpec"],
+        newSpec: { ...activeGarment, ...activeStyleUpdates } as unknown as RepriceGarmentInput["newSpec"],
+      });
+    }
+
+    // 2. Parked finals the brova style change was propagated to.
+    for (const [gid, ov] of Object.entries(currentState.garmentOverrides)) {
+      if (gid === activeGarment.id) continue; // handled above
+      if (ov.styleOverride == null) continue;
+      const g = (activeOrder.garments ?? []).find(x => x.id === gid);
+      if (!g) continue;
+      inputs.push({
+        garmentId: gid,
+        oldSpec: g as unknown as RepriceGarmentInput["oldSpec"],
+        newSpec: { ...g, ...ov.styleOverride } as unknown as RepriceGarmentInput["newSpec"],
+      });
+    }
+
+    if (inputs.length === 0) return null;
+
+    return computeStyleReprice({
+      garments: inputs,
+      styles,
+      rules: stylePricingRules,
+      currentOrderTotal: Number(activeOrder.order_total) || 0,
+      currentStyleCharge: Number(activeOrder.style_charge) || 0,
+    });
+  }, [activeOrder, activeGarment, activeStyleUpdates, currentState.garmentOverrides, currentState.feedbackAction, styles, stylePricingRules]);
+
+  // All measurements in play (real ids + staged), with follower lists.
+  const measurementsInPlay = useMemo(
+    (): MeasurementInPlay[] => {
+      if (!activeGarment) return [];
+      return computeMeasurementsInPlay({
+        allGarments: activeOrder?.garments ?? [],
+        staged: currentState.stagedMeasurement,
+        assignments: Object.fromEntries(
+          Object.entries(currentState.garmentOverrides).map(([k, v]) => [k, v.measurementAssignment]),
+        ),
+        brova: activeGarment,
+      });
+    },
+    [activeGarment, activeOrder?.garments, currentState.stagedMeasurement, currentState.garmentOverrides],
+  );
+
+  // Label function: human-readable measurement id, falling back to short uuid.
+  const measurementLabel = useMemo(() => {
+    const staged = currentState.stagedMeasurement;
+    return (id: string | null): string => {
+      if (id == null) return "Current";
+      if (staged && id === staged.localId) {
+        const src = staged.derivedFromMeasurementId;
+        const srcHuman = src ? (measurementHumanIds.get(src) ?? null) : null;
+        return srcHuman ? `${srcHuman} (new)` : "New";
+      }
+      return measurementHumanIds.get(id) ?? id.slice(0, 8);
+    };
+  }, [measurementHumanIds, currentState.stagedMeasurement]);
+
+  // Label function: the garment's human-readable per-order code (e.g. "12-1")
+  // plus its type, rendered as code + a small badge by GarmentTagLabel.
+  const garmentLabel = useMemo(() => {
+    const labelMap = new Map<string, GarmentTag>();
+    for (const g of activeOrder?.garments ?? []) {
+      const type: GarmentTag["type"] =
+        g.garment_type === "brova" ? "Brova" : g.garment_type === "alteration" ? "Alteration" : "Final";
+      labelMap.set(g.id, { code: g.garment_id ?? g.id.slice(0, 8), type });
+    }
+    return (id: string): GarmentTag => labelMap.get(id) ?? { code: id.slice(0, 8), type: "Final" };
+  }, [activeOrder?.garments]);
+
+  // Read-only gating (§2.5).
+  const orderLocked = useMemo(
+    () => orderFinalsInProduction(activeOrder?.garments ?? []),
+    [activeOrder?.garments],
+  );
+  const isReadOnly = useMemo(
+    () => !activeGarment || orderLocked || !brovaEditable(activeGarment),
+    [activeGarment, orderLocked],
+  );
+
+  // --- Override handlers ---
+  const setGarmentOverrideMeasurement = useCallback(
+    (garmentId: string, assignment: string | null) => {
+      if (!selectedGarmentId) return;
+      setGarmentStates(prev => {
+        const st = prev[selectedGarmentId] || createEmptyGarmentState();
+        const existing = st.garmentOverrides[garmentId] ?? { measurementAssignment: null, styleOverride: null };
+        return {
+          ...prev,
+          [selectedGarmentId]: {
+            ...st,
+            garmentOverrides: {
+              ...st.garmentOverrides,
+              [garmentId]: { ...existing, measurementAssignment: assignment },
+            },
+          },
+        };
+      });
+    },
+    [selectedGarmentId],
+  );
+
+  const applyMeasurementToShared = useCallback(() => {
+    if (!selectedGarmentId) return;
+    const localId = currentState.stagedMeasurement?.localId ?? null;
+    setGarmentStates(prev => {
+      const st = prev[selectedGarmentId] || createEmptyGarmentState();
+      const nextOverrides = { ...st.garmentOverrides };
+      for (const id of sharedGroupIds) {
+        const existing = nextOverrides[id] ?? { measurementAssignment: null, styleOverride: null };
+        nextOverrides[id] = { ...existing, measurementAssignment: localId };
+      }
+      return { ...prev, [selectedGarmentId]: { ...st, garmentOverrides: nextOverrides } };
+    });
+  }, [selectedGarmentId, sharedGroupIds, currentState.stagedMeasurement]);
+
+  const setFinalStyleField = useCallback(
+    (finalId: string, patch: StyleFields) => {
+      if (!selectedGarmentId) return;
+      setGarmentStates(prev => {
+        const st = prev[selectedGarmentId] || createEmptyGarmentState();
+        const final = (activeOrder?.garments ?? []).find(g => g.id === finalId);
+        if (!final) return prev;
+        const existing = st.garmentOverrides[finalId]?.styleOverride;
+        const base = existing ?? pickStyleFields(final);
+        const existingOverride = st.garmentOverrides[finalId] ?? { measurementAssignment: null, styleOverride: null };
+        return {
+          ...prev,
+          [selectedGarmentId]: {
+            ...st,
+            garmentOverrides: {
+              ...st.garmentOverrides,
+              [finalId]: { ...existingOverride, styleOverride: { ...base, ...patch } },
+            },
+          },
+        };
+      });
+    },
+    [selectedGarmentId, activeOrder?.garments],
+  );
+
   if (isLoadingOrder) {
     return (
-      <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4">
-        {/* Header skeleton */}
-        <div className="flex items-center justify-between border-b border-border pb-4">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-64 rounded-lg" />
-            <Skeleton className="h-4 w-40 rounded-md" />
-          </div>
-          <Skeleton className="h-10 w-28 rounded-md" />
+      <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4 pb-20">
+        {/* Header skeleton — mirrors the real one-row context strip so the
+            skeleton→content swap doesn't reflow the page. */}
+        <div className="flex items-center gap-3 border-b border-border pb-3">
+          <Skeleton className="h-8 w-8 rounded-md shrink-0" />
+          <Skeleton className="h-5 w-48 rounded-md" />
+          <Skeleton className="h-5 w-24 rounded-md ml-auto" />
         </div>
         {/* Tabs skeleton */}
-        <Skeleton className="h-10 w-80 rounded-md" />
-        {/* Content skeleton */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <div className="lg:col-span-2 space-y-4">
-            <Skeleton className="h-48 rounded-md" />
-            <Skeleton className="h-32 rounded-md" />
-          </div>
-          <div className="space-y-4">
-            <Skeleton className="h-40 rounded-md" />
-            <Skeleton className="h-24 rounded-md" />
-          </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-24 rounded-md" />
+          <Skeleton className="h-8 w-24 rounded-md" />
+          <Skeleton className="h-8 w-24 rounded-md" />
+        </div>
+        {/* Content skeleton — single column, full-width cards (matches real layout) */}
+        <div className="space-y-4">
+          <Skeleton className="h-64 w-full rounded-md" />
+          <Skeleton className="h-80 w-full rounded-md" />
+          <Skeleton className="h-40 w-full rounded-md" />
         </div>
       </div>
     );
@@ -1656,59 +2652,74 @@ function UnifiedFeedbackInterface() {
   return (
     <div className="p-4 md:p-5 max-w-6xl mx-auto space-y-4 pb-20">
 
-      {/* Header — compact one-row context strip */}
-      {(() => {
-        const balance = (activeOrder.order_total || 0) - (activeOrder.paid || 0);
-        const isHomeDelivery = !!activeOrder.home_delivery;
-        return (
-          <div className="flex items-center gap-3 flex-wrap border-b border-border pb-3">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={() => router.history.back()}>
-              <ArrowLeft className="size-4" />
+      {/* Header — order context only (brova trial; no price/pickup — that's the
+          cashier's job at handover, not the feedback form). */}
+      <div className="flex items-center gap-3 flex-wrap border-b border-border pb-4">
+        <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" onClick={() => router.history.back()}>
+          <ArrowLeft className="size-5" />
+        </Button>
+
+        <div className="flex items-baseline gap-2.5 min-w-0">
+          <h1 className="text-xl font-semibold text-foreground truncate">
+            {activeOrder.customer?.name || "Guest"}
+          </h1>
+          <span className="text-base text-muted-foreground tabular-nums">#{activeOrder.id}</span>
+          {activeOrder.invoice_number && (
+            <span className="text-base text-muted-foreground tabular-nums hidden sm:inline">
+              · INV {activeOrder.invoice_number}
+            </span>
+          )}
+          {activeOrder.customer?.phone && (
+            <span className="text-base text-muted-foreground font-mono hidden md:inline">
+              · {activeOrder.customer.phone}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <Badge variant="outline" className="font-normal text-sm">Brova trial</Badge>
+          {currentState.isEditing && (
+            <Badge variant="outline" className="font-normal text-sm">Editing</Badge>
+          )}
+          {feedbackHistory.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2"
+              onClick={() => setHistorySheetOpen(true)}
+            >
+              <History className="size-4" />
+              Feedback history
+              <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 tabular-nums">{feedbackHistory.length}</Badge>
             </Button>
+          )}
+        </div>
+      </div>
 
-            <div className="flex items-baseline gap-2 min-w-0">
-              <h1 className="text-base font-medium text-foreground truncate">
-                {activeOrder.customer?.name || "Guest"}
-              </h1>
-              <span className="text-xs text-muted-foreground tabular-nums">#{activeOrder.id}</span>
-              {activeOrder.invoice_number && (
-                <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">
-                  · INV {activeOrder.invoice_number}
-                </span>
-              )}
-              {activeOrder.customer?.phone && (
-                <span className="text-xs text-muted-foreground font-mono hidden md:inline">
-                  · {activeOrder.customer.phone}
-                </span>
-              )}
-            </div>
+      {/* FEEDBACK HISTORY SHEET — this garment's trips as an expand/collapse list.
+          Each row opens to the full recorded decision (measurements, style,
+          hashwa, attachments, signature, notes). Opened from the header button. */}
+      <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
+        <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-2xl">
+          <SheetHeader className="shrink-0 border-b border-border pr-12">
+            <SheetTitle className="text-base">Feedback history</SheetTitle>
+            <SheetDescription className="flex items-center gap-2">
+              {selectedGarmentId && <GarmentTagLabel tag={garmentLabel(selectedGarmentId)} />}
+              <span>· {feedbackHistory.length} trip{feedbackHistory.length === 1 ? "" : "s"}, tap a trip to see every decision. Read only.</span>
+            </SheetDescription>
+          </SheetHeader>
 
-            <div className="flex items-center gap-2 ml-auto text-xs">
-              {activeGarment?.garment_type === "brova" && (
-                <Badge variant="outline" className="font-normal">Brova trial</Badge>
-              )}
-              {activeGarment?.garment_type === "final" && (
-                <Badge variant="outline" className="font-normal">Final pickup</Badge>
-              )}
-              {activeGarment?.garment_type === "alteration" && (
-                <Badge variant="outline" className="font-normal">Alteration</Badge>
-              )}
-              {currentState.isEditing && (
-                <Badge variant="outline" className="font-normal">Editing</Badge>
-              )}
-              <span className="text-muted-foreground tabular-nums">
-                Paid <span className="text-foreground">{activeOrder.paid || 0} KWD</span>
-              </span>
-              <span className={cn("tabular-nums", balance > 0 ? "text-destructive" : "text-muted-foreground")}>
-                · {balance > 0 ? `Balance ${balance.toFixed(3)} KWD` : "Paid in full"}
-              </span>
-              <span className="text-muted-foreground hidden md:inline">
-                · {isHomeDelivery ? "Home delivery" : "Pickup"}
-              </span>
-            </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {feedbackHistory.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">No feedback recorded yet.</p>
+            ) : (
+              feedbackHistory.map((fb, i) => (
+                <PreviousFeedbackDetail key={fb.id} fb={fb} index={i} />
+              ))
+            )}
           </div>
-        );
-      })()}
+        </SheetContent>
+      </Sheet>
 
       <div className="space-y-4">
 
@@ -1727,7 +2738,7 @@ function UnifiedFeedbackInterface() {
                         className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-border bg-card px-3 h-8 rounded-md gap-2 transition-colors"
                     >
                         <span className="text-sm font-medium tabular-nums">{garment.garment_id}</span>
-                        <span className="text-[10px] opacity-70">
+                        <span className="text-xs opacity-70">
                             {(() => {
                                 const altNum = getAlterationNumber(garment.trip_number);
                                 if (altNum !== null) return `Alt ${altNum}`;
@@ -1753,210 +2764,313 @@ function UnifiedFeedbackInterface() {
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
                                 <Ruler className="size-4 text-muted-foreground" />
-                                <CardTitle className="text-sm font-medium">Measurement feedback</CardTitle>
+                                <CardTitle className="text-base font-medium">Measurement feedback</CardTitle>
                             </div>
                             <div className="flex items-center gap-2">
                                 {isMeasurementLoading ? (
-                                    <Badge variant="outline" className="bg-background font-semibold text-xs h-6 px-2">LOADING…</Badge>
+                                    <Badge variant="outline" className="bg-background font-semibold text-sm h-6 px-2">LOADING…</Badge>
                                 ) : measurementId ? (
-                                    <Badge variant="outline" className="bg-background font-mono font-medium text-[10px] h-6 px-2" title="Measurement ID">
-                                        M: {String(measurementId).slice(0, 8)}
+                                    <Badge variant="outline" className="bg-background font-mono font-medium text-xs h-6 px-2" title="Measurement ID">
+                                        M: {measurement?.measurement_id ?? (measurementId ? String(measurementId).slice(0, 8) : "-")}
                                     </Badge>
                                 ) : (
-                                    <Badge variant="outline" className="bg-background font-semibold text-xs h-6 px-2">NO MEASUREMENT</Badge>
+                                    <Badge variant="outline" className="bg-background font-semibold text-sm h-6 px-2">NO MEASUREMENT</Badge>
                                 )}
                             </div>
                         </div>
                     </CardHeader>
 
-                    {/* Scope toggle — only meaningful when bulk propagation would otherwise fire (brova) */}
-                    {activeGarment?.garment_type === "brova" && (
-                        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-muted/30 border-b border-border">
-                            <div className="flex items-start gap-2 min-w-0">
-                                <AlertCircle className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                                <div className="min-w-0">
-                                    <p className="text-xs font-medium">This garment only</p>
-                                    <p className="text-xs text-muted-foreground leading-snug">
-                                        {currentState.measurementGarmentOnly
-                                            ? "Customer-request edits create a new measurement for this brova only — siblings unchanged."
-                                            : "Customer-request edits update every garment on this order sharing this measurement."}
-                                    </p>
-                                </div>
+                    <div className="p-3">
+                        <div ref={measurementAreaRef}>
+                        {isMeasurementLoading ? (
+                            <div className="space-y-4">
+                                <Skeleton className="h-40 w-full rounded-lg" />
+                                <Skeleton className="h-40 w-full rounded-lg" />
                             </div>
-                            <Switch
-                                checked={currentState.measurementGarmentOnly}
-                                onCheckedChange={(v) =>
-                                    updateGarmentState(selectedGarmentId, { measurementGarmentOnly: v })
-                                }
-                                aria-label="Apply measurement changes to this garment only"
-                            />
-                        </div>
-                    )}
-
-                    <div className="p-3 space-y-4">
-                        {MEASUREMENT_GROUPS.map((group) => (
-                            <div key={group.title} className="rounded-lg border border-border/60 overflow-hidden">
-                                <div className="bg-muted/40 px-3 py-1.5 border-b border-border/60 text-[11px] font-medium text-muted-foreground">
-                                    {group.title}
-                                </div>
-                                <div className="relative overflow-x-auto">
-                                    <table className="border-collapse table-fixed">
-                                        <thead className="bg-muted/30 border-b border-border/60">
-                                            <tr className="text-xs font-medium text-muted-foreground">
-                                                <th className="text-left p-3 bg-muted/50 border-r border-border/60 w-[110px] sticky left-0 z-20">Label</th>
-                                                {group.rows.map((row) => (
-                                                    <th key={row.key} className="p-2 text-center border border-border/40 w-[96px]">
-                                                        <div className="font-semibold text-[11px] leading-tight">{row.type}</div>
-                                                        <div className="font-medium text-[10px] text-muted-foreground leading-tight">{row.subType}</div>
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {/* Current row */}
-                                            <tr className="border-b border-border/40">
-                                                <td className="p-3 bg-muted/40 border-r border-border/60 text-xs font-medium text-muted-foreground sticky left-0 z-10">Current</td>
-                                                {group.rows.map((row) => {
-                                                    const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
+                        ) : (
+                            <div className="space-y-4">
+                                {MEASUREMENT_GROUPS.map((group) => {
+                                    // Field columns stretch to fill the row's full width; when the
+                                    // area is too narrow for all of them, the remainder wrap into a
+                                    // stacked block below (the label column repeats) and keep the same
+                                    // column width so they stay aligned under the row above. Until the
+                                    // width is measured, keep all fields in one block at the min width.
+                                    const available = measurementAreaWidth > 0 ? measurementAreaWidth - GROUP_BORDER_W : 0;
+                                    const fit = Math.max(1, Math.floor((available - LABEL_COL_W) / FIELD_COL_W));
+                                    const colsPerRow = available > 0 ? Math.min(fit, group.rows.length) : group.rows.length;
+                                    const chunks = chunkArray(group.rows, colsPerRow);
+                                    // Width that would exactly fill the row, then capped at the max so
+                                    // few-column groups don't blow up. When capped, the row no longer
+                                    // fills (left-aligned, explicit table width); otherwise it stretches.
+                                    const idealColW = (available - LABEL_COL_W) / colsPerRow;
+                                    const capped = available > 0 && idealColW > FIELD_COL_MAX_W;
+                                    const fieldColW = available > 0 ? Math.min(idealColW, FIELD_COL_MAX_W) : FIELD_COL_W;
+                                    return (
+                                        <div key={group.title} className="rounded-lg border border-border/60 overflow-hidden">
+                                            <div className="bg-muted/40 px-3 py-1.5 border-b border-border/60 text-xs font-medium text-muted-foreground">
+                                                {group.title}
+                                            </div>
+                                            <div className="divide-y divide-border/60">
+                                                {chunks.map((chunkRows, ci) => {
+                                                    // A full chunk fills the whole row: w-full + columns with no
+                                                    // explicit width, which table-fixed shares equally after the
+                                                    // fixed label column. A partial last chunk gets an explicit
+                                                    // width so its columns match (and align under) the rows above.
+                                                    const isFull = chunkRows.length === colsPerRow;
+                                                    // Stretch to fill the row only when it's full AND not width-capped;
+                                                    // otherwise size columns explicitly and leave the row left-aligned.
+                                                    const stretch = isFull && !capped;
                                                     return (
-                                                        <td key={row.key} className="p-2 text-center border border-border/30 bg-muted/20">
-                                                            {orderValue != null ? (
-                                                                <span className="font-semibold text-sm tabular-nums">{orderValue}</span>
-                                                            ) : (
-                                                                <span className="text-muted-foreground/40 text-xs">·</span>
-                                                            )}
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                            {/* New row */}
-                                            <tr className="border-b border-border/40">
-                                                <td className="p-3 bg-primary/5 border-r border-border/60 text-xs font-medium text-primary sticky left-0 z-10">New</td>
-                                                {group.rows.map((row) => {
-                                                    const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
-                                                    const feedbackValue = currentState.feedbackMeasurements[row.key];
-                                                    const diff = getDifference(orderValue, feedbackValue);
-                                                    const status = getDiffStatus(diff);
-                                                    return (
-                                                        <td key={row.key} className="p-1 border border-border/30 bg-primary/[0.02]">
-                                                            <KeyedTextField
-                                                                type="number"
-                                                                step="0.01"
-                                                                className={cn(
-                                                                    "h-8 w-full text-center font-semibold text-sm tabular-nums border transition-all",
-                                                                    status === 'error' && "border-destructive bg-destructive/5 text-destructive",
-                                                                    status === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
-                                                                    status === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
-                                                                    !feedbackValue && "border-border hover:border-primary/40"
-                                                                )}
-                                                                inputKey={row.key}
-                                                                value={feedbackValue === "" || feedbackValue == null ? "" : String(feedbackValue)}
-                                                                onChange={handleFeedbackMeasurementChange}
-                                                            />
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                            {/* Delta row */}
-                                            <tr className="border-b border-border/40">
-                                                <td className="p-3 bg-muted/40 border-r border-border/60 text-xs font-medium text-muted-foreground sticky left-0 z-10">Delta</td>
-                                                {group.rows.map((row) => {
-                                                    const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
-                                                    const feedbackValue = currentState.feedbackMeasurements[row.key];
-                                                    const diff = getDifference(orderValue, feedbackValue);
-                                                    const status = getDiffStatus(diff);
-                                                    return (
-                                                        <td key={row.key} className="p-2 text-center border border-border/30">
-                                                            {diff !== null && (
-                                                                <Badge variant="secondary" className={cn(
-                                                                    "font-semibold text-xs h-5 px-1.5",
-                                                                    status === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
-                                                                    status === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
-                                                                    status === 'error' && "bg-red-100 text-red-800 border-border"
-                                                                )}>
-                                                                    {diff > 0 ? `+${diff}` : diff}
-                                                                </Badge>
-                                                            )}
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                            {/* Reason row */}
-                                            <tr className="border-b border-border/40">
-                                                <td className="p-3 bg-muted/40 border-r border-border/60 text-xs font-medium text-muted-foreground sticky left-0 z-10">Reason</td>
-                                                {group.rows.map((row) => {
-                                                    const reasonValue = currentState.differenceReasons[row.key] || "";
-                                                    const selectedReason = DIFFERENCE_REASONS.find(r => r.label === reasonValue);
-                                                    return (
-                                                        <td key={row.key} className="p-0 border border-border/30">
-                                                            <Select value={reasonValue} onValueChange={(val) => handleDifferenceReasonChange(row.key, val)}>
-                                                                <SelectTrigger
-                                                                    className="h-10 w-full text-xs font-medium border-none shadow-none rounded-none px-2 bg-transparent hover:bg-muted/30 transition-colors"
-                                                                    aria-label="Reason for measurement difference"
-                                                                >
-                                                                    {selectedReason ? (
-                                                                        <span className="flex items-center gap-1.5 truncate">
-                                                                            <span className={cn("size-1.5 rounded-full shrink-0", selectedReason.dot)} />
-                                                                            <span className="truncate">{selectedReason.short}</span>
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span className="text-muted-foreground/50">·</span>
-                                                                    )}
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    {DIFFERENCE_REASONS.map(r => (
-                                                                        <SelectItem key={r.label} value={r.label} className="text-xs font-medium py-2">
-                                                                            <span className="flex items-center gap-2">
-                                                                                <span className={cn("size-1.5 rounded-full", r.dot)} />
-                                                                                {r.label}
-                                                                            </span>
-                                                                        </SelectItem>
+                                                    <div key={ci} className="relative overflow-x-auto">
+                                                        <table
+                                                            className={cn("border-collapse table-fixed", stretch && "w-full")}
+                                                            style={!stretch && available > 0 ? { width: LABEL_COL_W + chunkRows.length * fieldColW } : undefined}
+                                                        >
+                                                            <thead className="bg-muted/30 border-b border-border/60">
+                                                                <tr className="text-sm font-medium text-muted-foreground">
+                                                                    <th className="text-left p-3 bg-muted/50 border-r border-border/60 sticky left-0 z-20" style={{ width: LABEL_COL_W }}>Label</th>
+                                                                    {chunkRows.map((row) => (
+                                                                        <th key={row.key} className="p-2 text-center border border-border/40" style={stretch ? undefined : { width: fieldColW }}>
+                                                                            <div className="font-semibold text-xs leading-tight">{row.type}</div>
+                                                                            <div className="font-medium text-xs text-muted-foreground leading-tight">{row.subType}</div>
+                                                                        </th>
                                                                     ))}
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </td>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {/* Current row */}
+                                                                <tr className="border-b border-border/40">
+                                                                    <td className="p-3 bg-muted/40 border-r border-border/60 text-sm font-medium text-muted-foreground sticky left-0 z-10">Current</td>
+                                                                    {chunkRows.map((row) => {
+                                                                        const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
+                                                                        return (
+                                                                            <td key={row.key} className="p-2 text-center border border-border/30 bg-muted/20">
+                                                                                {orderValue != null ? (
+                                                                                    <span className="font-semibold text-sm tabular-nums">{orderValue}</span>
+                                                                                ) : (
+                                                                                    <span className="text-muted-foreground/40 text-sm">·</span>
+                                                                                )}
+                                                                            </td>
+                                                                        );
+                                                                    })}
+                                                                </tr>
+                                                                {/* New row */}
+                                                                <tr className="border-b border-border/40">
+                                                                    <td className="p-3 bg-primary/5 border-r border-border/60 text-sm font-medium text-primary sticky left-0 z-10">New</td>
+                                                                    {chunkRows.map((row) => {
+                                                                        const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
+                                                                        const feedbackValue = currentState.feedbackMeasurements[row.key];
+                                                                        const diff = getDifference(orderValue, feedbackValue);
+                                                                        const status = getDiffStatus(diff);
+                                                                        return (
+                                                                            <td key={row.key} className="p-1 border border-border/30 bg-primary/[0.02]">
+                                                                                <KeyedTextField
+                                                                                    type="number"
+                                                                                    step="0.01"
+                                                                                    className={cn(
+                                                                                        "h-8 w-full text-center font-semibold text-sm tabular-nums border transition-all",
+                                                                                        status === 'error' && "border-destructive bg-destructive/5 text-destructive",
+                                                                                        status === 'warning' && "border-amber-500 bg-amber-50 text-amber-700",
+                                                                                        status === 'success' && "border-emerald-500 bg-emerald-50 text-emerald-700",
+                                                                                        !feedbackValue && "border-border hover:border-primary/40"
+                                                                                    )}
+                                                                                    inputKey={row.key}
+                                                                                    value={feedbackValue === "" || feedbackValue == null ? "" : String(feedbackValue)}
+                                                                                    onChange={handleFeedbackMeasurementChange}
+                                                                                />
+                                                                            </td>
+                                                                        );
+                                                                    })}
+                                                                </tr>
+                                                                {/* Delta row */}
+                                                                <tr className="border-b border-border/40">
+                                                                    <td className="p-3 bg-muted/40 border-r border-border/60 text-sm font-medium text-muted-foreground sticky left-0 z-10">Delta</td>
+                                                                    {chunkRows.map((row) => {
+                                                                        const orderValue = measurement ? (measurement[row.key as keyof Measurement] as number | null) : undefined;
+                                                                        const feedbackValue = currentState.feedbackMeasurements[row.key];
+                                                                        const diff = getDifference(orderValue, feedbackValue);
+                                                                        const status = getDiffStatus(diff);
+                                                                        return (
+                                                                            <td key={row.key} className="p-2 text-center border border-border/30">
+                                                                                {diff !== null && (
+                                                                                    <Badge variant="secondary" className={cn(
+                                                                                        "font-semibold text-sm h-6 px-1.5",
+                                                                                        status === 'success' && "bg-emerald-100 text-emerald-800 border-emerald-200",
+                                                                                        status === 'warning' && "bg-amber-100 text-amber-800 border-amber-200",
+                                                                                        status === 'error' && "bg-red-100 text-red-800 border-border"
+                                                                                    )}>
+                                                                                        {diff > 0 ? `+${diff}` : diff}
+                                                                                    </Badge>
+                                                                                )}
+                                                                            </td>
+                                                                        );
+                                                                    })}
+                                                                </tr>
+                                                                {/* Reason row */}
+                                                                <tr className="border-b border-border/40">
+                                                                    <td className="p-3 bg-muted/40 border-r border-border/60 text-sm font-medium text-muted-foreground sticky left-0 z-10">Reason</td>
+                                                                    {chunkRows.map((row) => {
+                                                                        const reasonValue = currentState.differenceReasons[row.key] || "";
+                                                                        const selectedReason = DIFFERENCE_REASONS.find(r => r.label === reasonValue);
+                                                                        return (
+                                                                            <td key={row.key} className="p-0 border border-border/30">
+                                                                                <Select value={reasonValue} onValueChange={(val) => handleDifferenceReasonChange(row.key, val)}>
+                                                                                    <SelectTrigger
+                                                                                        className="h-10 w-full text-sm font-medium border-none shadow-none rounded-none px-2 bg-transparent hover:bg-muted/30 transition-colors"
+                                                                                        aria-label="Reason for measurement difference"
+                                                                                    >
+                                                                                        {selectedReason ? (
+                                                                                            <span className="flex items-center gap-1.5 truncate">
+                                                                                                <span className={cn("size-1.5 rounded-full shrink-0", selectedReason.dot)} />
+                                                                                                <span className="truncate">{selectedReason.short}</span>
+                                                                                            </span>
+                                                                                        ) : (
+                                                                                            <span className="text-muted-foreground/50">·</span>
+                                                                                        )}
+                                                                                    </SelectTrigger>
+                                                                                    <SelectContent>
+                                                                                        {DIFFERENCE_REASONS.map(r => (
+                                                                                            <SelectItem key={r.label} value={r.label} className="text-sm font-medium py-2">
+                                                                                                <span className="flex items-center gap-2">
+                                                                                                    <span className={cn("size-1.5 rounded-full", r.dot)} />
+                                                                                                    {r.label}
+                                                                                                </span>
+                                                                                            </SelectItem>
+                                                                                        ))}
+                                                                                    </SelectContent>
+                                                                                </Select>
+                                                                            </td>
+                                                                        );
+                                                                    })}
+                                                                </tr>
+                                                                {/* Notes row */}
+                                                                <tr>
+                                                                    <td className="p-3 bg-muted/40 border-r border-border/60 text-sm font-medium text-muted-foreground sticky left-0 z-10">Notes</td>
+                                                                    {chunkRows.map((row) => {
+                                                                        const noteValue = currentState.measurementNotes[row.key] || "";
+                                                                        return (
+                                                                            <td key={row.key} className="p-1 border border-border/30">
+                                                                                <BufferedNoteField
+                                                                                    className="h-8 w-full text-xs font-medium border-none shadow-none focus-visible:ring-1 focus-visible:ring-primary bg-transparent px-1.5"
+                                                                                    inputKey={row.key}
+                                                                                    value={noteValue}
+                                                                                    onCommit={handleMeasurementNoteChange}
+                                                                                />
+                                                                            </td>
+                                                                        );
+                                                                    })}
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
                                                     );
                                                 })}
-                                            </tr>
-                                            {/* Notes row */}
-                                            <tr>
-                                                <td className="p-3 bg-muted/40 border-r border-border/60 text-xs font-medium text-muted-foreground sticky left-0 z-10">Notes</td>
-                                                {group.rows.map((row) => {
-                                                    const noteValue = currentState.measurementNotes[row.key] || "";
-                                                    return (
-                                                        <td key={row.key} className="p-1 border border-border/30">
-                                                            <KeyedTextField
-                                                                className="h-8 w-full text-[11px] font-medium border-none shadow-none focus-visible:ring-1 focus-visible:ring-primary bg-transparent px-1.5"
-                                                                inputKey={row.key}
-                                                                value={noteValue}
-                                                                onChange={handleMeasurementNoteChange}
-                                                            />
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        </div>
+                        {/* Shoulder slope — categorical correction. A spec-correcting
+                            reason re-points the slope on the minted measurement, just
+                            like the numeric rows above. */}
+                        {!isMeasurementLoading && (
+                            <div className="mt-4 rounded-lg border border-border/60 overflow-hidden">
+                                <div className="bg-muted/40 px-3 py-1.5 border-b border-border/60 text-xs font-medium text-muted-foreground">
+                                    Shoulder Slope
+                                </div>
+                                <div className="p-3 flex flex-wrap items-start gap-x-8 gap-y-3">
+                                    <div className="space-y-1">
+                                        <div className="text-sm font-medium text-muted-foreground">Current</div>
+                                        <ShoulderSlopeDisplay value={(measurement?.shoulder_slope ?? null) as string | null} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="text-sm font-medium text-primary">New</div>
+                                        <ShoulderSlopeSelect
+                                            value={currentState.shoulderSlopeNew || undefined}
+                                            onChange={handleShoulderSlopeChange}
+                                            disabled={isReadOnly}
+                                        />
+                                    </div>
+                                    <div className="space-y-1 min-w-[170px]">
+                                        <div className="text-sm font-medium text-muted-foreground">Reason</div>
+                                        <Select
+                                            value={currentState.differenceReasons["shoulder_slope"] || ""}
+                                            onValueChange={(val) => handleDifferenceReasonChange("shoulder_slope", val)}
+                                            disabled={isReadOnly}
+                                        >
+                                            <SelectTrigger className="h-9 w-full text-sm" aria-label="Reason for shoulder slope change">
+                                                <SelectValue placeholder="·" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {DIFFERENCE_REASONS.map(r => (
+                                                    <SelectItem key={r.label} value={r.label} className="text-sm font-medium py-2">
+                                                        <span className="flex items-center gap-2">
+                                                            <span className={cn("size-1.5 rounded-full", r.dot)} />
+                                                            {r.label}
+                                                        </span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
                             </div>
-                        ))}
+                        )}
+                        {/* Measurement override folded into this card — the correction above
+                            mints one new measurement; assign it to finals/siblings here.
+                            Only renders once a change stages a measurement. */}
+                        {isBrova && currentState.stagedMeasurement != null && (
+                            <div className="mt-4 pt-4 border-t border-border">
+                                <MeasurementOverrideSection
+                                    targets={overrideTargets}
+                                    sharedGroupIds={sharedGroupIds}
+                                    staged={currentState.stagedMeasurement}
+                                    measurementsInPlay={measurementsInPlay}
+                                    measurementLabel={measurementLabel}
+                                    garmentLabel={garmentLabel}
+                                    garmentOverrides={currentState.garmentOverrides}
+                                    readOnly={isReadOnly}
+                                    onOpenSheet={() => setSheetOpen(true)}
+                                    onSetMeasurement={setGarmentOverrideMeasurement}
+                                    onApplyMeasurementToShared={applyMeasurementToShared}
+                                />
+                            </div>
+                        )}
                     </div>
                 </Card>
+
+                <MeasurementSheet
+                    open={sheetOpen}
+                    onClose={() => setSheetOpen(false)}
+                    measurementsInPlay={measurementsInPlay}
+                    measurementLabel={measurementLabel}
+                    garmentLabel={garmentLabel}
+                />
 
                 {/* STYLE feedback SECTION */}
                 <Card className="border border-border rounded-md overflow-clip py-0 gap-0">
                     <CardHeader className="bg-muted/30 border-b px-4 py-3">
                         <div className="flex items-center gap-2.5">
                             <PenTool className="size-4 text-muted-foreground" />
-                            <CardTitle className="text-sm font-medium">Style feedback</CardTitle>
-                            <Badge variant="secondary" className="ml-auto text-xs font-medium">
+                            <CardTitle className="text-base font-medium">Style feedback</CardTitle>
+                            <Badge variant="secondary" className="ml-auto text-sm font-medium">
                                 {optionRows.filter(o => currentState.optionChecks[`${o.id}-main`]).length}/{optionRows.length} Confirmed
                             </Badge>
                         </div>
                     </CardHeader>
-                    <CardContent className="p-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {optionRows.map((opt) => {
+                    {/* Muted canvas so each white style card floats above it (easier to scan than white-on-white) */}
+                    <CardContent className="p-4 bg-muted/30">
+                        {/* Two fixed columns (first half / second half). Each card
+                            stays in one column for its lifetime, so rejecting a card
+                            only pushes the cards below it in its OWN column — the other
+                            column never moves and nothing teleports. (CSS `columns`
+                            re-balanced and shuffled cards between columns on every
+                            height change.) On mobile the columns stack, preserving
+                            top-to-bottom order. */}
+                        {(() => {
+                            const renderOptionCard = (opt: (typeof optionRows)[number]) => {
                                 const isConfirmed = currentState.optionChecks[`${opt.id}-main`] === true;
                                 const isRejected = currentState.optionChecks[`${opt.id}-main`] === false;
                                 const hashwaConfirmed = currentState.optionChecks[`${opt.id}-hashwa`] === true;
@@ -1968,16 +3082,34 @@ function UnifiedFeedbackInterface() {
                                 const newStyleText = pickerList ? findDisplayText(pickerList, newStyleValue) : newStyleValue;
                                 const newHashwaValue = currentState.hashwaChanges[opt.id] || "";
 
+                                // Select-type cards lay the brova feedback (left) and
+                                // the per-final assignment grid (right) side by side so
+                                // the full width is used and 5–6 finals wrap into a
+                                // compact grid instead of one tall full-width column.
+                                // Yes/No cards stay a single compact stack (they live in
+                                // the outer 2-up grid). `items-start` keeps the two panes
+                                // independent, so growing one never moves the other.
+                                const isBool = isBoolOpt(opt.id);
+                                const finalsBlock = isBrova && overrideFinals.length > 0 ? (
+                                    <FinalsCardOverride
+                                        optionId={opt.id}
+                                        finals={overrideFinals}
+                                        garmentOverrides={currentState.garmentOverrides}
+                                        garmentLabel={garmentLabel}
+                                        brovaStyle={brovaStyle}
+                                        readOnly={isReadOnly}
+                                        onSetFinalStyle={setFinalStyleField}
+                                        layout={isBool ? "stacked" : "aside"}
+                                    />
+                                ) : null;
+
                                 return (
                                     <div
                                         key={opt.id}
-                                        className={cn(
-                                            "rounded-md border bg-card p-3 transition-colors",
-                                            isConfirmed && "border-emerald-500/50",
-                                            isRejected && "border-destructive/60",
-                                            !isConfirmed && !isRejected && "border-border"
-                                        )}
+                                        className="rounded-md border border-border bg-card p-3 space-y-2.5 shadow-sm transition-[transform,box-shadow] duration-150 hover:scale-[1.01] hover:shadow-md"
                                     >
+                                        <div className={isBool ? "space-y-2.5" : "flex flex-col md:flex-row gap-2.5 md:gap-4 md:items-start"}>
+                                        <div className={isBool ? "space-y-2.5" : "space-y-2.5 md:w-[22rem] lg:w-[26rem] md:shrink-0"}>
                                         <div className="flex items-stretch gap-3">
                                             {/* Current option image */}
                                             {opt.mainImage ? (
@@ -1990,44 +3122,30 @@ function UnifiedFeedbackInterface() {
                                                 </div>
                                             )}
 
-                                            {/* Label + current value */}
-                                            <div className="flex-1 min-w-0 flex flex-col justify-between">
-                                                <div>
-                                                    <p className="text-sm font-medium text-foreground">{opt.label}</p>
-                                                    <p className="text-xs text-muted-foreground truncate">{opt.displayText || opt.mainValue}</p>
-                                                </div>
-                                                {opt.hashwaValue && (
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={cn(
-                                                            "self-start font-normal text-[10px] h-4 px-1.5 mt-1",
-                                                            hashwaConfirmed && "border-emerald-500/50 text-emerald-700",
-                                                            hashwaRejected && "border-destructive/60 text-destructive",
-                                                        )}
-                                                    >
-                                                        Hashwa: {opt.hashwaValue}
-                                                    </Badge>
-                                                )}
+                                            {/* Label + current value (hashwa shown in its own row below) */}
+                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                <p className="text-sm font-medium text-foreground">{opt.label}</p>
+                                                <p className="text-sm text-muted-foreground truncate">{opt.displayText || opt.mainValue}</p>
                                             </div>
 
-                                            {/* Confirm / Reject */}
-                                            <div className="shrink-0 flex flex-col gap-1">
+                                            {/* Confirm / Reject — horizontal; bool No-label is short ("Add"/"Remove") since the card title already names the option */}
+                                            <div className="shrink-0 flex items-start gap-1.5">
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-main`, true)}
                                                     className={cn(
-                                                        "flex items-center justify-center gap-1 px-2 h-7 rounded-md border text-xs font-medium transition-colors",
+                                                        "flex items-center justify-center gap-1 px-3 h-8 rounded-md border text-sm font-medium transition-colors",
                                                         isConfirmed
                                                             ? "bg-emerald-600 border-emerald-600 text-white"
                                                             : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
                                                     )}
                                                 >
-                                                    <Check className="w-3 h-3" />
+                                                    <Check className="w-4 h-4" />
                                                     {isBoolOpt(opt.id) ? "Keep" : "OK"}
                                                 </button>
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-main`, false)}
                                                     className={cn(
-                                                        "flex items-center justify-center gap-1 px-2 h-7 rounded-md border text-xs font-medium transition-colors whitespace-nowrap",
+                                                        "flex items-center justify-center gap-1 px-3 h-8 rounded-md border text-sm font-medium transition-colors whitespace-nowrap",
                                                         // Booleans: green when reject = ADD, red when reject = REMOVE.
                                                         isRejected
                                                             ? (isBoolOpt(opt.id) && !getBoolCurrent(opt.id)
@@ -2036,9 +3154,9 @@ function UnifiedFeedbackInterface() {
                                                             : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
                                                     )}
                                                 >
-                                                    <X className="w-3 h-3" />
+                                                    <X className="w-4 h-4" />
                                                     {isBoolOpt(opt.id)
-                                                        ? (getBoolCurrent(opt.id) ? `Remove ${BOOL_OPT_NAMES[opt.id]}` : `Add ${BOOL_OPT_NAMES[opt.id]}`)
+                                                        ? (getBoolCurrent(opt.id) ? "Remove" : "Add")
                                                         : "No"}
                                                 </button>
                                             </div>
@@ -2046,15 +3164,29 @@ function UnifiedFeedbackInterface() {
 
                                         {/* Rejected → pick new main style */}
                                         {isRejected && pickerList && (
-                                            <div className="mt-3 pt-3 border-t border-border space-y-2">
+                                            <div className="space-y-2">
+                                                {/* before → after confirmation once a replacement is chosen */}
+                                                {newStyleValue && (
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <span className="flex items-center gap-1.5 text-muted-foreground line-through min-w-0">
+                                                            {opt.mainImage && <img src={opt.mainImage} alt="" className="h-6 w-6 object-contain shrink-0" />}
+                                                            <span className="truncate">{opt.displayText || opt.mainValue}</span>
+                                                        </span>
+                                                        <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
+                                                        <span className="flex items-center gap-1.5 font-medium text-foreground min-w-0">
+                                                            {newStyleImage && <img src={newStyleImage} alt="" className="h-6 w-6 object-contain shrink-0" />}
+                                                            <span className="truncate">{newStyleText}</span>
+                                                        </span>
+                                                    </div>
+                                                )}
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-xs text-muted-foreground shrink-0">New →</span>
+                                                    <span className="text-sm text-muted-foreground shrink-0">New →</span>
                                                     <Select value={newStyleValue} onValueChange={(v) => handleStyleChange(opt.id, v)}>
                                                         <SelectTrigger className="h-10 flex-1 bg-background border-border">
                                                             {newStyleValue ? (
                                                                 <div className="flex items-center gap-2">
                                                                     {newStyleImage && <img src={newStyleImage} alt={newStyleText || ""} className="h-7 w-7 object-contain" />}
-                                                                    <span className="text-xs font-medium">{newStyleText}</span>
+                                                                    <span className="text-sm font-medium">{newStyleText}</span>
                                                                 </div>
                                                             ) : (
                                                                 <SelectValue placeholder="Select replacement..." />
@@ -2067,8 +3199,8 @@ function UnifiedFeedbackInterface() {
                                                                     <SelectItem key={o.value} value={o.value} disabled={isCurrent}>
                                                                         <div className="flex items-center gap-2">
                                                                             {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
-                                                                            <span className="text-xs font-medium">{o.displayText}</span>
-                                                                            {isCurrent && <span className="text-[10px] text-muted-foreground ml-1">(current)</span>}
+                                                                            <span className="text-sm font-medium">{o.displayText}</span>
+                                                                            {isCurrent && <span className="text-xs text-muted-foreground ml-1">(current)</span>}
                                                                         </div>
                                                                     </SelectItem>
                                                                 );
@@ -2084,13 +3216,13 @@ function UnifiedFeedbackInterface() {
                                                     const secondaryText = findDisplayText(secondaryList, secondaryValue);
                                                     return (
                                                         <div className="flex items-center gap-2">
-                                                            <span className="text-xs text-muted-foreground shrink-0">Under Zipper →</span>
+                                                            <span className="text-sm text-muted-foreground shrink-0">Under Zipper →</span>
                                                             <Select value={secondaryValue} onValueChange={(v) => handleStyleChange("jabzour_2", v)}>
                                                                 <SelectTrigger className="h-10 flex-1 bg-background border-border">
                                                                     {secondaryValue ? (
                                                                         <div className="flex items-center gap-2">
                                                                             {secondaryImage && <img src={secondaryImage} alt={secondaryText || ""} className="h-7 w-7 object-contain" />}
-                                                                            <span className="text-xs font-medium">{secondaryText}</span>
+                                                                            <span className="text-sm font-medium">{secondaryText}</span>
                                                                         </div>
                                                                     ) : (
                                                                         <SelectValue placeholder="Select jabzour style..." />
@@ -2104,8 +3236,8 @@ function UnifiedFeedbackInterface() {
                                                                             <SelectItem key={o.value} value={o.value} disabled={isCurrent}>
                                                                                 <div className="flex items-center gap-2">
                                                                                     {o.image && <img src={o.image} alt={o.alt} className="h-8 w-8 object-contain" />}
-                                                                                    <span className="text-xs font-medium">{o.displayText}</span>
-                                                                                    {isCurrent && <span className="text-[10px] text-muted-foreground ml-1">(current)</span>}
+                                                                                    <span className="text-sm font-medium">{o.displayText}</span>
+                                                                                    {isCurrent && <span className="text-xs text-muted-foreground ml-1">(current)</span>}
                                                                                 </div>
                                                                             </SelectItem>
                                                                         );
@@ -2122,12 +3254,12 @@ function UnifiedFeedbackInterface() {
                                         {isRejected && isBoolOpt(opt.id) && (() => {
                                             const removing = getBoolCurrent(opt.id);
                                             return (
-                                                <div className="mt-3 pt-3 border-t border-border flex items-center gap-2">
-                                                    <span className="text-xs text-muted-foreground shrink-0">New →</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-muted-foreground shrink-0">New →</span>
                                                     <Badge
                                                         variant="outline"
                                                         className={cn(
-                                                            "font-medium text-xs",
+                                                            "font-medium text-sm",
                                                             removing ? "text-destructive border-destructive/40" : "text-emerald-700 border-emerald-500/40"
                                                         )}
                                                     >
@@ -2137,44 +3269,46 @@ function UnifiedFeedbackInterface() {
                                             );
                                         })()}
 
-                                        {/* Hashwa row */}
+                                        {/* Hashwa row — value + confirm merged here (no separate badge) */}
                                         {opt.hashwaValue && (
-                                            <div className="mt-2 pt-2 border-t border-border/40 flex items-center gap-2">
-                                                <span className="text-xs text-muted-foreground shrink-0">Hashwa</span>
+                                            <div className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-2.5">
+                                                <span className="text-sm text-muted-foreground shrink-0">
+                                                    Hashwa: <span className="font-medium text-foreground">{opt.hashwaValue}</span>
+                                                </span>
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-hashwa`, true)}
                                                     className={cn(
-                                                        "flex items-center gap-1 px-2 h-6 rounded-md border text-xs font-medium transition-colors",
+                                                        "flex items-center gap-1 px-3 h-7 rounded-md border text-sm font-medium transition-colors",
                                                         hashwaConfirmed
                                                             ? "bg-emerald-600 border-emerald-600 text-white"
                                                             : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
                                                     )}
                                                 >
-                                                    <Check className="w-3 h-3" /> OK
+                                                    <Check className="w-4 h-4" /> OK
                                                 </button>
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-hashwa`, false)}
                                                     className={cn(
-                                                        "flex items-center gap-1 px-2 h-6 rounded-md border text-xs font-medium transition-colors",
+                                                        "flex items-center gap-1 px-3 h-7 rounded-md border text-sm font-medium transition-colors",
                                                         hashwaRejected
                                                             ? "bg-destructive border-destructive text-white"
                                                             : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
                                                     )}
                                                 >
-                                                    <X className="w-3 h-3" /> No
+                                                    <X className="w-4 h-4" /> No
                                                 </button>
                                                 {hashwaRejected && (
                                                     <Select value={newHashwaValue} onValueChange={(v) => handleHashwaChange(opt.id, v)}>
-                                                        <SelectTrigger className="h-7 text-[11px] flex-1 bg-background border-border">
+                                                        <SelectTrigger className="h-8 text-sm flex-1 bg-background border-border">
                                                             <SelectValue placeholder="New thickness..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             {thicknessOptions.map((t) => {
                                                                 const isCurrent = t.value === opt.hashwaValue;
                                                                 return (
-                                                                    <SelectItem key={t.value} value={t.value} disabled={isCurrent} className="text-xs font-medium">
+                                                                    <SelectItem key={t.value} value={t.value} disabled={isCurrent} className="text-sm font-medium">
                                                                         {t.value === "NO HASHWA" ? "No Hashwa" : t.value.charAt(0) + t.value.slice(1).toLowerCase()}
-                                                                        {isCurrent && <span className="text-[10px] text-muted-foreground ml-1">(current)</span>}
+                                                                        {isCurrent && <span className="text-xs text-muted-foreground ml-1">(current)</span>}
                                                                     </SelectItem>
                                                                 );
                                                             })}
@@ -2184,196 +3318,192 @@ function UnifiedFeedbackInterface() {
                                             </div>
                                         )}
 
+                                        {/* Note + media evidence — divided from the verdicts above */}
+                                        <div className="space-y-2.5 border-t border-border/40 pt-2.5">
                                         {/* Notes */}
-                                        <div className="mt-2 flex items-center gap-2 bg-muted/20 rounded px-2 border border-transparent focus-within:border-primary/30 focus-within:bg-background transition-all">
+                                        <div className="flex items-center gap-2 bg-muted/20 rounded px-2 border border-transparent focus-within:border-primary/30 focus-within:bg-background transition-all">
                                             <MessageSquare className="size-3.5 text-muted-foreground/40 shrink-0" />
-                                            <KeyedTextField
-                                                className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[11px] font-medium h-7 p-0"
-                                                placeholder="Note..."
+                                            <BufferedNoteField
+                                                className="border-none shadow-none focus-visible:ring-0 bg-transparent text-sm font-medium h-8 p-0"
+                                                placeholder="Note (optional)…"
                                                 inputKey={opt.id}
                                                 value={currentState.optionNotes[opt.id] || ""}
-                                                onChange={handleOptionNoteChange}
+                                                onCommit={handleOptionNoteChange}
                                             />
+                                        </div>
+
+                                        {/* Per-style attachments (photos + voice notes) */}
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <Camera className="size-3.5 text-muted-foreground/60 shrink-0" />
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 px-2 text-xs font-medium"
+                                                    onClick={() => document.getElementById(`photo-input-${opt.id}`)?.click()}
+                                                >
+                                                    <Camera className="w-3 h-3 mr-1" /> Photo
+                                                </Button>
+                                                <Button
+                                                    variant={recordingOptionId === opt.id ? "destructive" : "outline"}
+                                                    size="sm"
+                                                    className="h-7 px-2 text-xs font-medium"
+                                                    disabled={recordingOptionId !== null && recordingOptionId !== opt.id}
+                                                    onClick={() => (recordingOptionId === opt.id ? stopRecording() : startRecording(opt.id))}
+                                                >
+                                                    {recordingOptionId === opt.id ? (
+                                                        <><MicOff className="w-3 h-3 mr-1" /> Stop</>
+                                                    ) : (
+                                                        <><Mic className="w-3 h-3 mr-1" /> Voice</>
+                                                    )}
+                                                </Button>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    id={`photo-input-${opt.id}`}
+                                                    onChange={(e) => { handleAddOptionPhoto(opt.id, e.target.files?.[0] || null); e.target.value = ""; }}
+                                                />
+                                            </div>
+
+                                            {recordingOptionId === opt.id && (
+                                                <div className="flex items-center gap-2 p-1.5 rounded-md border border-destructive/30 bg-destructive/5">
+                                                    <div className="size-1.5 rounded-full bg-destructive animate-pulse" />
+                                                    <span className="text-xs font-medium text-destructive">Recording…</span>
+                                                </div>
+                                            )}
+
+                                            {(currentState.optionPhotos[opt.id]?.length ?? 0) > 0 && (
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {(currentState.optionPhotos[opt.id] ?? []).map((p, i) => (
+                                                        <div key={i} className="relative group size-14 rounded-md overflow-hidden border border-border">
+                                                            <img src={p.url} alt={`${opt.label} attachment ${i + 1}`} className="w-full h-full object-cover" />
+                                                            <button
+                                                                onClick={() => handleRemoveOptionPhoto(opt.id, i)}
+                                                                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            >
+                                                                <X className="size-3.5 text-white" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {(currentState.optionVoiceNotes[opt.id]?.length ?? 0) > 0 && (
+                                                <div className="space-y-1.5">
+                                                    {(currentState.optionVoiceNotes[opt.id] ?? []).map((url, i) => (
+                                                        <VoiceNotePlayer
+                                                            key={i}
+                                                            url={url}
+                                                            label={`${opt.label} voice ${i + 1}`}
+                                                            onRemove={() => removeOptionVoiceNote(opt.id, i)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* end note + media evidence group */}
+                                        </div>
+
+                                        {/* end feedback (left) pane */}
+                                        </div>
+
+                                        {/* Per-final style override for this attribute (§2.5) —
+                                            right pane for select cards, stacked under Yes/No cards */}
+                                        {finalsBlock && (
+                                            <div className={isBool ? undefined : "md:flex-1 md:min-w-0"}>
+                                                {finalsBlock}
+                                            </div>
+                                        )}
+                                        {/* end two-pane wrapper */}
                                         </div>
                                     </div>
                                 );
-                            })}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* SHARED MEDIA (photos + voice notes) */}
-                <Card className="border border-border rounded-md overflow-clip py-0 gap-0">
-                    <CardHeader className="bg-muted/30 border-b px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                            <Camera className="size-4 text-muted-foreground" />
-                            <CardTitle className="text-sm font-medium">Attachments</CardTitle>
-                            <Badge variant="secondary" className="ml-auto text-xs font-medium">
-                                {currentState.sharedPhotos.length + currentState.sharedVoiceNotes.length} items
-                            </Badge>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-4 space-y-3">
-                        {/* Capture buttons */}
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 font-medium text-xs"
-                                onClick={() => document.getElementById("shared-photo-input")?.click()}
-                            >
-                                <Camera className="w-3.5 h-3.5 mr-1.5" />
-                                Add Photo
-                            </Button>
-                            <Button
-                                variant={recordingOptionId === "shared" ? "destructive" : "outline"}
-                                size="sm"
-                                className="h-9 font-medium text-xs"
-                                onClick={recordingOptionId === "shared" ? stopRecording : startRecording}
-                            >
-                                {recordingOptionId === "shared" ? (
-                                    <><MicOff className="w-3.5 h-3.5 mr-1.5" />Stop</>
-                                ) : (
-                                    <><Mic className="w-3.5 h-3.5 mr-1.5" />Record Voice Note</>
-                                )}
-                            </Button>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                id="shared-photo-input"
-                                onChange={(e) => handleAddPhoto(e.target.files?.[0] || null)}
-                            />
-                        </div>
-
-                        {/* Recording indicator */}
-                        {recordingOptionId === "shared" && (
-                            <div className="flex items-center gap-2 p-2 rounded-md border border-destructive/30 bg-destructive/5">
-                                <div className="size-2 rounded-full bg-destructive animate-pulse" />
-                                <span className="text-xs font-medium text-destructive">Recording…</span>
-                            </div>
-                        )}
-
-                        {/* Photo thumbnails */}
-                        {currentState.sharedPhotos.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                                {currentState.sharedPhotos.map((p, i) => (
-                                    <div key={i} className="relative group size-20 rounded-lg overflow-hidden border border-border">
-                                        <img src={p.url} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover" />
-                                        <button
-                                            onClick={() => handleRemovePhoto(i)}
-                                            className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            <X className="size-4 text-white" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Voice notes */}
-                        {currentState.sharedVoiceNotes.length > 0 && (
-                            <div className="space-y-2">
-                                {currentState.sharedVoiceNotes.map((url, i) => (
-                                    <VoiceNotePlayer
-                                        key={i}
-                                        url={url}
-                                        label={`Voice Note ${i + 1}`}
-                                        onRemove={() => removeVoiceNote(i)}
-                                    />
-                                ))}
-                            </div>
-                        )}
-
-                        {currentState.sharedPhotos.length === 0 && currentState.sharedVoiceNotes.length === 0 && (
-                            <p className="text-xs text-muted-foreground text-center py-2">
-                                No attachments yet
-                            </p>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* PREVIOUS FEEDBACK HISTORY */}
-                {feedbackHistory.length > 0 && (
-                    <Card className="border border-border rounded-md overflow-clip py-0 gap-0">
-                        <CardHeader
-                            className="bg-muted/30 border-b px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors"
-                            onClick={() => setHistoryOpen(!historyOpen)}
-                        >
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2.5">
-                                    <History className="size-4 text-muted-foreground" />
-                                    <div>
-                                        <CardTitle className="text-sm font-medium">Previous feedback</CardTitle>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
-                                            {feedbackHistory.length} previous trip{feedbackHistory.length > 1 ? "s" : ""}
-                                        </p>
-                                    </div>
+                            };
+                            // Select-type styles (collar, cuff, jabzour, position, …)
+                            // need the full row width for their replacement picker +
+                            // before→after + per-final dropdowns, so they stack one per
+                            // row. The Yes/No accessory toggles are compact and uniform,
+                            // so they pack into a 2-column grid (items-start keeps the
+                            // tops of paired cards aligned).
+                            const selectRows = optionRows.filter(o => !isBoolOpt(o.id));
+                            const boolRows = optionRows.filter(o => isBoolOpt(o.id));
+                            return (
+                                <div className="space-y-3">
+                                    {selectRows.map(renderOptionCard)}
+                                    {boolRows.length > 0 && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                                            {boolRows.map(renderOptionCard)}
+                                        </div>
+                                    )}
                                 </div>
-                                <ChevronDown className={cn("size-5 text-muted-foreground transition-transform", historyOpen && "rotate-180")} />
+                            );
+                        })()}
+                    </CardContent>
+                </Card>
+
+
+                {/* EARLIER ATTACHMENTS — read-only media from feedback saved before
+                    per-style attachments existed (no style to file them under). */}
+                {(currentState.legacyPhotos.length > 0 || currentState.legacyVoiceNotes.length > 0) && (
+                    <Card className="border border-border rounded-md overflow-clip py-0 gap-0">
+                        <CardHeader className="bg-muted/30 border-b px-4 py-3">
+                            <div className="flex items-center gap-2.5">
+                                <Camera className="size-4 text-muted-foreground" />
+                                <CardTitle className="text-base font-medium">Earlier attachments</CardTitle>
+                                <span className="text-xs text-muted-foreground">from previous feedback, not filed under a style</span>
                             </div>
                         </CardHeader>
-                        {historyOpen && (
-                            <CardContent className="p-4 space-y-3">
-                                {feedbackHistory.map((fb: GarmentFeedback, i: number) => (
-                                    <div key={fb.id} className="p-3 rounded-md border border-border/60 bg-muted/10 space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className="text-xs font-normal">
-                                                    Trip {fb.trip_number || i + 1}
-                                                </Badge>
-                                                <Badge
-                                                    variant="outline"
-                                                    className={cn(
-                                                        "text-xs font-medium",
-                                                        (fb.action === "accepted" || fb.action === "collected") && "border-emerald-500/40 text-emerald-700",
-                                                        fb.action === "needs_repair_accepted" && "border-amber-500/40 text-amber-700",
-                                                        fb.action === "needs_repair_rejected" && "border-amber-600/40 text-amber-800",
-                                                        fb.action === "needs_redo" && "border-destructive/40 text-destructive",
-                                                        fb.action === "delivered" && "border-primary/40 text-primary",
-                                                    )}
-                                                >
-                                                    {fb.action?.replace(/_/g, " ")}
-                                                </Badge>
-                                            </div>
-                                            <span className="text-xs font-medium text-muted-foreground">
-                                                {fb.created_at ? parseUtcTimestamp(fb.created_at).toLocaleDateString("en-GB", { timeZone: TIMEZONE }) : ""}
-                                            </span>
+                        <CardContent className="p-4 space-y-3">
+                            {currentState.legacyPhotos.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                    {currentState.legacyPhotos.map((p, i) => (
+                                        <div key={i} className="size-20 rounded-lg overflow-hidden border border-border">
+                                            <img src={p.url} alt={`Earlier attachment ${i + 1}`} className="w-full h-full object-cover" />
                                         </div>
-                                        {fb.satisfaction_level && (
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs text-muted-foreground">Satisfaction:</span>
-                                                <span className="text-sm">
-                                                    {SATISFACTION_LEVELS.find(s => s.numericValue === fb.satisfaction_level)?.emoji || ""}{" "}
-                                                    {SATISFACTION_LEVELS.find(s => s.numericValue === fb.satisfaction_level)?.label || `${fb.satisfaction_level}/5`}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {fb.notes && (
-                                            <p className="text-xs text-muted-foreground">{fb.notes}</p>
-                                        )}
-                                    </div>
-                                ))}
-                            </CardContent>
-                        )}
+                                    ))}
+                                </div>
+                            )}
+                            {currentState.legacyVoiceNotes.length > 0 && (
+                                <div className="space-y-2">
+                                    {currentState.legacyVoiceNotes.map((url, i) => (
+                                        <audio key={i} src={url} controls preload="metadata" className="w-full h-9" />
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
                     </Card>
                 )}
 
             </TabsContent>
           </Tabs>
 
-          {/* FINAL ACTIONS CONTROL PANEL */}
+          {/* Read-only banner when editing is locked */}
+          {isReadOnly && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                {orderLocked
+                  ? "Finals are in production. Feedback editing is locked."
+                  : !activeGarment
+                  ? "No garment selected."
+                  : "This garment has been dispatched to the workshop or is no longer at the shop. Showing read-only history."}
+              </p>
+            </div>
+          )}
+
+          {/* FINAL ACTIONS CONTROL PANEL — hidden when read-only */}
+          {!isReadOnly && <>
           {/* CUSTOMER SENTIMENTS */}
           <Card className="border border-border rounded-md overflow-clip">
               <CardHeader className="bg-muted/30 border-b px-4 py-3">
                   <div className="flex items-center gap-2.5">
                       <User className="size-4 text-muted-foreground" />
-                      <CardTitle className="text-sm font-medium">Customer sentiments</CardTitle>
+                      <CardTitle className="text-base font-medium">Customer sentiments</CardTitle>
                   </div>
               </CardHeader>
               <CardContent className="p-4 space-y-4">
                   <div className="space-y-2">
-                      <Label className="text-xs font-medium text-muted-foreground">Overall Satisfaction <span className="text-destructive">*</span></Label>
+                      <Label className="text-sm font-medium text-muted-foreground">Overall Satisfaction <span className="text-destructive">*</span></Label>
                       <RadioGroup
                           value={currentState.satisfaction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { satisfaction: val })}
@@ -2387,7 +3517,7 @@ function UnifiedFeedbackInterface() {
                                       className="flex flex-col items-center justify-center gap-0.5 h-14 rounded-md border border-border bg-card p-2 cursor-pointer transition-colors grayscale opacity-60 hover:opacity-100 hover:grayscale-0 hover:border-muted-foreground/40 peer-data-[state=checked]:opacity-100 peer-data-[state=checked]:grayscale-0 peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-1 peer-data-[state=checked]:ring-primary"
                                   >
                                       <span className="text-2xl leading-none">{level.emoji}</span>
-                                      <span className="text-[10px] text-muted-foreground">{level.label}</span>
+                                      <span className="text-xs text-muted-foreground">{level.label}</span>
                                   </Label>
                               </div>
                           ))}
@@ -2398,9 +3528,9 @@ function UnifiedFeedbackInterface() {
                   {activeTab === "brova" && (
                       <div className="pt-3 border-t border-border/60 space-y-3">
                           <div className="flex items-center justify-between">
-                              <Label className="text-xs font-medium text-muted-foreground">Customer Signature <span className="text-muted-foreground/50 font-medium">(optional)</span></Label>
+                              <Label className="text-sm font-medium text-muted-foreground">Customer Signature <span className="text-muted-foreground/50 font-medium">(optional)</span></Label>
                               {currentState.customerSignature && (
-                                  <Badge variant="outline" className="text-emerald-700 border-emerald-500/50 text-xs font-medium">Signed</Badge>
+                                  <Badge variant="outline" className="text-emerald-700 border-emerald-500/50 text-sm font-medium">Signed</Badge>
                               )}
                           </div>
 
@@ -2428,7 +3558,7 @@ function UnifiedFeedbackInterface() {
                                       <div className="p-2.5 rounded-full bg-muted/30">
                                           <PenTool className="size-5 text-muted-foreground/50" />
                                       </div>
-                                      <span className="text-xs font-medium text-muted-foreground">Tap to Sign</span>
+                                      <span className="text-sm font-medium text-muted-foreground">Tap to Sign</span>
                                   </button>
                               }
                           />
@@ -2443,13 +3573,13 @@ function UnifiedFeedbackInterface() {
               <CardHeader className="bg-primary/5 border-b px-4 py-3">
                   <div className="flex items-center gap-2.5">
                       <RefreshCw className="size-4 text-muted-foreground" />
-                      <CardTitle className="text-sm font-medium">Garment action</CardTitle>
+                      <CardTitle className="text-base font-medium">Garment action</CardTitle>
                   </div>
               </CardHeader>
               <CardContent className="p-4 space-y-4">
                   {/* Status */}
                   <div className="space-y-2">
-                      <Label className="text-xs font-medium text-muted-foreground">Status <span className="text-destructive">*</span></Label>
+                      <Label className="text-sm font-medium text-muted-foreground">Status <span className="text-destructive">*</span></Label>
                       <RadioGroup
                           value={currentState.feedbackAction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { feedbackAction: val })}
@@ -2461,7 +3591,7 @@ function UnifiedFeedbackInterface() {
                                   <Label
                                       htmlFor={`action-${opt.value}`}
                                       className={cn(
-                                          "flex items-center justify-center h-10 rounded-lg border border-border bg-card px-2 cursor-pointer transition-all font-medium text-xs text-center",
+                                          "flex items-center justify-center h-10 rounded-lg border border-border bg-card px-2 cursor-pointer transition-all font-medium text-sm text-center",
                                           opt.color
                                       )}
                                   >
@@ -2487,9 +3617,95 @@ function UnifiedFeedbackInterface() {
                       </div>
                   )}
 
+                  {/* Redo resolution (§2.5) — explicit required choice of outcome */}
+                  {activeTab === "brova" && currentState.feedbackAction === "needs_redo" && (() => {
+                      const parkedFinals = (activeOrder?.garments ?? []).filter(
+                          g => g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance"
+                      );
+                      const fabrics = (redoFabricsData ?? []).filter(f => Number(f.shop_stock) > 0);
+                      return (
+                          <div className="space-y-3 p-3 rounded-md border border-border bg-muted/30">
+                              <Label className="text-sm font-medium text-muted-foreground">
+                                  How to redo? <span className="text-destructive">*</span>
+                              </Label>
+                              <RadioGroup
+                                  value={currentState.redoOutcome ?? ""}
+                                  onValueChange={(val) => updateGarmentState(selectedGarmentId, {
+                                      redoOutcome: val as GarmentFeedbackState["redoOutcome"],
+                                      redoReplacementFabricId: null,
+                                      redoPromoteFinalId: null,
+                                  })}
+                                  className="grid gap-2"
+                              >
+                                  {[
+                                      { value: "replacement_in", label: "Replacement: from our stock", hint: "We cut a fresh piece from shop stock." },
+                                      { value: "replacement_out", label: "Replacement: customer's fabric", hint: "Customer brings the cloth; waits in dispatch until they do." },
+                                      { value: "promote", label: "No replacement: promote a final", hint: "Discard this brova; one final becomes the new brova." },
+                                  ].map((opt) => (
+                                      <div key={opt.value} className="flex items-start gap-2">
+                                          <RadioGroupItem value={opt.value} id={`redo-${opt.value}`} className="mt-0.5" />
+                                          <Label htmlFor={`redo-${opt.value}`} className="flex-1 cursor-pointer font-normal">
+                                              <span className="text-sm font-medium">{opt.label}</span>
+                                              <span className="block text-xs text-muted-foreground">{opt.hint}</span>
+                                          </Label>
+                                      </div>
+                                  ))}
+                              </RadioGroup>
+
+                              {/* Cross case: a customer-cloth original switched to our stock → pick the fabric to cut. */}
+                              {currentState.redoOutcome === "replacement_in" && activeGarment?.fabric_source === "OUT" && (
+                                  <div className="space-y-1.5">
+                                      <Label className="text-xs text-muted-foreground">
+                                          Fabric to cut <span className="text-destructive">*</span>
+                                      </Label>
+                                      <Select
+                                          value={currentState.redoReplacementFabricId != null ? String(currentState.redoReplacementFabricId) : ""}
+                                          onValueChange={(v) => updateGarmentState(selectedGarmentId, { redoReplacementFabricId: Number(v) })}
+                                      >
+                                          <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select fabric…" /></SelectTrigger>
+                                          <SelectContent>
+                                              {fabrics.map(f => (
+                                                  <SelectItem key={f.id} value={String(f.id)}>{f.name} ({Number(f.shop_stock)}m)</SelectItem>
+                                              ))}
+                                          </SelectContent>
+                                      </Select>
+                                  </div>
+                              )}
+
+                              {/* Promote: choose which parked final becomes the new brova. */}
+                              {currentState.redoOutcome === "promote" && (
+                                  parkedFinals.length > 0 ? (
+                                      <div className="space-y-1.5">
+                                          <Label className="text-xs text-muted-foreground">
+                                              Which final becomes the brova? <span className="text-destructive">*</span>
+                                          </Label>
+                                          <Select
+                                              value={currentState.redoPromoteFinalId ?? ""}
+                                              onValueChange={(v) => updateGarmentState(selectedGarmentId, { redoPromoteFinalId: v })}
+                                          >
+                                              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select a parked final…" /></SelectTrigger>
+                                              <SelectContent>
+                                                  {parkedFinals.map(f => (
+                                                      <SelectItem key={f.id} value={f.id}>{f.garment_id || f.id.slice(0, 8)}</SelectItem>
+                                                  ))}
+                                              </SelectContent>
+                                          </Select>
+                                      </div>
+                                  ) : (
+                                      <p className="text-xs text-muted-foreground">No parked final to promote. This brova will be discarded only.</p>
+                                  )
+                              )}
+
+                              <p className="text-xs text-muted-foreground border-t border-border pt-2">
+                                  The customer refund (if any) is taken at the cashier.
+                              </p>
+                          </div>
+                      );
+                  })()}
+
                   {/* Distribution */}
                   <div className="space-y-2">
-                      <Label className="text-xs font-medium text-muted-foreground">Distribution <span className="text-destructive">*</span></Label>
+                      <Label className="text-sm font-medium text-muted-foreground">Distribution <span className="text-destructive">*</span></Label>
                       <RadioGroup
                           value={currentState.distributionAction || ""}
                           onValueChange={(val) => updateGarmentState(selectedGarmentId, { distributionAction: val })}
@@ -2557,7 +3773,7 @@ function UnifiedFeedbackInterface() {
                                 {currentState.existingFeedbackId ? "Update Feedback" : "Submit Feedback"}
                             </Button>
                             {missing.length > 0 && !lockedDone && (
-                              <p className="text-xs text-destructive text-center">
+                              <p className="text-sm text-destructive text-center">
                                 Required: {missing.join(", ")}
                               </p>
                             )}
@@ -2573,10 +3789,15 @@ function UnifiedFeedbackInterface() {
               onClose={() => setIsConfirmDialogOpen(false)}
               onConfirm={handleSave}
               title="Confirm Garment Feedback"
-              description={`You are about to submit feedback for garment ${activeGarment?.garment_id || activeGarment?.id || ""}. This will update its status and save the feedback record.`}
+              description={`You are about to submit feedback for garment ${activeGarment?.garment_id || activeGarment?.id || ""}. This will update its status and save the feedback record.${
+                repricePreview?.changed
+                  ? ` Order total changes from KWD ${repricePreview.oldOrderTotal.toFixed(3)} to KWD ${repricePreview.newOrderTotal.toFixed(3)} (${repricePreview.delta >= 0 ? "+" : ""}${repricePreview.delta.toFixed(3)}).`
+                  : ""
+              }`}
               confirmText="Submit Feedback"
               cancelText="Go Back"
           />
+          </>}
 
 
       </div>

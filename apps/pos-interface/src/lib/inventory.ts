@@ -61,7 +61,7 @@ export const MOVEMENT_TYPE_COLORS: Record<StockMovementType, string> = {
 // whether the stepper delta is positive or negative; "recount" appears in both
 // because a stocktake can correct either way.
 export const ADJUSTMENT_REASONS_ADD = [
-  { value: "recount_up", label: "Recount — found more" },
+  { value: "recount_up", label: "Recount: found more" },
   { value: "found", label: "Found / misplaced" },
   { value: "returned_from_customer", label: "Returned from customer" },
   { value: "other_add", label: "Other (specify)" },
@@ -71,7 +71,7 @@ export const ADJUSTMENT_REASONS_ADD = [
 // dedicated Damage/Waste action (WASTE_REASONS below) which records cost impact
 // + fault category — see CLAUDE.md §4.
 export const ADJUSTMENT_REASONS_REMOVE = [
-  { value: "recount_down", label: "Recount — short" },
+  { value: "recount_down", label: "Recount: short" },
   { value: "expired", label: "Expired" },
   { value: "returned_to_supplier", label: "Returned to supplier" },
   { value: "other_remove", label: "Other (specify)" },

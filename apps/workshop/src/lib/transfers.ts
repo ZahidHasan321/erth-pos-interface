@@ -86,7 +86,7 @@ export function isStale(t: TransferRequestWithItems, thresholdDays = 3): boolean
 
 export function itemNamesPreview(t: TransferRequestWithItems, max = 2): string {
   const names = t.items.map((i) => i.fabric?.name ?? i.shelf_item?.type ?? i.accessory?.name ?? `#${i.id}`);
-  if (names.length === 0) return "—";
+  if (names.length === 0) return "-";
   if (names.length <= max) return names.join(", ");
   return `${names.slice(0, max).join(", ")} +${names.length - max}`;
 }

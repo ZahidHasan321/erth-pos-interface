@@ -61,7 +61,7 @@ export function AlterationMeasurementTable({
                                         step="0.125"
                                         value={current ?? ""}
                                         onChange={(e) => onChange(col.name, e.target.value)}
-                                        placeholder={master != null ? "—" : "—"}
+                                        placeholder={master != null ? "-" : "-"}
                                         className={cn(
                                             "h-9 w-full text-center tabular-nums bg-transparent border-0 shadow-none px-1",
                                             "focus:ring-1 focus:ring-primary focus-visible:ring-1 focus-visible:ring-primary",
@@ -86,7 +86,7 @@ export function AlterationMeasurementTable({
                                             {master}
                                         </span>
                                     ) : (
-                                        <span className="text-xs text-muted-foreground/40">—</span>
+                                        <span className="text-xs text-muted-foreground/40">-</span>
                                     )}
                                 </td>
                             );

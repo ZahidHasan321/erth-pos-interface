@@ -12,8 +12,6 @@ import { Separator } from "@repo/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui/tooltip";
 import { useAuth } from "@/context/auth";
 import { useCreateTransfersBatch, useDirectSendTransfersBatch } from "@/hooks/useTransfers";
-import { getFabrics } from "@/api/fabrics";
-import { getShelf } from "@/api/shelf";
 import { getAccessories } from "@/api/accessories";
 import { ITEM_TYPE_LABELS, UNIT_OF_MEASURE_LABELS } from "@/components/store/transfer-constants";
 import { PageHeader } from "@/components/shared/PageShell";
@@ -36,19 +34,12 @@ export const Route = createFileRoute("/(main)/store/transfers_/new")({
   head: () => ({ meta: [{ title: "New transfer" }] }),
 });
 
-type ItemType = "fabric" | "shelf" | "accessory";
+// Only accessories ever transfer — fabric/shelf live solely on the shop side and
+// never cross to the workshop (§4), so there is no item-type choice to make.
+type ItemType = "accessory";
 type Direction = "shop_to_workshop" | "workshop_to_shop";
 type Mode = "request" | "send";
 type CartLine = { itemId: number; itemType: ItemType; qty: number; name: string; sourceStock: number; unit: Unit; step: number };
-
-// Item type is categorical, not a status. Workshop rules: one signal wins
-// color per region — let the text label carry the distinction. Dots stay
-// neutral so the cart's stock-warning amber/red can dominate when it appears.
-const TYPE_COLORS: Record<ItemType, { dot: string; text: string }> = {
-  fabric:    { dot: "bg-muted-foreground/60", text: "text-foreground" },
-  shelf:     { dot: "bg-muted-foreground/60", text: "text-foreground" },
-  accessory: { dot: "bg-muted-foreground/60", text: "text-foreground" },
-};
 
 // Cart auto-saves to localStorage so a refresh, accidental nav-away, or
 // closed tab doesn't lose what the user typed in. The "Clear" button is the
@@ -60,7 +51,6 @@ interface TransferDraft {
   cart: CartLine[];
   notes: string;
   mode: Mode;
-  itemType: ItemType;
   adminDirection: Direction;
   savedAt: number;
 }
@@ -109,7 +99,7 @@ function NewTransferPage() {
   const sendDirection: Direction = userSide === "shop" ? "shop_to_workshop" : "workshop_to_shop";
 
   const [adminDirection, setAdminDirection] = useState<Direction>(draft?.adminDirection ?? requestDirection);
-  const [itemType, setItemType] = useState<ItemType>(draft?.itemType ?? "fabric");
+  const itemType: ItemType = "accessory";
   const [cart, setCart] = useState<CartLine[]>(draft?.cart ?? []);
   const [search, setSearch] = useState("");
   const [notes, setNotes] = useState(draft?.notes ?? "");
@@ -130,20 +120,16 @@ function NewTransferPage() {
       return;
     }
     const payload: TransferDraft = {
-      cart, notes, mode, itemType, adminDirection, savedAt: Date.now(),
+      cart, notes, mode, adminDirection, savedAt: Date.now(),
     };
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
     } catch {
       // Quota exceeded or storage disabled — silent. Cart still works in-memory.
     }
-  }, [cart, notes, mode, itemType, adminDirection]);
+  }, [cart, notes, mode, adminDirection]);
 
-  const { data: fabrics = [], isLoading: fabricsLoading } = useQuery({ queryKey: ["fabrics"], queryFn: () => getFabrics(), enabled: itemType === "fabric", staleTime: 60_000 });
-  const { data: shelfItems = [], isLoading: shelfLoading } = useQuery({ queryKey: ["shelf"], queryFn: () => getShelf(), enabled: itemType === "shelf", staleTime: 60_000 });
-  const { data: accessories = [], isLoading: accLoading } = useQuery({ queryKey: ["accessories"], queryFn: () => getAccessories(), enabled: itemType === "accessory", staleTime: 60_000 });
-
-  const optionsLoading = (itemType === "fabric" && fabricsLoading) || (itemType === "shelf" && shelfLoading) || (itemType === "accessory" && accLoading);
+  const { data: accessories = [], isLoading: optionsLoading } = useQuery({ queryKey: ["accessories"], queryFn: () => getAccessories(), staleTime: 60_000 });
 
   const effectiveDirection: Direction = userSide
     ? (mode === "send" ? sendDirection : requestDirection)
@@ -152,24 +138,6 @@ function NewTransferPage() {
   const destLabel = effectiveDirection === "shop_to_workshop" ? "Workshop" : "Shop";
 
   const options = useMemo(() => {
-    if (itemType === "fabric") {
-      return fabrics.map((f) => ({
-        id: f.id,
-        label: f.name,
-        sourceStock: effectiveDirection === "shop_to_workshop" ? Number(f.shop_stock ?? 0) : Number(f.workshop_stock ?? 0),
-        unit: "meters" as Unit,
-        step: UNIT_STEP.meters,
-      }));
-    }
-    if (itemType === "shelf") {
-      return shelfItems.map((s) => ({
-        id: s.id,
-        label: s.type ?? `#${s.id}`,
-        sourceStock: effectiveDirection === "shop_to_workshop" ? Number(s.shop_stock ?? 0) : Number(s.workshop_stock ?? 0),
-        unit: "pieces" as Unit,
-        step: UNIT_STEP.pieces,
-      }));
-    }
     return accessories.map((a) => {
       const unit = (a.unit_of_measure ?? "pieces") as Unit;
       return {
@@ -180,7 +148,7 @@ function NewTransferPage() {
         step: UNIT_STEP[unit] ?? 1,
       };
     });
-  }, [itemType, fabrics, shelfItems, accessories, effectiveDirection]);
+  }, [accessories, effectiveDirection]);
 
   const cartWithCurrentStock = useMemo(() => cart.map((line) => {
     const opt = options.find((o) => o.id === line.itemId);
@@ -193,12 +161,6 @@ function NewTransferPage() {
     if (!q) return options;
     return options.filter((o) => o.label.toLowerCase().includes(q));
   }, [options, search]);
-
-  const cartTypeCounts = useMemo(() => {
-    const counts: Record<ItemType, number> = { fabric: 0, shelf: 0, accessory: 0 };
-    for (const l of cart) counts[l.itemType] += 1;
-    return counts;
-  }, [cart]);
 
   const hasInsufficientInCart = cartWithCurrentStock.some((l) => l.qty > l.sourceStock);
   const blockingInsufficient = mode === "send" && hasInsufficientInCart;
@@ -249,53 +211,32 @@ function NewTransferPage() {
       toast.error(
         zeroLines.length === cart.length
           ? "Set a quantity for every item before submitting"
-          : `${zeroLines.length} item(s) have no quantity — set or remove them`,
+          : `${zeroLines.length} item(s) have no quantity, set or remove them`,
       );
       return;
     }
 
-    // Group cart by item type — the DB stores one item_type per transfer
-    // request, so a mixed cart fans out to N requests. The batch RPC creates
-    // them all in a single Postgres transaction, so either every group lands
-    // or nothing does (no partial success).
+    // Every line is an accessory, so the whole cart is one transfer request
+    // (the DB stores one item_type per request). The batch RPC commits it in a
+    // single Postgres transaction — all or nothing, no partial success.
     const trimmedNotes = notes.trim() || undefined;
     const itemWord = cart.length !== 1 ? "items" : "item";
 
     try {
       if (mode === "send") {
-        const groups = (["fabric", "shelf", "accessory"] as ItemType[])
-          .map((type) => ({
-            item_type: type,
-            items: cart
-              .filter((l) => l.itemType === type)
-              .map((l) => {
-                const base: { qty: number; fabric_id?: number; shelf_id?: number; accessory_id?: number } = { qty: l.qty };
-                if (type === "fabric") base.fabric_id = l.itemId;
-                else if (type === "shelf") base.shelf_id = l.itemId;
-                else base.accessory_id = l.itemId;
-                return base;
-              }),
-          }))
-          .filter((g) => g.items.length > 0);
+        const groups = [{
+          item_type: "accessory" as ItemType,
+          items: cart.map((l) => ({ qty: l.qty, accessory_id: l.itemId })),
+        }];
         await sendMut.mutateAsync({ direction: sendDirection, notes: trimmedNotes, groups });
         clearDraft();
         toast.success(`Sent ${cart.length} ${itemWord} to ${destLabel}`);
         backToList();
       } else {
-        const groups = (["fabric", "shelf", "accessory"] as ItemType[])
-          .map((type) => ({
-            item_type: type,
-            items: cart
-              .filter((l) => l.itemType === type)
-              .map((l) => {
-                const base: { requested_qty: number; fabric_id?: number; shelf_id?: number; accessory_id?: number } = { requested_qty: l.qty };
-                if (type === "fabric") base.fabric_id = l.itemId;
-                else if (type === "shelf") base.shelf_id = l.itemId;
-                else base.accessory_id = l.itemId;
-                return base;
-              }),
-          }))
-          .filter((g) => g.items.length > 0);
+        const groups = [{
+          item_type: "accessory" as ItemType,
+          items: cart.map((l) => ({ requested_qty: l.qty, accessory_id: l.itemId })),
+        }];
         await createMut.mutateAsync({ direction: effectiveDirection, notes: trimmedNotes, groups });
         clearDraft();
         toast.success(`Requested ${cart.length} ${itemWord} from ${sourceLabel}`);
@@ -325,18 +266,20 @@ function NewTransferPage() {
         icon={ArrowRightLeft}
         title="New transfer"
         subtitle={mode === "request"
-          ? `Pick what you need from ${sourceLabel}. Mix item types if you want — each type becomes its own request.`
-          : `Pick what to send to ${destLabel}. Stock leaves ${sourceLabel} as soon as you submit. Each item type ships as its own transfer.`}
+          ? `Pick the accessories you need from ${sourceLabel}.`
+          : `Pick the accessories to send to ${destLabel}. Stock leaves ${sourceLabel} as soon as you submit.`}
       />
 
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Left: setup + picker */}
           <div className="lg:col-span-2 space-y-5">
-            <Card>
-              <CardContent className="p-4 space-y-4">
-                {/* Direction — only shown to admins (no side affiliation). Staff direction is derived from mode. */}
-                {!userSide && (
+            {/* Direction — admins (no side affiliation) choose it explicitly;
+                staff direction is derived from mode. There is no item-type
+                choice: every transfer is accessories (§4). */}
+            {!userSide && (
+              <Card>
+                <CardContent className="p-4">
                   <div className="space-y-2">
                     <Label>Direction</Label>
                     <div className="grid grid-cols-2 gap-2">
@@ -354,42 +297,11 @@ function NewTransferPage() {
                       />
                     </div>
                   </div>
-                )}
+                </CardContent>
+              </Card>
+            )}
 
-                {/* Item type — picker only. Cart can hold multiple types; each type
-                    becomes its own transfer request on submit. */}
-                <div className="space-y-2">
-                  <Label>Item type</Label>
-                  <div className="inline-flex rounded-md border p-0.5 bg-muted/40">
-                    {(["fabric", "shelf", "accessory"] as ItemType[]).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => { setItemType(t); setSearch(""); }}
-                        className={`px-3 py-1.5 text-sm rounded-[5px] transition-colors inline-flex items-center gap-1.5 ${
-                          itemType === t
-                            ? "bg-primary text-primary-foreground font-medium shadow-sm"
-                            : "text-muted-foreground hover:text-foreground hover:bg-background/60"
-                        }`}
-                      >
-                        <span className={`h-2 w-2 rounded-full ${TYPE_COLORS[t].dot}`} />
-                        {ITEM_TYPE_LABELS[t]}
-                        {cartTypeCounts[t] > 0 && (
-                          <span className={`text-[11px] tabular-nums ${itemType === t ? "opacity-80" : "opacity-60"}`}>
-                            ({cartTypeCounts[t]})
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Mixing types creates one request per type — each is sent separately.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Picker — searchable list of source-side items */}
+            {/* Picker — searchable list of source-side accessories */}
             <Card>
               <CardContent className="p-4 space-y-3">
                 <div>
@@ -541,19 +453,11 @@ function NewTransferPage() {
                                   </Tooltip>
                                 )}
                               </div>
-                              <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                                <span className={`font-medium ${TYPE_COLORS[line.itemType].text}`}>
-                                  {ITEM_TYPE_LABELS[line.itemType]}
-                                </span>
-                                {mode === "send" && (
-                                  <>
-                                    <span className="text-muted-foreground/50">·</span>
-                                    <span>
-                                      {sourceLabel} stock: <span className="tabular-nums">{line.sourceStock}</span> {unitLabel(line.unit)}
-                                    </span>
-                                  </>
-                                )}
-                              </p>
+                              {mode === "send" && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  {sourceLabel} stock: <span className="tabular-nums">{line.sourceStock}</span> {unitLabel(line.unit)}
+                                </p>
+                              )}
                             </div>
                             <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-[var(--status-bad)]" onClick={() => removeFromCart(line.itemType, line.itemId)}>
                               <Trash2 className="h-3.5 w-3.5" />

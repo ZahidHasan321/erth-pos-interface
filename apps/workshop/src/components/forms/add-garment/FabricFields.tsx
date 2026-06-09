@@ -64,7 +64,7 @@ export function FabricFields() {
                   <SelectContent>
                     {fabrics.map((f) => (
                       <SelectItem key={f.id} value={String(f.id)}>
-                        {f.name}{f.color ? ` — ${f.color}` : ""}
+                        {f.name}{f.color ? ` (${f.color})` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

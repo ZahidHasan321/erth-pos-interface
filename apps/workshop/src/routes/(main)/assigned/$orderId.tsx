@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { useOrderGarments } from "@/hooks/useWorkshopGarments";
 import { useUpdateGarmentDetails } from "@/hooks/useGarmentMutations";
 import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
-import { RedoDialog } from "@/components/shared/RedoDialog";
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import {
   StageBadge,
@@ -216,7 +215,7 @@ function AssignedOrderDetailPage() {
       {!sharedPlan && plannedGarments.length > 1 && (
         <div className="mt-3 bg-[var(--status-warn-bg)] border border-transparent rounded-md px-3 py-2">
           <p className="text-sm font-medium text-[var(--status-warn)]">
-            Garments have different worker assignments — edit individually below
+            Garments have different worker assignments. Edit individually below
           </p>
         </div>
       )}
@@ -350,14 +349,14 @@ function OrderHeader({
     // garments actively being fixed in production.
     if (needsRepairAtShop.length > 0) {
       const nextAlt = Math.max(...needsRepairAtShop.map((g) => g.trip_number ?? 1));
-      return { text: `Pending return — Alt ${nextAlt}`, cls: warnCls };
+      return { text: `Pending return: Alt ${nextAlt}`, cls: warnCls };
     }
     if (
       brovas.length > 0 &&
       brovasAtShop.length === brovas.length &&
       finals.length === 0
     )
-      return { text: `At shop — Trial ${maxTrip}`, cls: warnCls };
+      return { text: `At shop: Trial ${maxTrip}`, cls: warnCls };
     if (
       waitingAcceptance.length > 0 &&
       inProd.length === 0 &&
@@ -413,7 +412,7 @@ function OrderHeader({
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-lg">#{orderId}</span>
             <span className="font-medium text-base tracking-tight">
-              {first.customer_name ?? "—"}
+              {first.customer_name ?? "-"}
             </span>
             {brands.map((b) => (
               <BrandBadge key={b} brand={b} />
@@ -552,7 +551,7 @@ function SharedPlanSection({
     );
     if (skippedCount > 0) {
       toast.info(
-        `Updated ${editableGarments.length} garment${editableGarments.length !== 1 ? "s" : ""} — ${skippedCount} in production skipped`,
+        `Updated ${editableGarments.length} garment${editableGarments.length !== 1 ? "s" : ""}, ${skippedCount} in production skipped`,
       );
     }
   };
@@ -658,7 +657,6 @@ function GarmentPlanCard({
   const canEdit = editability.canEditPlan;
 
   const [planOpen, setPlanOpen] = useState(false);
-  const [redoOpen, setRedoOpen] = useState(false);
 
   const visibleSteps = PLAN_STEPS;
 
@@ -667,13 +665,13 @@ function GarmentPlanCard({
   // state nuance). Color only when it's a true urgency cue (overdue-ish).
   const contextMessage = (() => {
     const altN = getAlterationNumber(tripNum);
-    const altPrefix = altN !== null ? `Alt ${altN} — ` : "";
+    const altPrefix = altN !== null ? `Alt ${altN}: ` : "";
     if (garment.piece_stage === "discarded")
       return { text: "Discarded (redo)", cls: "text-[var(--status-bad)]" };
     if (garment.piece_stage === "completed")
       return { text: "Completed", cls: "text-muted-foreground" };
     if (garment.piece_stage === "ready_for_dispatch")
-      return { text: `${altPrefix}Production complete — ready for dispatch`, cls: "text-[var(--status-ok)]" };
+      return { text: `${altPrefix}Production complete, ready for dispatch`, cls: "text-[var(--status-ok)]" };
     if (garment.location === "transit_to_shop")
       return { text: `${altPrefix}In transit to shop`, cls: "text-muted-foreground" };
     if (garment.location === "transit_to_workshop")
@@ -684,7 +682,7 @@ function GarmentPlanCard({
     }
     if (garment.piece_stage === "awaiting_trial" && garment.location === "shop")
       return {
-        text: altN !== null ? `At shop — Alt ${altN} trial` : "At shop — awaiting trial",
+        text: altN !== null ? `At shop: Alt ${altN} trial` : "At shop: awaiting trial",
         cls: "text-[var(--status-warn)]",
       };
     if (garment.piece_stage === "ready_for_pickup")
@@ -692,15 +690,15 @@ function GarmentPlanCard({
     if (isAtShopPostProduction) return null;
     if (garment.piece_stage === "waiting_for_acceptance") {
       if (anyBrovaAccepted)
-        return { text: "Customer approved — ready to release finals", cls: "text-[var(--status-ok)]" };
-      return { text: "Parked — awaiting brova acceptance", cls: "text-muted-foreground" };
+        return { text: "Customer approved, ready to release finals", cls: "text-[var(--status-ok)]" };
+      return { text: "Parked: awaiting brova acceptance", cls: "text-muted-foreground" };
     }
     if (garment.location === "workshop" && hasStarted)
       return { text: `${altPrefix}In production`, cls: "text-muted-foreground" };
     if (garment.location === "workshop" && !hasStarted && garment.in_production)
-      return { text: `${altPrefix}Scheduled — waiting to start`, cls: "text-muted-foreground" };
+      return { text: `${altPrefix}Scheduled, waiting to start`, cls: "text-muted-foreground" };
     if (garment.location === "workshop" && !hasStarted && !garment.in_production)
-      return { text: `${altPrefix}Received — not yet started`, cls: "text-muted-foreground" };
+      return { text: `${altPrefix}Received, not yet started`, cls: "text-muted-foreground" };
     return null;
   })();
 
@@ -824,16 +822,7 @@ function GarmentPlanCard({
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs font-medium text-muted-foreground whitespace-nowrap">
                 Replacement created
               </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setRedoOpen(true)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--status-bad)] text-white text-sm font-medium whitespace-nowrap cursor-pointer"
-              >
-                Create replacement
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )
+            ) : null
           ) : canEdit ? (
             <button
               onClick={() => setPlanOpen(true)}
@@ -1074,7 +1063,7 @@ function GarmentPlanCard({
           feedbackNotes={garment.notes}
           garmentId={garment.id}
           tripHistory={garment.trip_history as TripHistoryEntry[] | string | null | undefined}
-          title={`Edit Plan — ${garment.garment_id}`}
+          title={`Edit Plan: ${garment.garment_id}`}
           lockedSteps={editability.lockedPlanSteps}
         />
       )}
@@ -1092,7 +1081,7 @@ function GarmentPlanCard({
               string
             > | null
           }
-          title={`Edit Plan — ${garment.garment_id}`}
+          title={`Edit Plan: ${garment.garment_id}`}
           confirmLabel="Save Changes"
           showDeliveryDate
           defaultDeliveryDate={
@@ -1100,9 +1089,6 @@ function GarmentPlanCard({
           }
           lockedSteps={editability.lockedPlanSteps}
         />
-      )}
-      {isDiscarded && !replacedByGarmentId && (
-        <RedoDialog open={redoOpen} onClose={() => setRedoOpen(false)} garmentId={garment.id} />
       )}
     </div>
   );

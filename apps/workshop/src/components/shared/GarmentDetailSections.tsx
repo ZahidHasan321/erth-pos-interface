@@ -1,6 +1,7 @@
 import { ProductionPipeline } from "@/components/shared/ProductionPipeline";
 import { MeasurementGrid } from "@/components/shared/MeasurementGrid";
 import { MeasurementValue } from "@/components/shared/MeasurementValue";
+import { ShoulderSlopeDisplay } from "@repo/ui/shoulder-slope";
 import { getMeasurementCorrections } from "@/lib/qc-corrections";
 import { StageBadge, AlterationBadge, ExpressBadge, QcFixBadge } from "@/components/shared/StageBadge";
 import { PIECE_STAGE_LABELS, PRODUCTION_STAGES } from "@/lib/constants";
@@ -43,9 +44,9 @@ const SATISFACTION_LEVELS: Record<number, string> = {
 const FEEDBACK_ACTION_STYLE: Record<string, { label: string; cls: string }> = {
   accepted:              { label: "Accepted",          cls: "bg-muted text-foreground" },
   needs_repair_accepted: { label: "Accepted with fix", cls: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]" },
-  needs_repair_rejected: { label: "Rejected — repair", cls: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]" },
+  needs_repair_rejected: { label: "Rejected: repair", cls: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]" },
   needs_repair:          { label: "Needs repair",      cls: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]" },
-  needs_redo:            { label: "Rejected — redo",   cls: "bg-[var(--status-bad-bg)] text-[var(--status-bad)]" },
+  needs_redo:            { label: "Rejected: redo",   cls: "bg-[var(--status-bad-bg)] text-[var(--status-bad)]" },
   collected:             { label: "Collected",         cls: "bg-muted text-foreground" },
   delivered:             { label: "Delivered",         cls: "bg-muted text-foreground" },
 };
@@ -72,11 +73,17 @@ const STYLE_FIELDS: { key: string; label: string; type: "text" | "boolean"; thic
   { key: "front_pocket_type", label: "Front pocket", type: "text", thicknessKey: "front_pocket_thickness" },
   { key: "wallet_pocket", label: "Wallet pocket", type: "boolean" },
   { key: "pen_holder", label: "Pen holder", type: "boolean" },
+  { key: "mobile_pocket", label: "Mobile pocket", type: "boolean" },
   { key: "small_tabaggi", label: "Small tabaggi", type: "boolean" },
   { key: "jabzour_1", label: "Jabzour 1", type: "text", thicknessKey: "jabzour_thickness" },
   { key: "jabzour_2", label: "Jabzour 2", type: "text" },
   { key: "lines", label: "Lines", type: "text" },
 ];
+
+/** §2.11 toggle fields — always shown with an explicit answer. */
+const TOGGLE_SPEC_KEYS = new Set([
+  "wallet_pocket", "pen_holder", "mobile_pocket", "small_tabaggi", "collar_position",
+]);
 
 export const HISTORY_KEY_MAP: Record<string, string> = {
   soaking: "soaker",
@@ -269,7 +276,10 @@ export function StyleSection({
   embedded?: boolean;
 }) {
   const g = garment as unknown as Record<string, unknown>;
+  // §2.11 toggles always show their explicit answer (Yes/No, or the collar
+  // position), so a "No" / "Standard" reads as a real spec, not an omission.
   const specs = STYLE_FIELDS.filter((f) => {
+    if (TOGGLE_SPEC_KEYS.has(f.key)) return true;
     const val = g[f.key];
     if (f.type === "boolean") return val === true;
     return val != null && val !== "";
@@ -290,12 +300,12 @@ export function StyleSection({
       {!embedded && <SectionTitle>Style & fabric</SectionTitle>}
 
       <div className="space-y-0">
-        <SpecRow label="Style" value={garment.style_name ?? garment.style ?? "—"} valueClass="capitalize" />
+        <SpecRow label="Style" value={garment.style_name ?? garment.style ?? "-"} valueClass="capitalize" />
         <SpecRow
           label="Fabric"
           value={
             <>
-              {garment.fabric_name ?? "—"}
+              {garment.fabric_name ?? "-"}
               {garment.fabric_color && (
                 <span className="text-muted-foreground ml-1">({garment.fabric_color})</span>
               )}
@@ -317,10 +327,20 @@ export function StyleSection({
           const thicknessStr = typeof thickness === "string" ? thickness : null;
           const thicknessLabel = thicknessStr ? THICKNESS_LABELS[thicknessStr] ?? thicknessStr : null;
           const isBool = field.type === "boolean";
-          const boolIcon = isBool && field.key === "wallet_pocket" ? ACCESSORY_ICONS.wallet
-            : isBool && field.key === "pen_holder" ? ACCESSORY_ICONS.pen
-            : isBool && field.key === "small_tabaggi" ? ACCESSORY_ICONS.smallTabaggi
+          const isOn = isBool && g[field.key] === true;
+          // §2.11 — collar position reads Up / Down / Standard (Standard = the
+          // absence of up/down). Booleans read explicit Yes / No.
+          const isCollarPos = field.key === "collar_position";
+          const collarLabel = g.collar_position === "up" ? "Up"
+            : g.collar_position === "down" ? "Down" : "Standard";
+          const boolIcon = isOn && field.key === "wallet_pocket" ? ACCESSORY_ICONS.wallet
+            : isOn && field.key === "pen_holder" ? ACCESSORY_ICONS.pen
+            : isOn && field.key === "mobile_pocket" ? ACCESSORY_ICONS.phone
+            : isOn && field.key === "small_tabaggi" ? ACCESSORY_ICONS.smallTabaggi
             : null;
+          const displayText = isBool ? (isOn ? "Yes" : "No")
+            : isCollarPos ? collarLabel
+            : (mapped?.label ?? lookupKey);
 
           return (
             <SpecRow
@@ -333,7 +353,7 @@ export function StyleSection({
                   ) : boolIcon ? (
                     <img src={boolIcon} alt={field.label} className="h-7 w-7 object-contain" />
                   ) : null}
-                  <span>{isBool ? "Yes" : (mapped?.label ?? lookupKey)}</span>
+                  <span className={cn(isBool && !isOn && "text-muted-foreground")}>{displayText}</span>
                   {thicknessLabel && (
                     <span className="text-xs font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-md">
                       {thicknessLabel}
@@ -433,7 +453,7 @@ export function WorkerHistorySection({
               </div>
 
               <span className="text-base text-right">
-                {actual ? actual : planned ? <span className="text-muted-foreground">{planned}</span> : <span className="text-muted-foreground/50">—</span>}
+                {actual ? actual : planned ? <span className="text-muted-foreground">{planned}</span> : <span className="text-muted-foreground/50">-</span>}
               </span>
             </div>
           );
@@ -498,7 +518,16 @@ interface OptionsChecklistRow {
   hashwa_rejected?: boolean | null;
   hashwa_new_value?: string | null;
   notes?: string | null;
+  // Per-style attachments — links saved beside this option in the feedback JSONB
+  // so the workshop sees photos/voice notes next to the exact style they describe.
+  photo_urls?: string[] | null;
+  voice_note_urls?: string[] | null;
 }
+
+const rowPhotoLinks = (o: OptionsChecklistRow): string[] =>
+  Array.isArray(o.photo_urls) ? o.photo_urls.filter((v): v is string => typeof v === "string") : [];
+const rowVoiceLinks = (o: OptionsChecklistRow): string[] =>
+  Array.isArray(o.voice_note_urls) ? o.voice_note_urls.filter((v): v is string => typeof v === "string") : [];
 
 const OPTION_NAME_LABELS: Record<string, string> = {
   collar: "Collar",
@@ -512,7 +541,7 @@ const OPTION_NAME_LABELS: Record<string, string> = {
 function StyleOptionValue({ styleKey, fallback }: { styleKey: string | null | undefined; fallback?: string }) {
   const key = String(styleKey ?? "");
   const mapped = key ? STYLE_IMAGE_MAP[key] : null;
-  const label = mapped?.label ?? key ?? fallback ?? "—";
+  const label = mapped?.label ?? key ?? fallback ?? "-";
   return (
     <span className="inline-flex items-center gap-1.5">
       {mapped?.image ? (
@@ -525,6 +554,37 @@ function StyleOptionValue({ styleKey, fallback }: { styleKey: string | null | un
       ) : null}
       <span>{label}</span>
     </span>
+  );
+}
+
+function StyleAttachments({ photos, voices }: { photos: string[]; voices: string[] }) {
+  if (photos.length === 0 && voices.length === 0) return null;
+  return (
+    <div className="pl-5 space-y-1.5">
+      {photos.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {photos.map((src, i) => (
+            <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block">
+              <img
+                src={src}
+                alt={`Attachment ${i + 1}`}
+                className="h-14 w-14 object-cover rounded-md border border-border hover:opacity-80 transition-opacity"
+              />
+            </a>
+          ))}
+        </div>
+      )}
+      {voices.length > 0 && (
+        <div className="space-y-1">
+          {voices.map((src, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Mic className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <audio controls src={src} className="w-full max-w-xs h-8" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -552,7 +612,25 @@ export function CustomerFeedbackPanel({
   const failedOptions = checklist.filter(
     (c) => c.rejected === true || c.hashwa_rejected === true,
   );
-  const mediaCount = photos.length + voices.length + (fb.customer_signature ? 1 : 0);
+  // Styles the customer attached media to but did not reject — surface their
+  // photos/voice notes too so a reference filed against an approved style isn't lost.
+  const mediaOnlyOptions = checklist.filter(
+    (c) =>
+      c.rejected !== true &&
+      c.hashwa_rejected !== true &&
+      (rowPhotoLinks(c).length > 0 || rowVoiceLinks(c).length > 0),
+  );
+  // The flat top-level photo_urls/voice_note_urls is an aggregate that already
+  // includes every per-style link; show only what ISN'T tied to a style (legacy /
+  // unfiled media) in the flat Media toggle so nothing duplicates the per-style view.
+  const perStyleUrls = new Set<string>();
+  for (const c of checklist) {
+    for (const u of rowPhotoLinks(c)) perStyleUrls.add(u);
+    for (const u of rowVoiceLinks(c)) perStyleUrls.add(u);
+  }
+  const unfiledPhotos = photos.filter((u) => !perStyleUrls.has(u));
+  const unfiledVoices = voices.filter((u) => !perStyleUrls.has(u));
+  const mediaCount = unfiledPhotos.length + unfiledVoices.length + (fb.customer_signature ? 1 : 0);
 
   return (
     <div className={cn("space-y-3", !compact && "border-t border-border pt-3")}>
@@ -631,17 +709,19 @@ export function CustomerFeedbackPanel({
                 {diffs.map((d, i) => {
                   const reasonKey = (d.reason ?? "").toLowerCase().replace(/\s+/g, "_");
                   const reasonCls = DIFF_REASON_STYLE[reasonKey] ?? "bg-muted text-muted-foreground";
+                  // shoulder_slope is categorical — render the shape, not a number.
+                  const isSlope = d.field === "shoulder_slope";
                   return (
                     <tr key={i} className="border-t border-border">
-                      <td className="px-2 py-1.5 capitalize">{(d.field ?? "—").replace(/_/g, " ")}</td>
+                      <td className="px-2 py-1.5 capitalize">{(d.field ?? "-").replace(/_/g, " ")}</td>
                       <td className="px-2 py-1.5 tabular-nums text-muted-foreground">
-                        <MeasurementValue raw={d.original_value} />
+                        {isSlope ? <ShoulderSlopeDisplay value={d.original_value as string | null} /> : <MeasurementValue raw={d.original_value} />}
                       </td>
                       <td className="px-2 py-1.5 tabular-nums">
-                        <MeasurementValue raw={d.actual_value} />
+                        {isSlope ? <ShoulderSlopeDisplay value={d.actual_value as string | null} /> : <MeasurementValue raw={d.actual_value} />}
                       </td>
                       <td className="px-2 py-1.5 tabular-nums">
-                        <MeasurementValue raw={d.difference} />
+                        {isSlope ? <span className="text-muted-foreground">-</span> : <MeasurementValue raw={d.difference} />}
                       </td>
                       <td className="px-2 py-1.5">
                         {d.reason && (
@@ -684,8 +764,8 @@ export function CustomerFeedbackPanel({
               };
               const toggleText = (v: string | null | undefined) => {
                 const t = toggleLabels[rawName];
-                if (!t) return v ?? "—";
-                return v === "Yes" ? t.yes : v === "No" ? t.no : (v ?? "—");
+                if (!t) return v ?? "-";
+                return v === "Yes" ? t.yes : v === "No" ? t.no : (v ?? "-");
               };
               const flippedFromExpected = (v: string | null | undefined) =>
                 v === "Yes" ? "No" : v === "No" ? "Yes" : null;
@@ -734,6 +814,33 @@ export function CustomerFeedbackPanel({
                   {o.notes && (
                     <p className="pl-5 italic text-muted-foreground">{o.notes}</p>
                   )}
+                  <StyleAttachments photos={rowPhotoLinks(o)} voices={rowVoiceLinks(o)} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {mediaOnlyOptions.length > 0 && (
+        <div className="space-y-1.5">
+          <SectionTitle count={mediaOnlyOptions.length}>
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <ImageIcon className="w-3.5 h-3.5" />
+              Customer attachments by style
+            </span>
+          </SectionTitle>
+          <div className="space-y-2">
+            {mediaOnlyOptions.map((o, i) => {
+              const rawName = o.option_name ?? "";
+              const label = OPTION_NAME_LABELS[rawName] ?? rawName.replace(/_/g, " ");
+              return (
+                <div key={i} className="text-sm bg-muted/30 rounded-md p-2.5 space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <ImageIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                    <span>{label}</span>
+                  </div>
+                  <StyleAttachments photos={rowPhotoLinks(o)} voices={rowVoiceLinks(o)} />
                 </div>
               );
             })}
@@ -742,10 +849,10 @@ export function CustomerFeedbackPanel({
       )}
 
       {mediaCount > 0 && (
-        <FeedbackMediaToggle photos={photos} voices={voices} signature={fb.customer_signature ?? null} />
+        <FeedbackMediaToggle photos={unfiledPhotos} voices={unfiledVoices} signature={fb.customer_signature ?? null} />
       )}
 
-      {!fb.notes && diffs.length === 0 && failedOptions.length === 0 && mediaCount === 0 && (
+      {!fb.notes && diffs.length === 0 && failedOptions.length === 0 && mediaOnlyOptions.length === 0 && mediaCount === 0 && (
         <p className="text-sm italic text-muted-foreground">
           {compact ? "No changes requested." : "No additional notes recorded."}
         </p>
@@ -894,7 +1001,7 @@ function qcOptionLabel(key: string): string {
 }
 
 function formatOptionValue(key: string, value: unknown): string {
-  if (value == null || value === "") return "—";
+  if (value == null || value === "") return "-";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   const thickness = key.endsWith("_thickness");
   if (thickness && typeof value === "string") return THICKNESS_LABELS[value] ?? value;
@@ -1155,7 +1262,7 @@ function TripCycleBody({
       ? <span className="text-muted-foreground italic">not started</span>
       : lastQc.result === "pass"
         ? <>Passed{lastQc.inspector && <span className="text-muted-foreground"> by {lastQc.inspector}</span>}</>
-        : <>Failed{failedCount > 1 && <span className="text-muted-foreground"> × {failedCount}</span>}{lastQc.fail_reason && <span className="text-muted-foreground"> — {lastQc.fail_reason}</span>}</>;
+        : <>Failed{failedCount > 1 && <span className="text-muted-foreground"> × {failedCount}</span>}{lastQc.fail_reason && <span className="text-muted-foreground">: {lastQc.fail_reason}</span>}</>;
 
   const qcBadge = !lastQc ? null : (
     <span className={cn(

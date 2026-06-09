@@ -56,7 +56,7 @@ function Field({ label, value, mono }: { label: string; value: string | null | u
         has ? "text-foreground" : "text-muted-foreground/60",
         mono && has && "font-mono",
       )}>
-        {has ? value : "—"}
+        {has ? value : "-"}
       </span>
     </div>
   );
@@ -279,15 +279,15 @@ function UserDetailPage() {
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                         <span className="text-muted-foreground">Unit</span>
                         <span className={cn(unitName ? "text-foreground" : "text-muted-foreground/60")}>
-                          {unitName ?? "—"}
+                          {unitName ?? "-"}
                         </span>
                         <span className="text-muted-foreground">Daily target</span>
                         <span className={cn("tabular-nums", r.daily_target ? "text-foreground" : "text-muted-foreground/60")}>
-                          {r.daily_target ?? "—"}
+                          {r.daily_target ?? "-"}
                         </span>
                         <span className="text-muted-foreground">Rating</span>
                         <span className={cn("tabular-nums", r.rating != null ? "text-foreground" : "text-muted-foreground/60")}>
-                          {r.rating ?? "—"}
+                          {r.rating ?? "-"}
                         </span>
                       </div>
                     </div>
@@ -325,7 +325,7 @@ function UserDetailPage() {
               Delete user permanently?
             </DialogTitle>
             <DialogDescription className="text-sm">
-              <span className="font-medium text-foreground">{user.name}</span> and their login will be removed for good. This cannot be undone. If they have any order or production history, the delete will be blocked — deactivate them instead.
+              <span className="font-medium text-foreground">{user.name}</span> and their login will be removed for good. This cannot be undone. If they have any order or production history, the delete will be blocked. Deactivate them instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">

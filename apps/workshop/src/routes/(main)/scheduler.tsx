@@ -1,13 +1,12 @@
 import React, { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useSchedulerGarments, useBrovaPlans, useWorkshopWorkload, useParkedRedos } from "@/hooks/useWorkshopGarments";
+import { useSchedulerGarments, useBrovaPlans, useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
 import { useScheduleGarments } from "@/hooks/useGarmentMutations";
 import { useResources } from "@/hooks/useResources";
 import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import { BrandBadge, ExpressBadge } from "@/components/shared/StageBadge";
 import { StatusPill, type PillColor } from "@/components/shared/StatusPill";
-import { ParkedRedosTable, useResumeRedo } from "@/components/shared/ParkedRedosTable";
 import {
   PageHeader, LoadingSkeleton, GarmentTypeBadge,
 } from "@/components/shared/PageShell";
@@ -24,9 +23,7 @@ import {
   Clock, Package, Home, User, RotateCcw,
   Calendar, BarChart3, Droplets, Zap, Loader2,
   Scissors, Ruler, Shirt, Sparkles, Flame, ShieldCheck,
-  AlertOctagon, ParkingSquare,
 } from "lucide-react";
-import { getRedoPriorityLabel } from "@/lib/root-causes";
 import { getAlterationNumber } from "@repo/database";
 import type { WorkshopGarment, TripHistoryEntry } from "@repo/database";
 import type { LucideIcon } from "lucide-react";
@@ -181,11 +178,6 @@ function SchedulerSectionTable({
                     <span className="font-mono text-base">{g.garment_id ?? g.id.slice(0, 8)}</span>
                     <div className="flex items-center gap-1 flex-wrap">
                       {!hideExpress && g.express && <ExpressBadge />}
-                      {g.redo_priority && (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-bad)] bg-[var(--status-bad-bg)] px-2 py-0.5 rounded-md">
-                          <RotateCcw className="w-3 h-3" /> Redo · {getRedoPriorityLabel(g.redo_priority)}
-                        </span>
-                      )}
                       {g.soaking && (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-info)] bg-[var(--status-info-bg)] px-2 py-0.5 rounded-md">
                           <Droplets className="w-3 h-3" /> Soak
@@ -209,13 +201,13 @@ function SchedulerSectionTable({
                         Alt {altNum}
                       </Badge>
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">-</span>
                     )}
                   </TableCell>
                 )}
                 <TableCell className="px-3 py-3 text-sm">
                   <div className="flex flex-col gap-0.5 max-w-[180px]">
-                    <span className="text-base tracking-tight truncate" title={g.customer_name ?? undefined}>{g.customer_name ?? "—"}</span>
+                    <span className="text-base tracking-tight truncate" title={g.customer_name ?? undefined}>{g.customer_name ?? "-"}</span>
                     {g.customer_mobile && (
                       <span className="text-sm font-mono text-muted-foreground">{g.customer_mobile}</span>
                     )}
@@ -231,7 +223,7 @@ function SchedulerSectionTable({
                 </TableCell>
                 {showFeedback && (
                   <TableCell className="px-3 py-3">
-                    {fb ? <StatusPill color={fb.color}>{fb.label}</StatusPill> : <span className="text-sm text-muted-foreground">—</span>}
+                    {fb ? <StatusPill color={fb.color}>{fb.label}</StatusPill> : <span className="text-sm text-muted-foreground">-</span>}
                   </TableCell>
                 )}
                 <TableCell className="px-3 py-3">
@@ -245,7 +237,7 @@ function SchedulerSectionTable({
                         {formatDate(g.delivery_date_order)}
                       </span>
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">-</span>
                     )}
                     {g.home_delivery && (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
@@ -475,9 +467,6 @@ function WorkloadSummary({
 
 function SchedulerPage() {
   const { data: schedulable = [], isLoading } = useSchedulerGarments();
-  // Parked redos sit at in_production=false, so they fall outside the scheduler
-  // fetch — pulled separately for their dedicated section (CLAUDE.md §6).
-  const { data: parkedRedos = [] } = useParkedRedos();
   // Workload payload: only rows with assigned_date / production_plan / today's
   // completion. Replaces the old useWorkshopGarments() pull which dragged
   // the entire workshop list (joins, measurements, etc.) just to count plans.
@@ -488,25 +477,15 @@ function SchedulerPage() {
   // Server guarantees every row is piece_stage=waiting_cut, location=workshop,
   // in_production=true, production_plan=null. So here we only split by trip /
   // garment_type / express / whether the order had a brova.
-  // High-priority redos (redo_priority='immediate') are pinned to a section at
-  // the top; pull them out of the normal slices so they don't double-render.
-  const immediateRedoGarments = useMemo(
-    () => schedulable.filter((g) => g.redo_priority === "immediate"),
-    [schedulable],
-  );
-  const normalSchedulable = useMemo(
-    () => schedulable.filter((g) => g.redo_priority !== "immediate"),
-    [schedulable],
-  );
   // Alteration-order garments (garment_type='alteration') get their own tab
   // regardless of trip — they don't share the brova/final/returns flow.
   const alterationOutGarments = useMemo(
-    () => normalSchedulable.filter((g) => g.garment_type === "alteration"),
-    [normalSchedulable],
+    () => schedulable.filter((g) => g.garment_type === "alteration"),
+    [schedulable],
   );
   const workOrderSchedulable = useMemo(
-    () => normalSchedulable.filter((g) => g.garment_type !== "alteration"),
-    [normalSchedulable],
+    () => schedulable.filter((g) => g.garment_type !== "alteration"),
+    [schedulable],
   );
   const trip1 = useMemo(
     () => workOrderSchedulable.filter((g) => (g.trip_number ?? 1) === 1),
@@ -538,6 +517,13 @@ function SchedulerPage() {
     [allReleasedFinals, brovaOrderIdSet],
   );
   const { data: brovaPlansMap = {} } = useBrovaPlans(finalOrderIdsNeedingLookup);
+
+  // Redo replacement brovas (§2.5) arrive with no own plan; the discarded original
+  // is still a brova in the order and retains its production_plan/worker_history, so
+  // we pre-fill the replacement with the SAME team. getBrovaPlansForOrders already
+  // returns only the non-empty plan, ignoring the empty replacement row.
+  const brovaOrderIds = useMemo(() => [...brovaOrderIdSet], [brovaOrderIdSet]);
+  const { data: redoBrovaPlansMap = {} } = useBrovaPlans(brovaOrderIds);
 
   // Order had a brova if one is in the scheduler now OR a stored brova plan exists.
   const hadBrova = useMemo(
@@ -593,14 +579,12 @@ function SchedulerPage() {
   }, [search]);
   const applySearch = <T extends WorkshopGarment>(arr: T[]) => searchFilter ? arr.filter(searchFilter) : arr;
 
-  const sortedImmediate = applySearch(groupByOrderSorted(immediateRedoGarments));
   const sortedExpress = applySearch(groupByOrderSorted(expressGarments));
   const sortedBrova = applySearch(groupByOrderSorted(brovaGarments));
   const sortedFinals = applySearch(groupByOrderSorted(finalsGarments));
   const sortedDirectFinals = applySearch(groupByOrderSorted(directFinalsGarments));
   const sortedReturns = applySearch(groupByOrderSorted(returnsGarments));
   const sortedAlterationOut = applySearch(groupByOrderSorted(alterationOutGarments));
-  const sortedParkedRedos = applySearch(parkedRedos);
 
   // ── Selection state ───────────────────────────────────────────────────────
   // New garments (Express + Brova + Direct Finals): no prior plan, cross-order, one shared pool
@@ -648,6 +632,13 @@ function SchedulerPage() {
     }
     for (const g of getSelectedGarments()) {
       if (g.worker_history) return { ...g.worker_history } as Record<string, string>;
+    }
+    // A redo replacement brova has no own history yet → inherit the order's
+    // existing brova plan (the discarded original's team), so the same people are
+    // pre-chosen (§2.5/§6). The planner can still change it.
+    for (const g of getSelectedGarments()) {
+      const plan = g.garment_type === "brova" ? redoBrovaPlansMap[g.order_id] : undefined;
+      if (plan && Object.keys(plan).length > 0) return { ...plan };
     }
     return null;
   };
@@ -754,16 +745,13 @@ function SchedulerPage() {
 
   const selectedDateLabel = selectedDate
     ? new Date(selectedDate + "T12:00:00+03:00").toLocaleDateString("default", { timeZone: TIMEZONE, weekday: "short", month: "short", day: "numeric" })
-    : "—";
+    : "-";
 
   const handleSchedule = async (plan: Record<string, string>, date: string, _unit?: string, reentryStage?: string) => {
     const selected = getSelectedGarments();
     await scheduleMut.mutateAsync({ ids: selected.map((g) => g.id), plan, date, reentryStage: reentryStage as any });
     clearAll();
   };
-
-  // Parked-redo resume (CLAUDE.md §6) — shared with the Decisions hub.
-  const { resumingId, resume } = useResumeRedo();
 
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-24 lg:pb-10">
@@ -815,19 +803,6 @@ function SchedulerPage() {
             <LoadingSkeleton />
           ) : (
             <>
-              {/* ── REDO — IMMEDIATE (pinned top, manager-flagged jump-queue) ── */}
-              {sortedImmediate.length > 0 && (
-                <Section title="Redo — immediate" icon={AlertOctagon} count={sortedImmediate.length}>
-                  <SchedulerSectionTable
-                    garments={sortedImmediate}
-                    selectedIds={selNew}
-                    onToggle={toggleGarment(setSelNew)}
-                    showType
-                    disabled={newDisabled}
-                  />
-                </Section>
-              )}
-
               {/* ── EXPRESS ── */}
               <Section title="Express" icon={Zap} count={sortedExpress.length} emptyLabel="No express to schedule">
                 <SchedulerSectionTable
@@ -895,17 +870,6 @@ function SchedulerPage() {
                   lockToOrder
                 />
               </Section>
-
-              {/* ── PARKED REDOS — needs manager decision (CLAUDE.md §6) ── */}
-              {sortedParkedRedos.length > 0 && (
-                <Section title="Parked redos — needs manager decision" icon={ParkingSquare} count={sortedParkedRedos.length}>
-                  <ParkedRedosTable
-                    garments={sortedParkedRedos}
-                    resumingId={resumingId}
-                    onResume={resume}
-                  />
-                </Section>
-              )}
             </>
           )}
         </div>

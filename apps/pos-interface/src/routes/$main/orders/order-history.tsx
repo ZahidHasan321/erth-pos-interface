@@ -13,10 +13,16 @@ function OrderHistoryPage() {
 
     // $main shell sends users into the full order editor (the new-X-order
     // routes double as edit views when an orderId search param is supplied).
+    // A closed WORK order is not editable, so it goes to the dedicated
+    // read-only view instead (the editor also redirects there as a safety net).
     const linkBuilder: OrderLinkBuilder = (order) => {
+        const isClosed =
+            order.checkout_status === "confirmed" || order.checkout_status === "cancelled";
         const to =
             order.order_type === "WORK"
-                ? "/$main/orders/new-work-order"
+                ? isClosed
+                    ? "/$main/orders/view-work-order"
+                    : "/$main/orders/new-work-order"
                 : order.order_type === "ALTERATION"
                     ? "/$main/orders/new-alteration-order"
                     : "/$main/orders/new-sales-order";

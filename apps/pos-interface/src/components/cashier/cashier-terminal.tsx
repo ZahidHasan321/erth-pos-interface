@@ -136,8 +136,8 @@ function OrderTableRow({ item, onSelect }: { item: CashierOrderListItem; onSelec
         completed: "bg-primary/10 text-primary",
     };
 
-    const orderDateStr = item.order_date ? shortDateFmt.format(new Date(item.order_date)) : "—";
-    const deliveryDateStr = item.delivery_date ? shortDateFmt.format(new Date(item.delivery_date)) : "—";
+    const orderDateStr = item.order_date ? shortDateFmt.format(new Date(item.order_date)) : "-";
+    const deliveryDateStr = item.delivery_date ? shortDateFmt.format(new Date(item.delivery_date)) : "-";
 
     const rowTint = isNew
         ? "bg-primary/[0.04] hover:bg-primary/[0.07]"
@@ -158,12 +158,12 @@ function OrderTableRow({ item, onSelect }: { item: CashierOrderListItem; onSelec
             </TableCell>
             <TableCell className="py-2.5">
                 <div className="font-medium text-sm truncate leading-tight">{item.customer_name || "Unknown"}</div>
-                <div className="text-[11px] text-muted-foreground truncate leading-tight">{item.customer_phone || "—"}</div>
+                <div className="text-[11px] text-muted-foreground truncate leading-tight">{item.customer_phone || "-"}</div>
             </TableCell>
             <TableCell className="py-2.5 text-xs text-muted-foreground tabular-nums whitespace-nowrap">{orderDateStr}</TableCell>
             <TableCell className="py-2.5 text-xs tabular-nums whitespace-nowrap">
-                {deliveryDateStr === "—" ? (
-                    <span className="text-muted-foreground">—</span>
+                {deliveryDateStr === "-" ? (
+                    <span className="text-muted-foreground">-</span>
                 ) : (
                     <span className="font-semibold">{deliveryDateStr}</span>
                 )}
@@ -365,7 +365,7 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <span className="font-semibold text-xs tabular-nums">#{o.id}</span>
-                                                <span className="text-xs truncate text-muted-foreground">{o.customer_name || "—"}</span>
+                                                <span className="text-xs truncate text-muted-foreground">{o.customer_name || "-"}</span>
                                             </div>
                                             <span className="font-semibold text-xs text-destructive tabular-nums shrink-0">{fmtK(due)}</span>
                                         </div>

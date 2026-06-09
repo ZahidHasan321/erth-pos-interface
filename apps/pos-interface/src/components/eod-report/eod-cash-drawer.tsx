@@ -86,7 +86,7 @@ export function EodCashDrawer({ date, report }: EodCashDrawerProps) {
                 <Row label="Expected Cash" value={fmtK(expectedCash)} emphasize />
                 <Row
                     label="Counted Cash"
-                    value={session.closing_counted_cash !== null ? fmtK(Number(session.closing_counted_cash)) : "—"}
+                    value={session.closing_counted_cash !== null ? fmtK(Number(session.closing_counted_cash)) : "-"}
                     emphasize
                 />
                 <VarianceRow variance={variance} closed={closed} />
@@ -108,7 +108,7 @@ export function EodCashDrawer({ date, report }: EodCashDrawerProps) {
 
             {closed && (
                 <div className="mt-4 pt-3 border-t border-border text-xs text-muted-foreground">
-                    Closed by {session.closed_by_name ?? "—"} at {session.closed_at ? fmtTime(session.closed_at) : "—"}
+                    Closed by {session.closed_by_name ?? "-"} at {session.closed_at ? fmtTime(session.closed_at) : "-"}
                     {session.closing_notes && <span className="ml-2">· {session.closing_notes}</span>}
                 </div>
             )}
@@ -132,7 +132,7 @@ function VarianceRow({ variance, closed }: { variance: number | null; closed: bo
         return (
             <div>
                 <p className="text-xs text-muted-foreground mb-1">Variance</p>
-                <p className="text-lg font-semibold text-muted-foreground tabular-nums">—</p>
+                <p className="text-lg font-semibold text-muted-foreground tabular-nums">-</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Pending close</p>
             </div>
         );

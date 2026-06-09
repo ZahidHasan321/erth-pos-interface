@@ -20,7 +20,7 @@ import type { Matcher } from "react-day-picker";
 export const Route = createFileRoute("/(main)/terminals/$stage/history")({
   component: TerminalHistoryPage,
   head: ({ params }) => ({
-    meta: [{ title: `${PIECE_STAGE_LABELS[params.stage as keyof typeof PIECE_STAGE_LABELS] ?? params.stage} — History` }],
+    meta: [{ title: `${PIECE_STAGE_LABELS[params.stage as keyof typeof PIECE_STAGE_LABELS] ?? params.stage}: History` }],
   }),
 });
 
@@ -100,7 +100,7 @@ function formatTime(iso: string): string {
     const d = parseUtcTimestamp(iso);
     return d.toLocaleTimeString(undefined, { timeZone: TIMEZONE, hour: "numeric", minute: "2-digit" });
   } catch {
-    return "—";
+    return "-";
   }
 }
 
@@ -192,7 +192,7 @@ function TerminalHistoryPage() {
 
       <PageHeader
         icon={History}
-        title={`${stageLabel} — History`}
+        title={`${stageLabel}: History`}
         subtitle={`${rows.length} completion${rows.length !== 1 ? "s" : ""} on ${formatDateLong(dateStr)}`}
       />
 
@@ -319,7 +319,7 @@ function TerminalHistoryPage() {
                   >
                     {showStarted && (
                       <TableCell className="px-3 py-3 font-mono text-xs tabular-nums text-muted-foreground">
-                        {r.startedAt ? formatTime(r.startedAt) : "—"}
+                        {r.startedAt ? formatTime(r.startedAt) : "-"}
                       </TableCell>
                     )}
                     <TableCell className="px-3 py-3 font-mono text-xs tabular-nums text-muted-foreground">
@@ -346,7 +346,7 @@ function TerminalHistoryPage() {
                     </TableCell>
                     <TableCell className="px-3 py-3 text-sm">
                       <div className="flex flex-col gap-0.5 max-w-[180px]">
-                        <span className="text-base tracking-tight truncate" title={g.customer_name ?? undefined}>{g.customer_name ?? "—"}</span>
+                        <span className="text-base tracking-tight truncate" title={g.customer_name ?? undefined}>{g.customer_name ?? "-"}</span>
                         {g.customer_mobile && (
                           <span className="text-xs font-mono text-muted-foreground">{g.customer_mobile}</span>
                         )}
@@ -365,14 +365,14 @@ function TerminalHistoryPage() {
                       )}
                     </TableCell>
                     <TableCell className="px-3 py-3 text-sm">
-                      <span className="truncate block max-w-[160px]">{g.style_name ?? g.style ?? "—"}</span>
+                      <span className="truncate block max-w-[160px]">{g.style_name ?? g.style ?? "-"}</span>
                     </TableCell>
                     <TableCell className="px-3 py-3">
                       <BrandBadge brand={g.order_brand} />
                     </TableCell>
                     {showWorker && (
                       <TableCell className="px-3 py-3 text-sm">
-                        {r.worker ?? <span className="text-xs text-muted-foreground italic">—</span>}
+                        {r.worker ?? <span className="text-xs text-muted-foreground italic">-</span>}
                       </TableCell>
                     )}
                     {isQc && (

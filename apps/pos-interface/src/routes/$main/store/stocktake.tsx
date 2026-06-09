@@ -158,7 +158,7 @@ function StocktakePage() {
     },
     onSuccess: (res) => {
       invalidateAfterValidate();
-      toast.success(`Stocktake validated — ${res.adjustments_applied} adjustment${res.adjustments_applied !== 1 ? "s" : ""} applied`);
+      toast.success(`Stocktake validated, ${res.adjustments_applied} adjustment${res.adjustments_applied !== 1 ? "s" : ""} applied`);
     },
     onError: (err: unknown) => toast.error(`Could not validate: ${err instanceof Error ? err.message : String(err)}`),
   });
@@ -177,7 +177,7 @@ function StocktakePage() {
   function handleValidate() {
     const m = missingReason();
     if (m) {
-      toast.error(`${m.name} has a variance — add a reason first`);
+      toast.error(`${m.name} has a variance, add a reason first`);
       return;
     }
     validateMut.mutate();
@@ -345,7 +345,7 @@ function StocktakePage() {
                             type="button"
                             onClick={() => toggleMatch(l)}
                             aria-pressed={matched}
-                            aria-label={matched ? `${l.name} matches system — tap to clear` : `Mark ${l.name} as matching system (${formatQty(l.itemType, l.system)})`}
+                            aria-label={matched ? `${l.name} matches system, tap to clear` : `Mark ${l.name} as matching system (${formatQty(l.itemType, l.system)})`}
                             className={cn(
                               "grid place-items-center h-8 w-8 rounded-md border transition-colors motion-reduce:transition-none touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                               matched
@@ -370,19 +370,19 @@ function StocktakePage() {
                             value={e.counted}
                             onChange={(ev) => setEntry(key, { counted: ev.target.value })}
                             className="h-8 text-right tabular-nums"
-                            placeholder="—"
+                            placeholder="-"
                             aria-label={`Counted quantity for ${l.name}`}
                           />
                         </TableCell>
                         <TableCell className={cn("text-right tabular-nums text-sm font-medium", variance == null || variance === 0 ? "text-muted-foreground" : variance > 0 ? "text-green-700" : "text-red-700")}>
-                          {variance == null ? "—" : `${variance > 0 ? "+" : ""}${formatQty(l.itemType, variance)}`}
+                          {variance == null ? "-" : `${variance > 0 ? "+" : ""}${formatQty(l.itemType, variance)}`}
                         </TableCell>
                         <TableCell>
                           <Input
                             value={e.reason}
                             onChange={(ev) => setEntry(key, { reason: ev.target.value })}
                             className={cn("h-8", needsReason && !e.reason.trim() && "border-red-300 focus-visible:ring-red-400")}
-                            placeholder={needsReason ? "Reason required" : "—"}
+                            placeholder={needsReason ? "Reason required" : "-"}
                             disabled={!needsReason}
                             aria-label={`Variance reason for ${l.name}`}
                             aria-required={needsReason}
@@ -397,8 +397,8 @@ function StocktakePage() {
                         {lines.length === 0
                           ? "No active stock to count."
                           : filter === "uncounted"
-                            ? "Every item has a count — nothing left to count."
-                            : "No variances — counts match the system."}
+                            ? "Every item has a count. Nothing left to count."
+                            : "No variances. Counts match the system."}
                       </TableCell>
                     </TableRow>
                   )}
@@ -430,7 +430,7 @@ function StocktakePage() {
                   params={{ main, sessionId: String(h.id) }}
                   className="flex items-center justify-between px-4 py-2 text-sm hover:bg-muted/50 transition-colors motion-reduce:transition-none"
                 >
-                  <span>{h.validated_at ? new Date(h.validated_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
+                  <span>{h.validated_at ? new Date(h.validated_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "-"}</span>
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">Validated <ChevronRight className="h-3.5 w-3.5" /></span>
                 </Link>
               </li>

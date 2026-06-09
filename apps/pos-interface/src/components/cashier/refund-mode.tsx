@@ -158,7 +158,7 @@ export function RefundMode({
                                     </button>
                                 </TooltipTrigger>
                                 <TooltipContent side="right" className="max-w-xs">
-                                    Refund mode — money moves out, not in. Pick items to refund or enter an overpayment amount.
+                                    Refund mode. Money moves out, not in. Pick items to refund or enter an overpayment amount.
                                 </TooltipContent>
                             </Tooltip>
                         </div>
@@ -235,7 +235,7 @@ export function RefundMode({
                             </div>
                             {amountError && <p className="text-xs text-red-500 mt-1">{amountError}</p>}
                             {!hasItems && overpayment > 0.001 && (
-                                <p className="text-[11px] text-muted-foreground mt-1">No items selected — refunding overpayment only.</p>
+                                <p className="text-[11px] text-muted-foreground mt-1">No items selected. Refunding overpayment only.</p>
                             )}
                         </div>
 

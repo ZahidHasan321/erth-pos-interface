@@ -365,7 +365,7 @@ export function OrderSummaryAndPaymentForm({
             </h1>
             <p className="text-sm text-muted-foreground">
               {cashierHandlesPayment
-                ? "Review your order details and confirm — payment will be handled at the cashier"
+                ? "Review your order details and confirm. Payment will be handled at the cashier"
                 : "Review your order, apply discounts, and select payment method"}
             </p>
           </div>
@@ -385,7 +385,7 @@ export function OrderSummaryAndPaymentForm({
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                   {fabricSelections.map((g, i) => {
                     const fabric = invoiceData?.fabrics?.find(f => f.id === g.fabric_id);
-                    const fabricName = fabric?.name || (g.fabric_source === "OUT" ? `External (${g.shop_name || "—"})` : `Fabric #${g.fabric_id || "—"}`);
+                    const fabricName = fabric?.name || (g.fabric_source === "OUT" ? `External (${g.shop_name || "-"})` : `Fabric #${g.fabric_id || "-"}`);
 
                     return (
                       <div key={g.garment_id || i} className="bg-card rounded-lg border border-border p-2.5 space-y-1">

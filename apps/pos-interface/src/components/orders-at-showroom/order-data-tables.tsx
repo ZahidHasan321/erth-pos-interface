@@ -41,7 +41,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-IN", {
 });
 
 function fmtDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return dateFormatter.format(parsed);
@@ -68,7 +68,7 @@ function statusBadge(row: OrderRow): { label: string; className: string } {
     case "ready_for_pickup":
       return { label: "Ready for Pickup", className: "bg-emerald-100 text-emerald-700 border-emerald-200" };
     default:
-      return { label: row.fatouraStage || "—", className: "bg-muted text-muted-foreground border-border" };
+      return { label: row.fatouraStage || "-", className: "bg-muted text-muted-foreground border-border" };
   }
 }
 

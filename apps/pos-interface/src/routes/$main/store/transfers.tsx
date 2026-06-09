@@ -32,7 +32,6 @@ function TransfersPage() {
   const [tab, setTab] = useState<TabKey>("inbox");
   const [search, setSearch] = useState("");
   const [direction, setDirection] = useState<string>("all");
-  const [itemType, setItemType] = useState<string>("all");
   const [drawer, setDrawer] = useState<TransferRequestWithItems | null>(null);
 
   const { data: transfers = [], isLoading } = useTransferRequests();
@@ -45,7 +44,6 @@ function TransfersPage() {
       if (tab === "done" && isOpen(t)) return false;
 
       if (direction !== "all" && t.direction !== direction) return false;
-      if (itemType !== "all" && t.item_type !== itemType) return false;
 
       if (q) {
         const hay = [
@@ -58,7 +56,7 @@ function TransfersPage() {
       }
       return true;
     });
-  }, [transfers, tab, direction, itemType, search, user]);
+  }, [transfers, tab, direction, search, user]);
 
   const counts = useMemo(() => ({
     inbox: transfers.filter((t) => primaryActionFor(user, t)).length,
@@ -88,7 +86,7 @@ function TransfersPage() {
       {counts.stale > 0 && tab !== "done" && (
         <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm flex items-center gap-2">
           <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
-          <span className="text-amber-900">{counts.stale} transfer{counts.stale !== 1 ? "s" : ""} stuck for over 3 days — see the In flight tab.</span>
+          <span className="text-amber-900">{counts.stale} transfer{counts.stale !== 1 ? "s" : ""} stuck for over 3 days. See the In flight tab.</span>
         </div>
       )}
 
@@ -118,15 +116,6 @@ function TransfersPage() {
               <SelectItem value="all">All directions</SelectItem>
               <SelectItem value="shop_to_workshop">Shop → Workshop</SelectItem>
               <SelectItem value="workshop_to_shop">Workshop → Shop</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={itemType} onValueChange={setItemType}>
-            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="fabric">Fabric</SelectItem>
-              <SelectItem value="shelf">Shelf</SelectItem>
-              <SelectItem value="accessory">Accessory</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -319,7 +308,7 @@ function TransferCardMobile({
 function EmptyState({ kind, mainParam }: { kind: "inbox" | "open" | "done"; mainParam: string }) {
   const messages = {
     inbox: { title: "You're all caught up", body: "Anything that needs you to send or receive will land here." },
-    open: { title: "Nothing in motion", body: "Active transfers — waiting on someone — will show up here." },
+    open: { title: "Nothing in motion", body: "Active transfers, waiting on someone, will show up here." },
     done: { title: "No history yet", body: "Completed transfers will be archived here." },
   };
   const m = messages[kind];

@@ -139,6 +139,22 @@ export type JabzourType = (typeof jabzourTypeEnum.enumValues)[number];
 export const collarPositionEnum = pgEnum("collar_position", ["up", "down"]);
 export type CollarPosition = (typeof collarPositionEnum.enumValues)[number];
 
+// Shoulder slope — a categorical body measurement (4 fixed shapes), entered as a
+// required dropdown. Lives on `measurements` next to the numeric dimensions, but
+// is modelled as an enum so it stays OUT of the numeric MEASUREMENTS_SPEC machinery
+// (the Zod decimal builder, QC tolerance compare, and INPUT_MEASUREMENT_KEYS that
+// feeds the alteration form all assume numbers). The 4 shape glyphs + the editable
+// picker live in @repo/ui (shoulder-slope.tsx) — keep these values in sync.
+export const SHOULDER_SLOPE_VALUES = ["sloped_down", "sloped_up", "straight", "peaked"] as const;
+export const shoulderSlopeEnum = pgEnum("shoulder_slope", SHOULDER_SLOPE_VALUES);
+export type ShoulderSlope = (typeof SHOULDER_SLOPE_VALUES)[number];
+export const SHOULDER_SLOPE_LABELS: Record<ShoulderSlope, string> = {
+  sloped_down: "Sloped Down",
+  sloped_up: "Sloped Up",
+  straight: "Straight",
+  peaked: "Peaked",
+};
+
 export const garmentTypeEnum = pgEnum("garment_type", ["brova", "final", "alteration"]);
 export type GarmentType = (typeof garmentTypeEnum.enumValues)[number];
 
@@ -518,6 +534,8 @@ export const measurements = pgTable("measurements", {
     collar_width: numeric("collar_width", { precision: 5, scale: 2 }),
     collar_height: numeric("collar_height", { precision: 5, scale: 2 }),
     shoulder: numeric("shoulder", { precision: 5, scale: 2 }),
+    // Categorical body measurement (enum, not numeric) — see shoulderSlopeEnum.
+    shoulder_slope: shoulderSlopeEnum("shoulder_slope"),
     chest_upper: numeric("chest_upper", { precision: 5, scale: 2 }),
     chest_full: numeric("chest_full", { precision: 5, scale: 2 }),
     sleeve_length: numeric("sleeve_length", { precision: 5, scale: 2 }),
@@ -936,12 +954,19 @@ export const garments = pgTable("garments", {
     // root_cause is set on the DISCARDED ORIGINAL (the attributed scrap); the
     // responsible party is derived in SQL (§2.9), never stored separately.
     root_cause: rootCauseEnum("root_cause"),
-    // The next three live on the REPLACEMENT row. Manager priority queue control
-    // (immediate/next_slot/parked); the parked reason; and a flag that the
-    // customer must provide replacement cloth (OUT fabric — parked customer_decision).
+    // These live on the REPLACEMENT row. redo_priority is VESTIGIAL — redo is now
+    // shop-initiated (§2.5) and the workshop redo-priority queue was dropped (§6),
+    // so it is no longer written/read (kept to avoid a destructive column drop).
+    // redo_parked_reason now marks a replacement WAITING IN SHOP DISPATCH (on the
+    // customer's cloth — customer_decision — or a restock — waiting_material), not
+    // a workshop scheduler park; redo_customer_must_provide_fabric flags OUT cloth.
     redo_priority: redoPriorityEnum("redo_priority"),
     redo_parked_reason: redoParkedReasonEnum("redo_parked_reason"),
     redo_customer_must_provide_fabric: boolean("redo_customer_must_provide_fabric").default(false).notNull(),
+    // Set when a final is promoted to a brova by an outcome-3 redo (§2.5): the
+    // chosen final becomes the new trial brova when no replacement is made. Audit
+    // marker — this brova row was originally a final.
+    promoted_to_brova_at: timestamp("promoted_to_brova_at", { withTimezone: true }),
 
     // --- Group C repeated-returns investigation (CLAUDE.md §2.10) ---
     // Auto-set server-side when quality returns (QC fails) ≥ 2 OR total returns ≥ 3.
@@ -1045,6 +1070,22 @@ export const garmentFeedback = pgTable("garment_feedback", {
     notes: text("notes"),
     difference_reasons: text("difference_reasons"),
         // JSON: summary of why measurements differ
+
+    // --- Price audit (brova-trial per-final style reprice, §2.5) ---
+    // Set on the brova's feedback row when a style change moved the order total.
+    // Audit-only: records who/why + the old→new delta. Never gates anything.
+    price_adjustment: jsonb("price_adjustment").$type<{
+        order_id: number;
+        old_order_total: number;
+        new_order_total: number;
+        delta: number;
+        old_style_charge: number;
+        new_style_charge: number;
+        per_garment: { garment_id: string; old_snapshot: number; new_snapshot: number }[];
+        actor: string | null;
+        reason: string | null;
+        applied_at: string;
+    }>(),
 
     // --- Timestamps ---
     created_at: timestamp("created_at").defaultNow(),

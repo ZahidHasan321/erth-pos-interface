@@ -4,7 +4,7 @@ import ErthLogo from "@/assets/erth-light.svg";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
-  head: () => ({ meta: [{ title: "Autolinium — Tailoring Atelier" }] }),
+  head: () => ({ meta: [{ title: "Autolinium: Tailoring Atelier" }] }),
 });
 
 function LandingPage() {

@@ -30,6 +30,9 @@ export function mapMeasurementToFormValues(
       ? new Date(measurement.measurement_date).toISOString()
       : new Date().toISOString(),
     notes: measurement.notes || "",
+    // Categorical — pass through as-is; absent legacy rows stay undefined so the
+    // required picker flags them on edit (never coerced to a number/zero).
+    shoulder_slope: measurement.shoulder_slope ?? undefined,
     ...measurementValues,
   } as CustomerMeasurementsSchema;
 }
@@ -58,6 +61,7 @@ export function mapFormValuesToMeasurement(
       ? new Date(formValues.measurement_date)
       : new Date(),
     notes: formValues.notes,
+    shoulder_slope: formValues.shoulder_slope ?? null,
     ...measurementValues,
   } as Partial<Measurement>;
 }

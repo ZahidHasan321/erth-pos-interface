@@ -197,7 +197,7 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
             {isRefund && refundItems && refundItems.length > 0 && (
                 <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-[11px] font-medium">
                     <Package className="h-3 w-3" />
-                    {refundItems.length} item{refundItems.length !== 1 ? "s" : ""} selected — {Number((refundTotal || 0).toFixed(3))} KWD
+                    {refundItems.length} item{refundItems.length !== 1 ? "s" : ""} selected · {Number((refundTotal || 0).toFixed(3))} KWD
                 </div>
             )}
 
@@ -238,7 +238,7 @@ export function PaymentForm({ orderId, remainingBalance, orderTotal, totalPaid, 
                     )}
                 </div>
                 {isRefund && (!refundItems || refundItems.length === 0) && overpayment > 0.001 && (
-                    <p className="text-[10px] text-muted-foreground">No items selected — refunding overpayment only. No garment will be flagged as refunded.</p>
+                    <p className="text-[10px] text-muted-foreground">No items selected. Refunding overpayment only. No garment will be flagged as refunded.</p>
                 )}
                 {form.formState.errors.amount && (
                     <p className="text-[10px] text-red-500">{form.formState.errors.amount.message}</p>

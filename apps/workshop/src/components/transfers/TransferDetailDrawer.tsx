@@ -110,7 +110,7 @@ export function TransferDetailDrawer({ open, onClose, transfer }: Props) {
       return;
     }
     if (dispatchOverStock) {
-      toast.error("A line exceeds available source stock — lower it before sending");
+      toast.error("A line exceeds available source stock, lower it before sending");
       return;
     }
     const payload = items.map((i) => ({ id: i.id, dispatched_qty: Number(i.qty) }));
@@ -269,9 +269,9 @@ export function TransferDetailDrawer({ open, onClose, transfer }: Props) {
                     <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
                       <QtyCell label="Requested" value={requestedQty} highlight={action === "dispatch"} />
                       {(dispatchedQty != null || action === "receive") && (
-                        <QtyCell label="Sent" value={dispatchedQty ?? "—"} highlight={action === "receive"} />
+                        <QtyCell label="Sent" value={dispatchedQty ?? "-"} highlight={action === "receive"} />
                       )}
-                      {isReceived && <QtyCell label="Received" value={it.received_qty ?? "—"} />}
+                      {isReceived && <QtyCell label="Received" value={it.received_qty ?? "-"} />}
                     </div>
 
                     {!!it.missing_qty && Number(it.missing_qty) > 0 && (

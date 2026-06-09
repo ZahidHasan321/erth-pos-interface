@@ -129,9 +129,9 @@ async function wasteAnnotation(
 async function pick(tx: Tx, id: string) {
   return only(
     await tx`
-      SELECT piece_stage, location, trip_number, in_production,
+      SELECT piece_stage, location, trip_number, in_production, garment_type,
              redo_priority, redo_parked_reason, redo_customer_must_provide_fabric,
-             root_cause, replaced_by_garment_id
+             root_cause, replaced_by_garment_id, promoted_to_brova_at
       FROM garments WHERE id = ${id}`,
     `garment ${id}`,
   ) as unknown as {
@@ -139,11 +139,13 @@ async function pick(tx: Tx, id: string) {
     location: string;
     trip_number: number;
     in_production: boolean;
+    garment_type: string;
     redo_priority: string | null;
     redo_parked_reason: string | null;
     redo_customer_must_provide_fabric: boolean;
     root_cause: string | null;
     replaced_by_garment_id: string | null;
+    promoted_to_brova_at: string | null;
   };
 }
 
@@ -353,9 +355,15 @@ describe("T3 material unavailable parks the replacement (CLAUDE.md §2.5/§6)", 
       expect(res.parked).toBe(true);
       expect(res.parked_reason).toBe("waiting_material");
       const repl = await pick(tx, res.id);
-      expect(repl.redo_priority).toBe("parked");
+      // §6: the redo-priority queue is dropped — redo_priority is vestigial (null).
+      // The dispatch wait is marked by redo_parked_reason. Shop-initiated → the
+      // replacement lands in the SHOP dispatch queue (location shop, trip 0).
+      expect(repl.redo_priority).toBeNull();
       expect(repl.redo_parked_reason).toBe("waiting_material");
       expect(repl.in_production).toBe(false);
+      expect(repl.location).toBe("shop");
+      expect(repl.trip_number).toBe(0);
+      expect(repl.piece_stage).toBe("waiting_cut");
 
       // INVARIANT (conservation): no replacement cut while parked — shop stock
       // is untouched by the create call.
@@ -418,11 +426,15 @@ describe("T4 resume_parked_redo lands the deferred cut (CLAUDE.md §6 resume-par
       // The net-zero annotation still contributes 0 signed delta.
       expect(await ledgerDelta(tx, "fabric", FABRIC_A_ID, "shop", "waste")).toBe(0);
 
-      // The replacement is now active (unparked) and schedulable.
+      // Resumed → dispatchable from the SHOP: the wait mark is cleared, the
+      // replacement stays at the shop (trip 0, in_production false; the workshop
+      // starts it after dispatch + receive).
       const repl = await pick(tx, res.id);
-      expect(repl.redo_priority).not.toBe("parked");
+      expect(repl.redo_priority).toBeNull();
       expect(repl.redo_parked_reason).toBeNull();
-      expect(repl.in_production).toBe(true);
+      expect(repl.in_production).toBe(false);
+      expect(repl.location).toBe("shop");
+      expect(repl.trip_number).toBe(0);
     });
   });
 
@@ -467,8 +479,10 @@ describe("T5 OUT-fabric redo never touches our stock (CLAUDE.md §4 customer fab
       expect(res.parked_reason).toBe("customer_decision");
       const repl = await pick(tx, res.id);
       expect(repl.redo_customer_must_provide_fabric).toBe(true);
-      expect(repl.redo_priority).toBe("parked");
+      expect(repl.redo_priority).toBeNull();
       expect(repl.redo_parked_reason).toBe("customer_decision");
+      expect(repl.location).toBe("shop");
+      expect(repl.trip_number).toBe(0);
 
       // INVARIANT (conservation): OUT cloth never entered our stock — no consume,
       // and no waste annotation (we never held it to scrap). The ledger gains no
@@ -483,12 +497,102 @@ describe("T5 OUT-fabric redo never touches our stock (CLAUDE.md §4 customer fab
       expect(resume.resumed).toBe(true);
       expect(Number(resume.consumed)).toBe(0);
       const after = await pick(tx, res.id);
-      expect(after.redo_priority).not.toBe("parked");
+      expect(after.redo_priority).toBeNull();
       expect(after.redo_parked_reason).toBeNull();
-      expect(after.in_production).toBe(true);
+      // Dispatchable from the shop (the customer's cloth never touches our stock).
+      expect(after.in_production).toBe(false);
+      expect(after.location).toBe("shop");
+      expect(after.trip_number).toBe(0);
       // Still nothing wasted/consumed from our stock.
       expect(await ledgerCount(tx, "fabric", FABRIC_A_ID, "shop", "waste")).toBe(wasteBefore);
       expect(await ledgerCount(tx, "fabric", FABRIC_A_ID, "shop", "consumption")).toBe(consumeBefore);
+    });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// T6 — redo outcome 3: promote a parked final to brova (no replacement) (§2.5)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("T6 redo promote-a-final (SPEC §2.5 outcome 3)", () => {
+  it("discards the brova, promotes one parked final to brova (released to production), keeps the other parked, links replaced_by, and net-zero-annotates the brova's scrap — no fresh fabric consumed", async () => {
+    await inRolledBackTx(async (tx) => {
+      const { orderId, garments } = await wf.createWorkOrder(tx, [
+        { garment_type: "brova" },
+        { garment_type: "final" },
+        { garment_type: "final" },
+      ]);
+      const bId = oneId(garments, "brova");
+      const finals = idsOf(garments, "final");
+      const promoteId = finals[0]!;
+      const otherId = finals[1]!;
+
+      // Drive the brova to the shop trial; finals dispatched alongside, stay parked.
+      await wf.dispatchOrder(tx, orderId);
+      await wf.workshopReceive(tx, [bId, ...finals], { start: true });
+      await wf.runProduction(tx, [bId]);
+      await wf.submitQc(tx, bId, { pass: true });
+      await wf.workshopDispatch(tx, [bId]);
+      await wf.shopReceive(tx, [bId]);
+
+      const wasteBefore = await ledgerCount(tx, "fabric", FABRIC_A_ID, "shop", "waste");
+      const stockBefore = await fabricStock(tx, FABRIC_A_ID);
+
+      const res = await wf.promoteFinalToBrova(tx, bId, promoteId);
+      expect(res.promoted_final_id).toBe(promoteId);
+
+      // Brova discarded (terminal) and FK-linked to the promoted final (§2.8 label).
+      const brova = await pick(tx, bId);
+      expect(brova.piece_stage).toBe("discarded");
+      expect(brova.replaced_by_garment_id).toBe(promoteId);
+      expect(brova.in_production).toBe(false);
+
+      // The promoted final is now a brova, released to production, stamped for audit.
+      const promoted = await pick(tx, promoteId);
+      expect(promoted.garment_type).toBe("brova");
+      expect(promoted.piece_stage).toBe("waiting_cut");
+      expect(promoted.in_production).toBe(false);
+      expect(promoted.promoted_to_brova_at).not.toBeNull();
+
+      // The other final stays parked, untouched.
+      const other = await pick(tx, otherId);
+      expect(other.garment_type).toBe("final");
+      expect(other.piece_stage).toBe("waiting_for_acceptance");
+
+      // INVARIANT: no fresh fabric consumed (the final's cut was booked at confirmation).
+      const stockAfter = await fabricStock(tx, FABRIC_A_ID);
+      expect(Number(stockAfter.shop_stock)).toBe(Number(stockBefore.shop_stock));
+
+      // The discarded brova's own company (IN) cut is scrap-annotated net-zero (§4).
+      expect(await ledgerCount(tx, "fabric", FABRIC_A_ID, "shop", "waste")).toBe(wasteBefore + 1);
+      const ann = await wasteAnnotation(tx, FABRIC_A_ID, "shop");
+      expect(ann!.annotated_qty).toBe(L);
+      expect(ann!.qty_delta).toBe(0);
+    });
+  });
+
+  it("discard-only (no parked final to promote) discards the brova + annotates scrap, promotes nothing, leaves no replacement link", async () => {
+    await inRolledBackTx(async (tx) => {
+      const { orderId, garments } = await wf.createWorkOrder(tx, [{ garment_type: "brova" }]);
+      const bId = oneId(garments, "brova");
+      await wf.dispatchOrder(tx, orderId);
+      await wf.workshopReceive(tx, [bId], { start: true });
+      await wf.runProduction(tx, [bId]);
+      await wf.submitQc(tx, bId, { pass: true });
+      await wf.workshopDispatch(tx, [bId]);
+      await wf.shopReceive(tx, [bId]);
+
+      const wasteBefore = await ledgerCount(tx, "fabric", FABRIC_A_ID, "shop", "waste");
+
+      const res = await wf.promoteFinalToBrova(tx, bId, null);
+      expect(res.promoted_final_id).toBeNull();
+
+      const brova = await pick(tx, bId);
+      expect(brova.piece_stage).toBe("discarded");
+      expect(brova.replaced_by_garment_id).toBeNull();
+
+      // The scrap is still annotated (the discard is a fact at redo).
+      expect(await ledgerCount(tx, "fabric", FABRIC_A_ID, "shop", "waste")).toBe(wasteBefore + 1);
     });
   });
 });

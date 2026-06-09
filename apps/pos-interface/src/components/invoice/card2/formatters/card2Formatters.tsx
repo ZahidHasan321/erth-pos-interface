@@ -75,6 +75,12 @@ export const formatValue = (value: PrimitiveValue): string => {
   return normalizedValue.length > 0 ? normalizedValue : EMPTY_VALUE
 }
 
+/** Money amounts are always in Kuwaiti Dinar — prefix "KD" unless empty. */
+export const formatKd = (value: PrimitiveValue): string => {
+  const formatted = formatValue(value)
+  return formatted === EMPTY_VALUE ? formatted : `KD ${formatted}`
+}
+
 const StackedFraction = ({ numerator, denominator }: { numerator: number; denominator: number }) => (
   <span className="card2-frac">
     <span className="card2-frac__num">{numerator}</span>

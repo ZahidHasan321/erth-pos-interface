@@ -27,7 +27,10 @@ export const columns: ColumnDef<GarmentSchema>[] = [
   {
     accessorKey: "collar_type",
     header: "Collar",
-    size: 180,
+    // Collar packs five controls (two type/button selects + small-tabbagi,
+    // position and Hashwa). 180 was far too narrow, so the browser shrank the
+    // column and wrapped the labels — widen it to fit the row on one line.
+    size: 360,
     cell: StyleCells.CollarCell,
   },
   {

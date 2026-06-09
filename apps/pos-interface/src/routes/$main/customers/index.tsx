@@ -59,17 +59,17 @@ function isSameGroup(
 }
 
 function formatRelative(iso?: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   try {
     return formatDistanceToNowStrict(new Date(iso), { addSuffix: false }) + " ago";
   } catch {
-    return "—";
+    return "-";
   }
 }
 
 function formatCurrency(value: number | string | null | undefined): string {
   const n = typeof value === "string" ? Number(value) : value ?? 0;
-  if (!n || Number.isNaN(n)) return "—";
+  if (!n || Number.isNaN(n)) return "-";
   return n.toFixed(3);
 }
 
@@ -274,7 +274,7 @@ function CustomersListComponent() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <MapPin className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">
-                            {customer.area || "—"}
+                            {customer.area || "-"}
                             {customer.city ? `, ${customer.city}` : ""}
                           </span>
                         </div>
@@ -299,7 +299,7 @@ function CustomersListComponent() {
                             {formatCurrency(outstanding)}
                           </span>
                         ) : (
-                          <span className="font-mono text-xs text-muted-foreground tabular-nums">—</span>
+                          <span className="font-mono text-xs text-muted-foreground tabular-nums">-</span>
                         )}
                       </TableCell>
                       <TableCell className="py-2.5 text-right pr-3">

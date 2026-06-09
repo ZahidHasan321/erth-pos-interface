@@ -17,7 +17,7 @@ export const Route = createFileRoute("/(auth)/erth/login")({
     }
   },
   component: ErthLoginPage,
-  head: () => ({ meta: [{ title: "Erth — Sign In" }] }),
+  head: () => ({ meta: [{ title: "Erth: Sign In" }] }),
 });
 
 type ShopUser = {
@@ -324,7 +324,7 @@ function ErthLoginPage() {
                 fontSize: 12, lineHeight: 1.7, fontWeight: 400,
                 color: "oklch(1 0 0 / 0.5)", maxWidth: 200,
               }}>
-                Orders, fittings &<br />alterations — in one place.
+                Orders, fittings &<br />alterations, in one place.
               </p>
             </div>
 

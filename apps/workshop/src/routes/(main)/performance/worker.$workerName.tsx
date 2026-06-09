@@ -46,7 +46,7 @@ export const Route = createFileRoute("/(main)/performance/worker/$workerName")({
     preset: (search.preset as string) ?? "week",
   }),
   head: ({ params }) => ({
-    meta: [{ title: `${decodeURIComponent(params.workerName)} — Performance` }],
+    meta: [{ title: `${decodeURIComponent(params.workerName)}: Performance` }],
   }),
 });
 
@@ -244,7 +244,7 @@ function WorkerDetailPage() {
       {worker.unitOnly && (
         <StatusBanner tone="info" icon={Info}>
           {STAGE_LABELS[stage] ?? stage} performance is tracked at the unit level
-          {worker.unit ? <> ({worker.unit})</> : null}. Individual output is not scored — this page shows attendance and per-garment time only.
+          {worker.unit ? <> ({worker.unit})</> : null}. Individual output is not scored. This page shows attendance and per-garment time only.
         </StatusBanner>
       )}
 
@@ -290,7 +290,7 @@ function WorkerDetailPage() {
                   ))}
                 </div>
               ) : (
-                <span className="text-sm text-muted-foreground">—</span>
+                <span className="text-sm text-muted-foreground">-</span>
               )}
             </KpiCard>
           </>
@@ -390,7 +390,7 @@ function WorkerDetailPage() {
                       : TONE_TEXT.bad,
                   )}
                 >
-                  {quality.qcPassRate === null ? "—" : `${quality.qcPassRate}%`}
+                  {quality.qcPassRate === null ? "-" : `${quality.qcPassRate}%`}
                 </p>
                 <p className="text-xs text-muted-foreground">no QC fails across all trips</p>
               </div>
@@ -411,7 +411,7 @@ function WorkerDetailPage() {
                       : TONE_TEXT.bad,
                   )}
                 >
-                  {quality.defectRate === null ? "—" : `${quality.defectRate}%`}
+                  {quality.defectRate === null ? "-" : `${quality.defectRate}%`}
                 </p>
                 <p className="text-xs text-muted-foreground">QC flagged this stage for rework</p>
               </div>

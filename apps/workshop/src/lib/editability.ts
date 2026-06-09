@@ -97,7 +97,7 @@ export function getGarmentEditability(garment: WorkshopGarment): GarmentEditabil
       canStart: false,
       canComplete: false,
       lockedPlanSteps: new Set(PLAN_STEP_ORDER.map((s) => s.key)),
-      readOnlyReason: "Garment discarded — kept for history",
+      readOnlyReason: "Garment discarded, kept for history",
     };
   }
 
@@ -181,7 +181,7 @@ export function getGarmentEditability(garment: WorkshopGarment): GarmentEditabil
         canStart: false,
         canComplete: false,
         lockedPlanSteps: new Set(PLAN_STEP_ORDER.map((s) => s.key)),
-        readOnlyReason: "Production complete — ready for dispatch",
+        readOnlyReason: "Production complete, ready for dispatch",
       };
     }
 
@@ -199,7 +199,7 @@ export function getGarmentEditability(garment: WorkshopGarment): GarmentEditabil
       canComplete: hasStarted,
       lockedPlanSteps,
       readOnlyReason: hasStarted
-        ? "In production — current stage locked"
+        ? "In production, current stage locked"
         : null,
     };
   }

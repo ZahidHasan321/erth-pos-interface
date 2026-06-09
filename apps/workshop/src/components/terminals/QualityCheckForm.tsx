@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@repo/ui/dialog";
 import { Skeleton } from "@repo/ui/skeleton";
+import { ShoulderSlopeSelect, ShoulderSlopeDisplay, type ShoulderSlopeValue } from "@repo/ui/shoulder-slope";
 import { parseMeasurementParts } from "@repo/database";
 
 import { cn } from "@/lib/utils";
@@ -39,7 +40,8 @@ import {
 import {
   ImageOptionGrid,
   ThicknessPicker,
-  IconToggle,
+  YesNoToggle,
+  CollarPositionPicker,
 } from "@/components/forms/add-garment/StyleFields";
 import {
   QC_MEASUREMENTS,
@@ -53,6 +55,7 @@ import {
   normalizeExpectedJabzour,
   type QcInputs,
   type QcOptionSpec,
+  type CollarPosition,
 } from "@/lib/qc-spec";
 
 import type {
@@ -63,6 +66,25 @@ import type {
   TripHistoryEntry,
   QcAttempt,
 } from "@repo/database";
+
+/** The three pocket accessories scope as a unit: an alteration/rework that
+ *  flags any one surfaces all three, so the visually grouped "Accessories" row
+ *  never appears half-populated (the Pen-disappears bug, §2.11). */
+const QC_ACCESSORY_KEYS = ["wallet_pocket", "pen_holder", "mobile_pocket"];
+
+/** Expand a flagged-key set so hard-coupled option groups travel together:
+ *  jabzour_1 ↔ jabzour_2 (Shaab needs both), and the accessory trio. Mutates
+ *  and returns the set. */
+function coupleOptionGroups(flagged: Set<string>): Set<string> {
+  if (flagged.has("jabzour_1") || flagged.has("jabzour_2")) {
+    flagged.add("jabzour_1");
+    flagged.add("jabzour_2");
+  }
+  if (QC_ACCESSORY_KEYS.some((k) => flagged.has(k))) {
+    for (const k of QC_ACCESSORY_KEYS) flagged.add(k);
+  }
+  return flagged;
+}
 
 interface Props {
   garment: WorkshopGarment;
@@ -114,12 +136,9 @@ export function QualityCheckForm({
     if (lastFail) {
       // Core narrowing: union of last fail's failed_measurements ∪ failed_options ∪ failed_quality.
       const flagged = deriveReworkEnabledKeys(lastFail);
-      // Jabzour 1 ↔ Jabzour 2 are hard-coupled: switching jabzour_1 to JAB_SHAAB requires
-      // re-entering jabzour_2 (and vice versa). Always enable both together.
-      if (flagged.has("jabzour_1") || flagged.has("jabzour_2")) {
-        flagged.add("jabzour_1");
-        flagged.add("jabzour_2");
-      }
+      // Jabzour 1 ↔ Jabzour 2 and the accessory trio are hard-coupled — always
+      // enable each group as a whole so a re-check never shows a partial group.
+      coupleOptionGroups(flagged);
       return flagged;
     }
     // Alteration QC: only check what the shop flagged. Ratings stay always-on
@@ -134,10 +153,7 @@ export function QualityCheckForm({
           const sec = QC_OPTION_TO_SECTION[o.key];
           if (sec && alterationFilter.visibleSections.has(sec)) flagged.add(o.key);
         }
-        if (flagged.has("jabzour_1") || flagged.has("jabzour_2")) {
-          flagged.add("jabzour_1");
-          flagged.add("jabzour_2");
-        }
+        coupleOptionGroups(flagged);
       }
       for (const q of QC_QUALITY) flagged.add(q.key);
       return flagged;
@@ -279,15 +295,21 @@ export function QualityCheckForm({
   const j = normalizeExpectedJabzour(expectedOptions.jabzour_1, expectedOptions.jabzour_2);
   expectedOptions.jabzour_1 = j.jabzour_1;
   expectedOptions.jabzour_2 = j.jabzour_2;
+  // shoulder_slope lives on the measurement snapshot, not the garment record —
+  // override the garment-sourced (undefined) value with the measured spec.
+  expectedOptions.shoulder_slope = expectedMeasurements.shoulder_slope ?? null;
 
   // Option fields the garment record specifies. Marked with * in the form.
-  // Booleans only count when expected=true (false = "feature absent", not a
-  // value to verify). Built inline since QC_OPTIONS is small.
+  // §2.11 toggles always count — an explicit Yes/No (or Up/Down/Standard) is
+  // always a spec to verify, both directions. Text/number only when present.
+  // Built inline since QC_OPTIONS is small.
   const expectedOptionKeys = new Set<string>();
   for (const o of QC_OPTIONS) {
     const v = expectedOptions[o.key];
-    if (o.type === "boolean") {
-      if (Boolean(v)) expectedOptionKeys.add(o.key);
+    // shoulder_slope is a required explicit choice (like the §2.11 toggles) — the
+    // inspector always verifies it, both directions.
+    if (o.type === "boolean" || o.key === "collar_position" || o.key === "shoulder_slope") {
+      expectedOptionKeys.add(o.key);
     } else if (o.type === "number") {
       if (v != null && Number.isFinite(Number(v))) expectedOptionKeys.add(o.key);
     } else if (v != null && v !== "") {
@@ -325,13 +347,30 @@ export function QualityCheckForm({
   }
   for (const o of QC_OPTIONS) {
     if (!enabledKeys.has(o.key)) continue;
-    if (o.type === "boolean") continue; // boolean default false is valid
+    // §2.11 toggles are required once enabled — the inspector must answer Yes/No
+    // (or Up/Down/Standard); an unanswered control blocks submit. This is what
+    // forces a deliberate choice instead of a silent "off".
+    if (o.type === "boolean") {
+      if (options[o.key] == null) missing.push({ key: o.key, label: o.label });
+      continue;
+    }
+    if (o.key === "collar_position") {
+      const v = options[o.key];
+      if (v !== "up" && v !== "down" && v !== "standard") {
+        missing.push({ key: o.key, label: o.label });
+      }
+      continue;
+    }
+    // shoulder_slope is a required explicit choice — must be answered before submit.
+    if (o.key === "shoulder_slope") {
+      const v = options[o.key];
+      if (v == null || v === "") missing.push({ key: o.key, label: o.label });
+      continue;
+    }
     // jabzour_2 never gates completeness — record what's actually on the garment.
     // SHAAB-without-jabzour_2 is a valid (failing) observation when the worker
     // forgot the second style; evaluation flags the mismatch.
     if (o.key === "jabzour_2") continue;
-    // collar_position null = "Standard" — always a valid choice, never required.
-    if (o.key === "collar_position") continue;
     // If the spec expected null, operator can leave it empty — forcing a value
     // would cause a false mismatch (e.g. jabzour_1 wasn't requested at all).
     const expected = expectedOptions[o.key];
@@ -414,7 +453,7 @@ export function QualityCheckForm({
       <div className="bg-card border rounded-xl p-4 shadow-sm">
         <Skeleton className="h-8 w-40 mb-3" />
         <p className="text-sm text-muted-foreground">
-          Garment has no linked measurement snapshot — QC cannot proceed.
+          Garment has no linked measurement snapshot. QC cannot proceed.
         </p>
       </div>
     );
@@ -430,14 +469,14 @@ export function QualityCheckForm({
             {isRework && (
               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[11px] font-medium">
                 <AlertTriangle className="w-3 h-3" />
-                Rework — re-checking {enabledKeys.size} field
+                Rework: re-checking {enabledKeys.size} field
                 {enabledKeys.size === 1 ? "" : "s"}
               </span>
             )}
             {!isRework && isAlteration && (
               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 px-2 py-0.5 text-[11px] font-medium">
                 <AlertTriangle className="w-3 h-3" />
-                Alteration — checking only flagged fields
+                Alteration: checking only flagged fields
               </span>
             )}
           </h3>
@@ -468,7 +507,7 @@ export function QualityCheckForm({
 
       {/* Step 1 — Measurements (skipped entirely when alteration has none flagged) */}
       {visibleGroups.length > 0 && (
-        <SectionCard title="Step 1 — Measurements" subtitle={`Tolerance ±${QC_TOLERANCE}"`}>
+        <SectionCard title="Step 1: Measurements" subtitle={`Tolerance ±${QC_TOLERANCE}"`}>
           {visibleGroups.map((group, i) => (
             <MeasurementGrid
               key={group.title || `group-${i}`}
@@ -486,7 +525,7 @@ export function QualityCheckForm({
 
       {/* Step 2 — Options (groups with no enabled fields are hidden in alteration + QC-rework modes) */}
       {(!scopedHideOptions || QC_OPTIONS.some((o) => enabledKeys.has(o.key))) && (
-        <SectionCard title="Step 2 — Options">
+        <SectionCard title="Step 2: Options">
           <OptionGroups
             values={options}
             enabledKeys={enabledKeys}
@@ -500,7 +539,7 @@ export function QualityCheckForm({
       )}
 
       {/* Step 3 — Quality */}
-      <SectionCard title="Step 3 — Quality" subtitle={`Score 1-5 (≥${QC_QUALITY_THRESHOLD} passes)`}>
+      <SectionCard title="Step 3: Quality" subtitle={`Score 1-5 (≥${QC_QUALITY_THRESHOLD} passes)`}>
         <QualityTable
           values={quality}
           enabledKeys={enabledKeys}
@@ -517,7 +556,7 @@ export function QualityCheckForm({
         {missing.length > 0 && (
           <details className="text-xs">
             <summary className="font-medium text-red-600 cursor-pointer select-none">
-              {missing.length} field{missing.length === 1 ? "" : "s"} pending — show
+              {missing.length} field{missing.length === 1 ? "" : "s"} pending, show
             </summary>
             <p className="mt-1 text-muted-foreground leading-relaxed">
               {missing.map((m) => m.label).join(", ")}
@@ -542,7 +581,7 @@ export function QualityCheckForm({
           <DialogHeader className="px-4 pt-4 pb-3 border-b border-border">
             <DialogTitle className="text-base font-medium flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-[var(--status-bad)]" />
-              Failed QC — return to production
+              Failed QC: return to production
             </DialogTitle>
             <p className="text-sm text-muted-foreground mt-0.5">
               {garment.garment_id} · review what needs fixing, then pick which stages to send the piece back to.
@@ -706,7 +745,7 @@ function MeasurementGrid({
                   "h-10 w-full text-center text-lg font-medium tabular-nums bg-background border border-input px-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary",
                   !enabled && "bg-muted/30 text-muted-foreground",
                 )}
-                placeholder="—"
+                placeholder="-"
               />
               <div className="h-5 flex items-center justify-center mt-1 text-[11px] text-muted-foreground/70">
                 {measuredNum != null && Number.isFinite(measuredNum) ? (
@@ -769,18 +808,30 @@ function OptionGroups({
 }) {
   const text = (k: string) =>
     values[k] == null || values[k] === "" ? null : String(values[k]);
-  const bool = (k: string) => Boolean(values[k]);
+  // Tri-state read for §2.11 toggles: undefined until the inspector answers
+  // (never coerced to false), so the control shows a "not filled" state.
+  const tri = (k: string): boolean | undefined =>
+    values[k] === true ? true : values[k] === false ? false : undefined;
+  const collarVal = (): CollarPosition | undefined => {
+    const v = values.collar_position;
+    return v === "up" || v === "down" || v === "standard" ? v : undefined;
+  };
+  const slopeVal = (): ShoulderSlopeValue | undefined => {
+    const v = values.shoulder_slope;
+    return typeof v === "string" ? (v as ShoulderSlopeValue) : undefined;
+  };
   const off = (k: string) => !enabledKeys.has(k);
   const show = (k: string) => !scopedHide || enabledKeys.has(k);
   const showAny = (...keys: string[]) => keys.some(show);
   const req = (k: string) => expectedKeys.has(k);
-  // Boolean toggles get the failed indicator immediately — OFF is a real
-  // answer, not "no answer yet". Image pickers stay gated behind touch so a
+  // A toggle/picker flags failed only once evaluation says so — and evaluation
+  // never marks an UNANSWERED toggle, so an untouched control can't glow red
+  // (the point-2 auto-flag bug). Image pickers stay gated behind touch so a
   // fresh page doesn't glow red on every untouched option.
   const failed = (k: string) => {
     if (!failedKeys.has(k)) return false;
     const spec = QC_OPTIONS.find((o) => o.key === k);
-    if (spec?.type === "boolean") return true;
+    if (spec?.type === "boolean" || k === "collar_position") return true;
     return touchedKeys.has(k);
   };
 
@@ -816,8 +867,8 @@ function OptionGroups({
           )}
           {show("small_tabaggi") && (
             <div className="flex flex-wrap gap-2">
-              <IconToggle
-                checked={bool("small_tabaggi")}
+              <YesNoToggle
+                value={tri("small_tabaggi")}
                 onChange={(v) => onChange("small_tabaggi", v)}
                 icon={smallTabaggiImage}
                 label="Small Tabaggi"
@@ -828,33 +879,13 @@ function OptionGroups({
           )}
           {show("collar_position") && (
             <>
-              <SubLabel failed={failed("collar_position")}>Position</SubLabel>
-              <div className={cn("flex gap-4", off("collar_position") && "opacity-50")}>
-                {(["up", "down"] as const).map((pos) => {
-                  const selected = text("collar_position") === pos;
-                  const showFail = selected && failed("collar_position");
-                  return (
-                    <label
-                      key={pos}
-                      className={cn(
-                        "flex items-center gap-2 text-sm rounded px-1",
-                        showFail && "text-red-700 font-medium",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        disabled={off("collar_position")}
-                        checked={selected}
-                        onChange={(e) =>
-                          onChange("collar_position", e.target.checked ? pos : null)
-                        }
-                        className={cn(showFail && "accent-red-500")}
-                      />
-                      {pos.toUpperCase()}
-                    </label>
-                  );
-                })}
-              </div>
+              <SubLabel failed={failed("collar_position")} required={req("collar_position")}>Position</SubLabel>
+              <CollarPositionPicker
+                value={collarVal()}
+                onChange={(v) => onChange("collar_position", v)}
+                disabled={off("collar_position")}
+                failed={failed("collar_position")}
+              />
             </>
           )}
           {show("collar_thickness") && (
@@ -868,6 +899,18 @@ function OptionGroups({
               />
             </div>
           )}
+        </OptionGroup>
+      )}
+
+      {show("shoulder_slope") && (
+        <OptionGroup title="Shoulder slope">
+          <SubLabel failed={failed("shoulder_slope")} required={req("shoulder_slope")}>Slope</SubLabel>
+          <ShoulderSlopeSelect
+            value={slopeVal()}
+            onChange={(v) => onChange("shoulder_slope", v)}
+            disabled={off("shoulder_slope")}
+            invalid={failed("shoulder_slope")}
+          />
         </OptionGroup>
       )}
 
@@ -894,7 +937,7 @@ function OptionGroups({
                   <span className="text-red-600">*</span>
                 ) : (
                   <span className="text-amber-600">
-                    (clear — only used when Type 1 is Shaab)
+                    (clear, only used when Type 1 is Shaab)
                   </span>
                 )}
               </SubLabel>
@@ -953,8 +996,8 @@ function OptionGroups({
               <SubLabel>Accessories</SubLabel>
               <div className="flex flex-wrap gap-2">
                 {show("wallet_pocket") && (
-                  <IconToggle
-                    checked={bool("wallet_pocket")}
+                  <YesNoToggle
+                    value={tri("wallet_pocket")}
                     onChange={(v) => onChange("wallet_pocket", v)}
                     icon={walletIcon}
                     label="Wallet"
@@ -963,8 +1006,8 @@ function OptionGroups({
                   />
                 )}
                 {show("pen_holder") && (
-                  <IconToggle
-                    checked={bool("pen_holder")}
+                  <YesNoToggle
+                    value={tri("pen_holder")}
                     onChange={(v) => onChange("pen_holder", v)}
                     icon={penIcon}
                     label="Pen"
@@ -973,8 +1016,8 @@ function OptionGroups({
                   />
                 )}
                 {show("mobile_pocket") && (
-                  <IconToggle
-                    checked={bool("mobile_pocket")}
+                  <YesNoToggle
+                    value={tri("mobile_pocket")}
                     onChange={(v) => onChange("mobile_pocket", v)}
                     icon={phoneIcon}
                     label="Mobile"
@@ -1386,7 +1429,7 @@ function MeasurementValue({
   highlight?: boolean;
 }) {
   if (!Number.isFinite(value)) {
-    return <span className="text-sm text-muted-foreground italic">—</span>;
+    return <span className="text-sm text-muted-foreground italic">-</span>;
   }
   return (
     <span
@@ -1412,6 +1455,7 @@ function OptionFailRow({
 }) {
   const visual = OPTION_IMAGE_LOOKUP[spec.key];
   const boolIcon = spec.type === "boolean" ? BOOL_ICON_LOOKUP[spec.key] : undefined;
+  const isSlope = spec.key === "shoulder_slope";
   // Thickness / collar_position / lines render via richer chips so the rework
   // dialog matches the colored badges shown elsewhere (DishdashaOverlay, feedback).
   const isRichChip =
@@ -1429,6 +1473,8 @@ function OptionFailRow({
           <ImageOptionChip option={visual.find((b) => b.value === got)} highlight />
         ) : boolIcon ? (
           <BoolOptionChip on={Boolean(got)} icon={boolIcon} highlight />
+        ) : isSlope ? (
+          <ShoulderSlopeDisplay value={got as string | null} className="text-[var(--status-bad)]" />
         ) : isRichChip ? (
           <RichOptionChip spec={spec} value={got} highlight />
         ) : (
@@ -1441,6 +1487,8 @@ function OptionFailRow({
           <ImageOptionChip option={visual.find((b) => b.value === expected)} muted />
         ) : boolIcon ? (
           <BoolOptionChip on={Boolean(expected)} icon={boolIcon} muted />
+        ) : isSlope ? (
+          <ShoulderSlopeDisplay value={expected as string | null} className="text-muted-foreground" />
         ) : isRichChip ? (
           <RichOptionChip spec={spec} value={expected} muted />
         ) : (
@@ -1484,7 +1532,7 @@ function RichOptionChip({
   if (spec.key.endsWith("_thickness")) {
     const raw = value == null || value === "" ? "" : String(value).toUpperCase();
     const label =
-      value == null || value === "" ? "—" : formatOptionText(spec, value);
+      value == null || value === "" ? "-" : formatOptionText(spec, value);
     // Identity tones: thickness has distinct kinds, kept on 700-shades per CLAUDE.md
     const tone = highlight
       ? highlightTone
@@ -1517,7 +1565,7 @@ function RichOptionChip({
 
   if (spec.key === "lines") {
     const n = Number(value);
-    const label = n === 1 ? "Single" : n === 2 ? "Double" : "—";
+    const label = n === 1 ? "Single" : n === 2 ? "Double" : "-";
     const tone = highlight
       ? highlightTone
       : muted
@@ -1643,7 +1691,7 @@ function formatOptionText(spec: QcOptionSpec, val: unknown): string {
   if (spec.type === "boolean") return val ? "Yes" : "No";
   if (val == null || val === "") {
     if (spec.key === "collar_position") return "Standard";
-    return "—";
+    return "-";
   }
   if (spec.key.endsWith("_thickness")) {
     const t = thicknessOptions.find((opt) => opt.value === val);

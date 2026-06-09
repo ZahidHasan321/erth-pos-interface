@@ -62,7 +62,7 @@ const FIELD_MAP: Record<QualityTemplateFieldId, keyof Measurement> = {
 };
 
 function fmtThick(v: string | null | undefined): string {
-  if (!v) return "—";
+  if (!v) return "-";
   const n = v.trim().toUpperCase();
   if (n === "S" || n === "SINGLE") return "Single";
   if (n === "D" || n === "DOUBLE") return "Double";
@@ -172,7 +172,7 @@ function MeasureLayout({
               label={heightLabel}
               className={cn(heightBase, heightTintClass || heightDefault)}
             >
-              <span className="whitespace-nowrap">{height ?? "—"}</span>
+              <span className="whitespace-nowrap">{height ?? "-"}</span>
             </HoverValueBox>
           </div>
           {width !== undefined && (
@@ -181,7 +181,7 @@ function MeasureLayout({
                 label={widthLabel}
                 className={cn(widthBase, widthTintClass || widthDefault)}
               >
-                {width ?? "—"}
+                {width ?? "-"}
               </HoverValueBox>
             </div>
           )}
@@ -277,7 +277,7 @@ function StyleSection({
       {defects && defects.length > 0 && (
         <div className="mt-2 rounded-md border border-red-300 bg-red-50 p-1.5">
           <div className="text-[10px] font-medium text-red-700 mb-1">
-            QC defect — fix to spec
+            QC defect: fix to spec
           </div>
           <div className="flex flex-wrap gap-1">
             {defects.map((d) => (
@@ -356,7 +356,7 @@ function MeasureRow({
         "text-base font-medium tabular-nums leading-tight",
         tintClass ? "" : "text-foreground",
       )}>
-        {value ?? "—"}
+        {value ?? "-"}
       </span>
     </HoverValueBox>
   );
@@ -522,7 +522,7 @@ export function DishdashaOverlay({
                   : "bg-yellow-100/90 border border-yellow-500 text-zinc-900";
             const fieldLabel = qcLabel(key);
             const cellTitle = hasQcActual && fieldLabel
-              ? `${fieldLabel} — QC measured ${qcActual}`
+              ? `${fieldLabel}: QC measured ${qcActual}`
               : fieldLabel;
             return (
               <Tooltip key={field.id}>

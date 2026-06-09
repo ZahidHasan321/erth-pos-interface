@@ -295,7 +295,7 @@ describe("brova feedback Branch Tree (CLAUDE.md §Branch Tree table)", () => {
     });
   });
 
-  it("SPEC Reject-Redo: original discarded (terminal) · workshop creates replacement (replaces↔replaced_by)", async () => {
+  it("SPEC Reject-Redo: original discarded (terminal) · shop creates replacement at the shop (replaces↔replaced_by)", async () => {
     await inRolledBackTx(async (tx) => {
       const { orderId, bId } = await brovaAtShop(tx);
       const r = await wf.brovaFeedback(tx, orderId, bId, "needs_redo");
@@ -305,12 +305,15 @@ describe("brova feedback Branch Tree (CLAUDE.md §Branch Tree table)", () => {
       const replId = await wf.createReplacement(tx, bId);
       expect((await pick(tx, bId)).replaced_by_garment_id).toBe(replId);
       const repl = await pick(tx, replId);
+      // SPEC §2.5: shop-initiated → the replacement lands in the shop dispatch
+      // queue (location shop, trip 0), then dispatches like any fresh garment.
       expect(repl).toMatchObject({
         piece_stage: "waiting_cut",
-        location: "workshop",
-        trip_number: 1,
+        location: "shop",
+        trip_number: 0,
       });
 
+      await wf.dispatchOrder(tx, orderId);
       await wf.workshopReceive(tx, [replId], { start: true });
       await wf.runProduction(tx, [replId]);
       await wf.submitQc(tx, replId, { pass: true });
@@ -593,7 +596,7 @@ describe("final hand-over rejections (CLAUDE.md §Final Collection)", () => {
     });
   });
 
-  it("SPEC: Needs Redo on normal final → discarded; createReplacement → waiting_cut/trip 1, replaced_by set", async () => {
+  it("SPEC: Needs Redo on normal final → discarded; createReplacement → waiting_cut at shop/trip 0, replaced_by set", async () => {
     await inRolledBackTx(async (tx) => {
       const { id } = await finalAtShop(tx);
       await wf.finalReject(tx, id, "needs_redo");
@@ -604,8 +607,10 @@ describe("final hand-over rejections (CLAUDE.md §Final Collection)", () => {
       const replId = await wf.createReplacement(tx, id);
       expect((await pick(tx, id)).replaced_by_garment_id).toBe(replId);
       const repl = await pick(tx, replId);
+      // SPEC §2.5: shop-initiated → replacement created at the shop (trip 0).
       expect(repl.piece_stage).toBe("waiting_cut");
-      expect(repl.trip_number).toBe(1);
+      expect(repl.location).toBe("shop");
+      expect(repl.trip_number).toBe(0);
     });
   });
 

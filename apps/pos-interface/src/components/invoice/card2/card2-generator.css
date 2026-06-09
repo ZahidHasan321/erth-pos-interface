@@ -263,23 +263,45 @@
   line-height: 1;
 }
 
-.card2-style-matrix__tick-stack {
+.card2-style-matrix__stack-cell {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4mm;
+  justify-content: center;
+  gap: 0.5mm;
+  width: 100%;
+  line-height: 1.1;
 }
 
-.card2-style-matrix__tick-row {
+.card2-style-matrix__stack-line {
   display: inline-flex;
-  align-items: center;
-  gap: 0.6mm;
-  font-size: 7pt;
-  line-height: 1;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5mm;
+  white-space: nowrap;
 }
 
-.card2-style-matrix__tick-label {
+.card2-style-matrix__stack-tag {
+  font-size: 0.78em;
+  font-weight: 700;
+  color: #6a6a6a;
+}
+
+.card2-style-matrix__stack-name {
+  max-width: 100%;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card2-style-matrix__stack-detail {
+  max-width: 100%;
+  font-size: 0.82em;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card2-style-matrix__meta-row td {
@@ -296,14 +318,12 @@
 }
 
 .card2-style-matrix__meta-detail-list {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: flex-start;
-  flex-wrap: nowrap;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 0.2mm;
   max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
 }
 
 .card2-style-matrix__meta-chip {

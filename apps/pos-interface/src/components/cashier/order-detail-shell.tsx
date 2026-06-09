@@ -253,7 +253,7 @@ function CustomerHeaderInline({ order, isCancelled }: { order: Order; isCancelle
             <div className="min-w-0 flex flex-col leading-tight">
                 <span className="font-bold text-lg truncate">{order.customer?.name || "N/A"}</span>
                 <span className="text-xs text-muted-foreground tabular-nums truncate">
-                    {phone ? `${countryCode} ${phone}` : "—"}
+                    {phone ? `${countryCode} ${phone}` : "-"}
                 </span>
             </div>
             <span className="font-bold text-base tabular-nums shrink-0">#{order.id}</span>

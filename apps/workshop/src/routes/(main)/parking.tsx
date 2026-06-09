@@ -154,7 +154,7 @@ function ParkingGarmentRow({
       )}
       <TableCell className="px-3 py-3 text-sm">
         <div className="flex flex-col gap-0.5 max-w-[180px]">
-          <span className="text-base tracking-tight truncate" title={garment.customer_name ?? undefined}>{garment.customer_name ?? "—"}</span>
+          <span className="text-base tracking-tight truncate" title={garment.customer_name ?? undefined}>{garment.customer_name ?? "-"}</span>
           {garment.customer_mobile && (
             <span className="text-sm font-mono text-muted-foreground">
               {garment.customer_mobile}
@@ -188,7 +188,7 @@ function ParkingGarmentRow({
               {formatDate(garment.delivery_date_order)}
             </span>
           ) : (
-            <span className="text-sm text-muted-foreground">—</span>
+            <span className="text-sm text-muted-foreground">-</span>
           )}
           {garment.home_delivery && (
             <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-muted px-2 py-0.5 rounded-md">
@@ -783,7 +783,7 @@ function ParkingPage() {
                           <TableCell className="text-sm">
                             <div className="flex flex-col gap-0.5 max-w-[180px]">
                               <span className="text-base tracking-tight truncate" title={g.customer_name ?? undefined}>
-                                {g.customer_name ?? "—"}
+                                {g.customer_name ?? "-"}
                               </span>
                               {g.customer_mobile && (
                                 <span className="text-sm font-mono text-muted-foreground">
@@ -793,7 +793,7 @@ function ParkingPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {g.invoice_number ? `#${g.invoice_number}` : "—"}
+                            {g.invoice_number ? `#${g.invoice_number}` : "-"}
                           </TableCell>
                           <TableCell>
                             {(g.trip_number ?? 1) >= 2 && (
@@ -817,7 +817,7 @@ function ParkingPage() {
                                 </span>
                               ) : (
                                 <span className="text-sm text-muted-foreground">
-                                  —
+                                  -
                                 </span>
                               )}
                               {g.home_delivery && (
