@@ -152,7 +152,7 @@ export const SHOULDER_SLOPE_LABELS: Record<ShoulderSlope, string> = {
   sloped_down: "Sloped Down",
   sloped_up: "Sloped Up",
   straight: "Straight",
-  peaked: "Peaked",
+  peaked: "Normal",
 };
 
 export const garmentTypeEnum = pgEnum("garment_type", ["brova", "final", "alteration"]);
@@ -293,8 +293,8 @@ export type StyleRuleType = (typeof styleRuleTypeEnum.enumValues)[number];
 
 // --- ROOT-CAUSE TAXONOMY (shared attribution vocabulary — CLAUDE.md §2.9) ---
 // One canonical "who is responsible / why" enum shared by redo+scrap recording,
-// redo material waste, the repeated-returns investigation workflow, and
-// performance attribution (Groups A/C/D). The responsible party is DERIVED in
+// redo material waste, and performance attribution (Groups A/D). The
+// repeated-returns investigation workflow (Group C) was removed. The responsible party is DERIVED in
 // SQL (root_cause_responsible_party in triggers.sql), never stored separately.
 // Distinct from the §2.5 measurement-reason gates (the measurement-scoped view)
 // and §4 WASTE_REASONS (the physical-reason axis) — see §2.9. The DB type is
@@ -968,11 +968,10 @@ export const garments = pgTable("garments", {
     // marker — this brova row was originally a final.
     promoted_to_brova_at: timestamp("promoted_to_brova_at", { withTimezone: true }),
 
-    // --- Group C repeated-returns investigation (CLAUDE.md §2.10) ---
-    // Auto-set server-side when quality returns (QC fails) ≥ 2 OR total returns ≥ 3.
-    // Holds the garment out of production (the in_production false→true "start" is
-    // rejected while true) until a manager records an investigation. Per-garment;
-    // never cascades to order-siblings.
+    // --- Group C repeated-returns investigation: REMOVED, vestigial (CLAUDE.md §2.10) ---
+    // The auto-hold was removed: nothing sets this true and there is no writer. Kept
+    // vestigial (no destructive drop, matching redo_priority). Investigation/root-cause
+    // handling is being redesigned elsewhere.
     needs_investigation: boolean("needs_investigation").default(false).notNull(),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
@@ -980,9 +979,10 @@ export const garments = pgTable("garments", {
     replacedByUnique: uniqueIndex("garments_replaced_by_unique").on(t.replaced_by_garment_id),
 }));
 
-// --- 6.3 GARMENT INVESTIGATIONS (CLAUDE.md §2.10 repeated-returns) ---
-// One row per resolved investigation (append-only history). Written by the
-// manager-gated record_investigation RPC, which also clears the garment's hold.
+// --- 6.3 GARMENT INVESTIGATIONS: vestigial (CLAUDE.md §2.10 repeated-returns) ---
+// Vestigial — the auto-hold was removed and its record_investigation writer dropped.
+// The table is retained (no destructive drop) but has no writer. Kept so the schema
+// still types the (unused) table; safe to drop if the redesign supersedes it.
 export const garmentInvestigations = pgTable("garment_investigations", {
     id: uuid("id").defaultRandom().primaryKey(),
     garment_id: uuid("garment_id").notNull().references((): AnyPgColumn => garments.id),

@@ -14,12 +14,14 @@ import { Checkbox } from "@repo/ui/checkbox";
 import { Plus } from "lucide-react";
 
 import {
-    ALTERATION_STYLE_FIELDS,
     type AlterationGarmentSchema,
+    type AlterationGarmentSource,
     type AlterationMeasurementField,
     type AlterationStyleField,
 } from "./alteration-form.schema";
 import { AlterationMeasurementTable } from "./AlterationMeasurementTable";
+import { AlterationChangeSummary } from "./AlterationChangeSummary";
+import { OriginalSpecPanel } from "./OriginalSpecPanel";
 import { getNumberedLabel, getLabel } from "@repo/database";
 
 // Same field grouping as the customer-measurements form — kept here so the
@@ -67,17 +69,12 @@ import {
     walletIcon,
     type BaseOption,
 } from "@/components/forms/fabric-selection-and-options/constants";
-import { getMeasurementsByCustomerId } from "@/api/measurements";
 import { getCustomerGarmentsForLink, type PriorGarmentForLink } from "@/api/alteration-orders";
-import type { Measurement } from "@repo/database";
-
-const BUFI_OPTIONS = ["Brova", "Final", "External"] as const;
 
 interface AlterationGarmentFormProps {
     customerId: number | null;
     value: AlterationGarmentSchema;
     onChange: (next: AlterationGarmentSchema) => void;
-    masterMeasurement: Measurement | null;
 }
 
 type StyleVal = string | boolean | number;
@@ -86,16 +83,7 @@ export function AlterationGarmentForm({
     customerId,
     value,
     onChange,
-    masterMeasurement,
 }: AlterationGarmentFormProps) {
-    const { data: customerMeasurementsRes } = useQuery({
-        queryKey: ["measurements", customerId],
-        queryFn: () => (customerId ? getMeasurementsByCustomerId(customerId) : Promise.resolve(null)),
-        enabled: !!customerId,
-        staleTime: Infinity,
-    });
-    const measurements = customerMeasurementsRes?.data ?? [];
-
     const { data: priorGarmentsRes } = useQuery({
         queryKey: ["customer-garments-for-link", customerId],
         queryFn: () => (customerId ? getCustomerGarmentsForLink(customerId) : Promise.resolve({ status: "success" as const, data: [] })),
@@ -139,27 +127,19 @@ export function AlterationGarmentForm({
         update({ alteration_measurements: next });
     };
 
-    const linkPriorGarment = (priorGarmentId: string) => {
-        const prior = priorGarments.find((g) => g.id === priorGarmentId);
-        if (!prior) return;
-
-        const newStyles: Record<string, StyleVal> = {};
-        for (const f of ALTERATION_STYLE_FIELDS) {
-            const v = (prior as Record<string, unknown>)[f];
-            if (v != null && v !== "") newStyles[f] = v as StyleVal;
+    // Linking sets the FK reference ONLY. It never prefills the change maps:
+    // an alteration records only what the staff explicitly chooses to change.
+    const setSource = (source: AlterationGarmentSource) => {
+        if (source === "external") {
+            update({ source, original_garment_id: null });
+        } else {
+            update({ source });
         }
-
-        update({
-            original_garment_id: priorGarmentId,
-            alteration_styles: newStyles,
-        });
     };
 
-    const masterValueFor = (field: AlterationMeasurementField): number | null => {
-        if (!masterMeasurement) return null;
-        const v = (masterMeasurement as Record<string, unknown>)[field];
-        return typeof v === "number" ? v : null;
-    };
+    const pickedPrior: PriorGarmentForLink | null = value.original_garment_id
+        ? priorGarments.find((g) => g.id === value.original_garment_id) ?? null
+        : null;
 
     const isShaab = styleStr("jabzour_1") === "JAB_SHAAB";
     React.useEffect(() => {
@@ -176,142 +156,136 @@ export function AlterationGarmentForm({
 
     return (
         <div className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-1.5">
-                    <Label>Type</Label>
-                    <div className="flex h-9 overflow-hidden rounded-md border border-slate-300">
-                        {BUFI_OPTIONS.map((opt) => {
-                            const selected = value.bufi_ext === opt;
+            {/* Internal vs external: the primary per-garment choice */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div>
+                        <span className="text-sm font-semibold text-slate-800">
+                            Garment source <span className="text-red-500">*</span>
+                        </span>
+                        <p className="text-[11px] text-slate-500">
+                            Did we make this garment, or another shop?
+                        </p>
+                    </div>
+                    <div className="ml-auto flex h-9 overflow-hidden rounded-md border border-slate-300">
+                        {(["internal", "external"] as const).map((opt) => {
+                            const selected = value.source === opt;
                             return (
                                 <button
                                     key={opt}
                                     type="button"
-                                    onClick={() => update({ bufi_ext: selected ? null : opt })}
+                                    onClick={() => setSource(opt)}
                                     className={
-                                        "flex-1 text-sm font-semibold transition border-r border-slate-300 last:border-r-0 " +
+                                        "w-32 text-sm font-semibold transition border-r border-slate-300 last:border-r-0 " +
                                         (selected
                                             ? "bg-slate-900 text-white"
                                             : "bg-white text-slate-700 hover:bg-slate-50")
                                     }
                                 >
-                                    {opt}
+                                    {opt === "internal" ? "We made it" : "Another shop"}
                                 </button>
                             );
                         })}
                     </div>
                 </div>
-                <div className="space-y-1.5">
-                    <Label>Link prior garment</Label>
-                    <Select
-                        value={value.original_garment_id ?? "__none"}
-                        onValueChange={(v) => {
-                            if (v === "__none") {
-                                update({ original_garment_id: null });
-                            } else {
-                                linkPriorGarment(v);
-                            }
-                        }}
-                        disabled={!customerId || priorGarments.length === 0}
-                    >
-                        <SelectTrigger className="bg-background">
-                            <SelectValue placeholder={customerId ? (priorGarments.length === 0 ? "No prior garments" : "Optional") : "Select customer first"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__none">(None)</SelectItem>
-                            {priorGarments.map((g: PriorGarmentForLink) => (
-                                <SelectItem key={g.id} value={g.id}>
-                                    #{g.order_id} · {g.garment_id ?? g.id.slice(0, 8)} · {g.garment_type ?? "-"}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
 
-            {/* Mode toggle */}
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <span className="text-sm font-medium text-slate-700">Measurements</span>
-                <div className="flex h-8 overflow-hidden rounded-md border border-slate-300">
-                    {(["changes_only", "full_set"] as const).map((m) => {
-                        const selected = value.mode === m;
-                        return (
-                            <button
-                                key={m}
-                                type="button"
-                                onClick={() => update({ mode: m, full_measurement_set_id: m === "full_set" ? value.full_measurement_set_id : null })}
-                                className={
-                                    "px-3 text-sm font-semibold transition border-r border-slate-300 last:border-r-0 " +
-                                    (selected ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-100")
-                                }
+                {/* Internal: required source-garment picker + read-only reference */}
+                {value.source === "internal" && (
+                    <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+                        <div className="space-y-1.5">
+                            <Label>
+                                Original garment <span className="text-red-500">*</span>
+                            </Label>
+                            <Select
+                                value={value.original_garment_id ?? ""}
+                                onValueChange={(v) => update({ original_garment_id: v || null })}
+                                disabled={!customerId || priorGarments.length === 0}
                             >
-                                {m === "changes_only" ? "Changes only" : "Full set"}
-                            </button>
-                        );
-                    })}
-                </div>
-                {value.mode === "full_set" && (
-                    <Select
-                        value={value.full_measurement_set_id ?? ""}
-                        onValueChange={(v) => update({ full_measurement_set_id: v || null })}
-                    >
-                        <SelectTrigger className="ml-auto w-72 bg-background">
-                            <SelectValue placeholder={measurements.length === 0 ? "No saved measurements" : "Pick measurement record"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {measurements.map((m) => (
-                                <SelectItem key={m.id} value={m.id}>
-                                    {m.measurement_id ?? m.id.slice(0, 8)} · {m.type ?? "-"} · {m.reference ?? "-"}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                                <SelectTrigger className="bg-background">
+                                    <SelectValue placeholder={
+                                        !customerId
+                                            ? "Select customer first"
+                                            : priorGarments.length === 0
+                                                ? "No prior garments on file for this customer"
+                                                : "Pick the garment being altered"
+                                    } />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {priorGarments.map((g: PriorGarmentForLink) => (
+                                        <SelectItem key={g.id} value={g.id}>
+                                            #{g.order_id} · {g.garment_id ?? g.id.slice(0, 8)} · {g.garment_type ?? "-"}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {pickedPrior && (
+                            <>
+                                <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                    <span className="font-semibold text-slate-900">
+                                        Order #{pickedPrior.order_id}
+                                    </span>
+                                    <span className="text-slate-400">·</span>
+                                    <span>{pickedPrior.garment_type ?? "Garment"}</span>
+                                    <span className="text-slate-400">·</span>
+                                    <span className="font-mono text-xs text-slate-500">
+                                        {pickedPrior.garment_id ?? pickedPrior.id.slice(0, 8)}
+                                    </span>
+                                </div>
+                                <OriginalSpecPanel prior={pickedPrior} />
+                            </>
+                        )}
+                    </div>
                 )}
             </div>
 
-            {/* Sparse measurement fields (changes_only) — table layout matching measurement form */}
-            {value.mode === "changes_only" && (
-                <div className="space-y-3">
-                    <div>
-                        <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-                            Measurement Changes
-                        </h4>
-                        <p className="text-sm text-slate-500">
-                            Fill only the cells that are changing. The row below each input shows the existing master value for reference.
-                        </p>
-                    </div>
+            {/* Live recap of what is being changed (only the new values) */}
+            <AlterationChangeSummary
+                measurements={value.alteration_measurements}
+                styles={value.alteration_styles}
+                onClearMeasurement={(f) => setMeasurementField(f, "")}
+                onClearStyle={(f) => setStyle(f as AlterationStyleField, null)}
+            />
 
-                    <div className="space-y-3">
-                        <AlterationMeasurementTable
-                            title="Chest & Shoulder"
-                            values={value.alteration_measurements}
-                            masterValueFor={masterValueFor}
-                            onChange={setMeasurementField}
-                            columns={alterationColumns(AUTO_TAPE_GROUP_1, true)}
-                        />
-                        <AlterationMeasurementTable
-                            title="Waist, Back & Collar"
-                            values={value.alteration_measurements}
-                            masterValueFor={masterValueFor}
-                            onChange={setMeasurementField}
-                            columns={alterationColumns(AUTO_TAPE_GROUP_2, true)}
-                        />
-                        <AlterationMeasurementTable
-                            title="Pockets & Jabzour"
-                            values={value.alteration_measurements}
-                            masterValueFor={masterValueFor}
-                            onChange={setMeasurementField}
-                            columns={alterationColumns(MANUAL_GROUP_1)}
-                        />
-                        <AlterationMeasurementTable
-                            title="Basma, Hemming & Pen Pocket"
-                            values={value.alteration_measurements}
-                            masterValueFor={masterValueFor}
-                            onChange={setMeasurementField}
-                            columns={alterationColumns(MANUAL_GROUP_2)}
-                        />
-                    </div>
+            {/* Measurement changes: per-field, new value only */}
+            <div className="space-y-3">
+                <div>
+                    <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                        Measurement Changes
+                    </h4>
+                    <p className="text-sm text-slate-500">
+                        Fill only the fields that are changing. Enter the new value.
+                    </p>
                 </div>
-            )}
+
+                <div className="space-y-3">
+                    <AlterationMeasurementTable
+                        title="Chest & Shoulder"
+                        values={value.alteration_measurements}
+                        onChange={setMeasurementField}
+                        columns={alterationColumns(AUTO_TAPE_GROUP_1, true)}
+                    />
+                    <AlterationMeasurementTable
+                        title="Waist, Back & Collar"
+                        values={value.alteration_measurements}
+                        onChange={setMeasurementField}
+                        columns={alterationColumns(AUTO_TAPE_GROUP_2, true)}
+                    />
+                    <AlterationMeasurementTable
+                        title="Pockets & Jabzour"
+                        values={value.alteration_measurements}
+                        onChange={setMeasurementField}
+                        columns={alterationColumns(MANUAL_GROUP_1)}
+                    />
+                    <AlterationMeasurementTable
+                        title="Basma, Hemming & Pen Pocket"
+                        values={value.alteration_measurements}
+                        onChange={setMeasurementField}
+                        columns={alterationColumns(MANUAL_GROUP_2)}
+                    />
+                </div>
+            </div>
 
             {/* Style overrides — image-driven */}
             <div className="space-y-3">
@@ -320,7 +294,7 @@ export function AlterationGarmentForm({
                         Style Changes
                     </h4>
                     <p className="text-sm text-slate-500">
-                        Pick only what should change from the original.
+                        Pick only the styles that should change.
                     </p>
                 </div>
 

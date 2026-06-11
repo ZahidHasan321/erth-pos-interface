@@ -9,8 +9,8 @@ const LIST_STALE_TIME = 5 * 60 * 1000;
 
 /**
  * Workshop sidebar badge counts. Hits get_workshop_sidebar_counts RPC
- * which returns 12 integers — no per-row data. Replaces the old pattern
- * of fetching every garment just to run .filter().length 12 times.
+ * which returns one integer per badge — no per-row data. Replaces the old
+ * pattern of fetching every garment just to run .filter().length per badge.
  */
 export function useSidebarCounts() {
   return useQuery({

@@ -15,7 +15,6 @@ import {
   RefreshCw,
   MessageSquare,
   PenTool,
-  AlertCircle,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
@@ -43,7 +42,6 @@ import {
   SelectValue,
 } from "@repo/ui/select";
 import { Label } from "@repo/ui/label";
-import { Checkbox } from "@repo/ui/checkbox";
 import { ShoulderSlopeSelect, ShoulderSlopeDisplay } from "@repo/ui/shoulder-slope";
 import { toast } from "sonner";
 import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
@@ -288,7 +286,6 @@ interface GarmentFeedbackState {
   satisfaction: string | null;
   feedbackAction: string | null;
   distributionAction: string | null;
-  isInvestigationNeeded: boolean;
   customerSignature: string | null;
   notes: string;
   submitted: boolean;
@@ -325,7 +322,6 @@ const createEmptyGarmentState = (): GarmentFeedbackState => ({
   satisfaction: null,
   feedbackAction: null,
   distributionAction: null,
-  isInvestigationNeeded: false,
   customerSignature: null,
   notes: "",
   submitted: false,
@@ -379,7 +375,6 @@ const isDraftMeaningful = (st: GarmentFeedbackState): boolean =>
   st.satisfaction !== null ||
   st.feedbackAction !== null ||
   st.distributionAction !== null ||
-  st.isInvestigationNeeded ||
   !!st.customerSignature ||
   st.notes.length > 0;
 
@@ -971,7 +966,7 @@ function PreviousFeedbackDetail({ fb, index }: { fb: GarmentFeedback; index: num
 // --- Main Component ---
 
 function UnifiedFeedbackInterface() {
-  const { orderId: rawOrderId } = Route.useParams();
+  const { main, orderId: rawOrderId } = Route.useParams();
   const { garmentId: deepLinkGarmentId } = Route.useSearch();
   const paramOrderId = Number(rawOrderId);
   const router = useRouter();
@@ -1294,6 +1289,16 @@ function UnifiedFeedbackInterface() {
         .then((res) => {
           if (res.status === "error" || !res.data) {
             toast.error("Order not found");
+          } else if (res.data.order_type === "ALTERATION") {
+            // Alteration-out orders have no feedback/trial flow — they are received
+            // and handed over at the cashier. If this page is reached for one, send
+            // the user to the read-only alteration view instead of a broken form.
+            router.navigate({
+              to: "/$main/orders/new-alteration-order",
+              params: { main },
+              search: { orderId: paramOrderId },
+              replace: true,
+            });
           } else {
             setActiveOrder(res.data);
           }
@@ -1719,15 +1724,12 @@ function UnifiedFeedbackInterface() {
                 toast.info(result.message);
             }
         } else {
-            const isAlterationGarment = activeGarment.garment_type === "alteration";
-            const isHomeDelivery = isAlterationGarment
-                ? !!activeGarment.home_delivery
-                : !!activeOrder.home_delivery;
-
+            // Finals only — alteration-out orders never reach this page (redirected
+            // to the read-only alteration view on load).
             const updatePayload = buildFinalGarmentPayload({
                 feedbackAction: state.feedbackAction,
-                isAlterationGarment,
-                isHomeDelivery,
+                isAlterationGarment: false,
+                isHomeDelivery: !!activeOrder.home_delivery,
             });
 
             await updateGarment(activeGarment.id, updatePayload);
@@ -2529,8 +2531,7 @@ function UnifiedFeedbackInterface() {
   const garmentLabel = useMemo(() => {
     const labelMap = new Map<string, GarmentTag>();
     for (const g of activeOrder?.garments ?? []) {
-      const type: GarmentTag["type"] =
-        g.garment_type === "brova" ? "Brova" : g.garment_type === "alteration" ? "Alteration" : "Final";
+      const type: GarmentTag["type"] = g.garment_type === "brova" ? "Brova" : "Final";
       labelMap.set(g.id, { code: g.garment_id ?? g.id.slice(0, 8), type });
     }
     return (id: string): GarmentTag => labelMap.get(id) ?? { code: id.slice(0, 8), type: "Final" };
@@ -2743,7 +2744,6 @@ function UnifiedFeedbackInterface() {
                                 const altNum = getAlterationNumber(garment.trip_number);
                                 if (altNum !== null) return `Alt ${altNum}`;
                                 if (garment.garment_type === 'brova') return "Brova";
-                                if (garment.garment_type === 'alteration') return "Alt";
                                 return "Final";
                             })()}
                         </span>
@@ -3601,21 +3601,6 @@ function UnifiedFeedbackInterface() {
                           ))}
                       </RadioGroup>
                   </div>
-
-                  {/* Investigation (Brova + Redo only) */}
-                  {activeTab === "brova" && currentState.feedbackAction === "needs_redo" && (
-                      <div className="p-3 rounded-md border border-destructive/30 bg-destructive/5">
-                          <div className="flex items-center gap-3">
-                              <AlertCircle className="size-4 text-destructive shrink-0" />
-                              <p className="text-sm font-medium text-destructive flex-1">Investigation required?</p>
-                              <Checkbox
-                                  id="investigation"
-                                  checked={currentState.isInvestigationNeeded}
-                                  onCheckedChange={(c) => updateGarmentState(selectedGarmentId, { isInvestigationNeeded: c as boolean })}
-                              />
-                          </div>
-                      </div>
-                  )}
 
                   {/* Redo resolution (§2.5) — explicit required choice of outcome */}
                   {activeTab === "brova" && currentState.feedbackAction === "needs_redo" && (() => {

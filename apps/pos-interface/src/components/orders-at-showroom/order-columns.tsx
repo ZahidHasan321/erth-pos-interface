@@ -369,10 +369,15 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
     cell: ({ row }) => {
       const status = row.original.showroomStatus.label;
       const hasShopItems = row.original.showroomStatus.hasPhysicalItems;
-      const showFeedback = hasShopItems;
+      // Alteration-out garments are received and handed over at the cashier, not
+      // fed back. Their row action opens the read-only alteration view instead of
+      // the feedback form.
+      const isAlterationOut = status === "alteration_out";
+      const showFeedback = hasShopItems && !isAlterationOut;
+      const showAlterationView = isAlterationOut;
       const showDispatch = status === "needs_action";
 
-      if (!showFeedback && !showDispatch) return null;
+      if (!showFeedback && !showAlterationView && !showDispatch) return null;
 
       return (
         <TooltipProvider delayDuration={200}>
@@ -397,7 +402,7 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                       to="/$main/orders/order-management/feedback/$orderId"
                       params={{ orderId: String(row.original.order.id) }}
                       onClick={(e) => e.stopPropagation()}
-                      aria-label={status === "brova_trial" ? "Brova feedback" : status === "alteration_in" || status === "alteration_out" ? "Alteration feedback" : "Final feedback"}
+                      aria-label={status === "brova_trial" ? "Brova feedback" : status === "alteration_in" ? "Alteration feedback" : "Final feedback"}
                     >
                       <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
                     </Link>
@@ -406,9 +411,33 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                 <TooltipContent side="top" className="text-xs font-bold">
                   {status === "brova_trial"
                     ? "Brova Feedback"
-                    : status === "alteration_in" || status === "alteration_out"
+                    : status === "alteration_in"
                       ? "Alteration Feedback"
                       : "Final Feedback"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {showAlterationView && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    asChild
+                    className="h-7 w-7 p-0 transition-colors hover:bg-purple-100 hover:text-purple-700 text-purple-600"
+                  >
+                    <Link
+                      to="/$main/orders/new-alteration-order"
+                      search={{ orderId: row.original.order.id }}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="View alteration order"
+                    >
+                      <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs font-bold">
+                  View Alteration
                 </TooltipContent>
               </Tooltip>
             )}

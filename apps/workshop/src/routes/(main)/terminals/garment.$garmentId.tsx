@@ -123,12 +123,10 @@ function TerminalGarmentPage() {
   const altNum = getAlterationNumber(currentTrip, garment.garment_type);
   const isRepair = hasQcFail || isAltIn || isAltOut;
 
-  const altOutHasBaseline = isAltOut
-    && (!!garment.full_measurement_set || !!garment.original_garment_measurement);
   const baseAlterationFilter = isAltIn
     ? buildAlterationFilter(priorFeedback)
     : isAltOut
-      ? buildAltOutFilter(garment, altOutHasBaseline)
+      ? buildAltOutFilter(garment)
       : null;
   const qcFailContext = hasQcFail ? buildQcFailContext(garment) : null;
   // QC fail describes the most-recent issue the worker must fix; it takes

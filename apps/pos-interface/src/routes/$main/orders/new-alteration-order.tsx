@@ -22,13 +22,6 @@ import { Label } from "@repo/ui/label";
 import { Switch } from "@repo/ui/switch";
 import { Textarea } from "@repo/ui/textarea";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@repo/ui/select";
-import {
     AlterationGarmentForm,
 } from "@/components/forms/alteration/alteration-garment-form";
 import {
@@ -39,9 +32,8 @@ import {
 } from "@/components/forms/alteration/alteration-form.schema";
 import { useAlterationOrderMutations } from "@/hooks/useAlterationOrderMutations";
 import { useAuth } from "@/context/auth";
-import { getMeasurementsByCustomerId } from "@/api/measurements";
 import { getAlterationOrderById } from "@/api/alteration-orders";
-import type { Customer, Garment, Measurement } from "@repo/database";
+import type { Customer, Garment } from "@repo/database";
 
 type AlterationOrderSearch = { orderId?: number };
 
@@ -72,7 +64,6 @@ function NewAlterationOrder() {
     const [comments, setComments] = React.useState("");
     const [homeDelivery, setHomeDelivery] = React.useState(false);
     const [orderTotalRaw, setOrderTotalRaw] = React.useState("");
-    const [masterMeasurementId, setMasterMeasurementId] = React.useState<string | null>(null);
 
     const { data: existingOrderRes } = useQuery({
         queryKey: ["alteration-order", orderId],
@@ -103,8 +94,7 @@ function NewAlterationOrder() {
         if (rows.length > 0) {
             setGarments(rows.map((g) => ({
                 key: g.id,
-                mode: g.full_measurement_set_id ? "full_set" : "changes_only",
-                full_measurement_set_id: g.full_measurement_set_id,
+                source: g.original_garment_id || g.bufi_ext === "Internal" ? "internal" : "external",
                 original_garment_id: g.original_garment_id,
                 bufi_ext: g.bufi_ext,
                 delivery_date: g.delivery_date ? new Date(g.delivery_date).toISOString() : null,
@@ -117,11 +107,6 @@ function NewAlterationOrder() {
             const firstDate = rows[0]?.delivery_date;
             setRequestedDeliveryDate(firstDate ? new Date(firstDate) : null);
             setHomeDelivery(!!rows[0]?.home_delivery);
-
-            const fullSetGarment = rows.find((g) => g.full_measurement_set_id);
-            if (fullSetGarment?.full_measurement_set_id) {
-                setMasterMeasurementId(fullSetGarment.full_measurement_set_id);
-            }
         }
 
         setComments(order.comments ?? "");
@@ -131,35 +116,14 @@ function NewAlterationOrder() {
 
     const customerId = selectedCustomer?.id ?? null;
 
-    const { data: measurementsRes } = useQuery({
-        queryKey: ["measurements", customerId],
-        queryFn: () => (customerId ? getMeasurementsByCustomerId(customerId) : Promise.resolve(null)),
-        enabled: !!customerId,
-        staleTime: Infinity,
-    });
-    const customerMeasurements = React.useMemo(() => measurementsRes?.data ?? [], [measurementsRes]);
-
-    React.useEffect(() => {
-        if (!masterMeasurementId && customerMeasurements.length > 0) {
-            setMasterMeasurementId(customerMeasurements[0]!.id);
-        }
-    }, [customerMeasurements, masterMeasurementId]);
-
-    const masterMeasurement: Measurement | null = React.useMemo(() => {
-        if (!masterMeasurementId) return null;
-        return customerMeasurements.find((m) => m.id === masterMeasurementId) ?? null;
-    }, [customerMeasurements, masterMeasurementId]);
-
     const handleCustomerFound = React.useCallback((customer: Customer) => {
         setSelectedCustomer(customer);
         demographicsForm.reset(mapCustomerToFormValues(customer));
-        setMasterMeasurementId(null);
     }, [demographicsForm]);
 
     const handleCustomerClear = React.useCallback(() => {
         setSelectedCustomer(null);
         demographicsForm.reset(customerDemographicsDefaults);
-        setMasterMeasurementId(null);
     }, [demographicsForm]);
 
     const updateGarment = (idx: number, next: AlterationGarmentSchema) => {
@@ -195,6 +159,31 @@ function NewAlterationOrder() {
             return;
         }
 
+        // Per-garment checks first so the toast names the specific garment.
+        for (let i = 0; i < garments.length; i++) {
+            const g = garments[i]!;
+            const label = `Garment ${i + 1}`;
+            if (!g.source) {
+                toast.error(`${label}: choose internal or external before confirming`);
+                setActiveTab(i);
+                return;
+            }
+            if (g.source === "internal" && !g.original_garment_id) {
+                toast.error(`${label}: pick the original garment for this internal alteration`);
+                setActiveTab(i);
+                return;
+            }
+            const measurementChanges = Object.keys(g.alteration_measurements ?? {}).length;
+            const styleChanges = Object.entries(g.alteration_styles ?? {}).filter(
+                ([, v]) => v !== false && v !== null && v !== "" && v !== undefined,
+            ).length;
+            if (measurementChanges === 0 && styleChanges === 0) {
+                toast.error(`${label}: enter at least one measurement or style change`);
+                setActiveTab(i);
+                return;
+            }
+        }
+
         const deliveryIso = requestedDeliveryDate.toISOString();
         const garmentsWithDelivery = garments.map((g) => ({ ...g, delivery_date: deliveryIso }));
 
@@ -226,10 +215,8 @@ function NewAlterationOrder() {
                 master_measurement_id: null,
                 master_measurement_updates: null,
                 garments: data.garments.map((g) => ({
-                    mode: g.mode,
-                    full_measurement_set_id: g.full_measurement_set_id,
                     original_garment_id: g.original_garment_id,
-                    bufi_ext: g.bufi_ext,
+                    bufi_ext: g.source === "internal" ? "Internal" : "External",
                     delivery_date: g.delivery_date,
                     notes: g.notes,
                     alteration_measurements: g.alteration_measurements,
@@ -281,7 +268,7 @@ function NewAlterationOrder() {
                         <p className="text-sm text-slate-600">
                             {isViewMode
                                 ? "Existing alteration order details."
-                                : "Customer-brought garments. Per-garment changes or full new measurement set."}
+                                : "Customer-brought garments. Record only the changes to make."}
                         </p>
                     </div>
                     <div className="text-right">
@@ -313,37 +300,6 @@ function NewAlterationOrder() {
                     />
                 </section>
                 </fieldset>
-
-                <section className="rounded-xl border border-slate-300/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
-                    <div className="mb-3 flex items-center gap-3">
-                        <h2 className="text-sm font-semibold text-slate-800">Master Measurement Record</h2>
-                        <Select
-                            value={masterMeasurementId ?? ""}
-                            onValueChange={(v) => setMasterMeasurementId(v || null)}
-                            disabled={isViewMode || !customerId || customerMeasurements.length === 0}
-                        >
-                            <SelectTrigger className="ml-auto w-80 bg-background">
-                                <SelectValue placeholder={
-                                    !customerId
-                                        ? "Select customer first"
-                                        : customerMeasurements.length === 0
-                                            ? "No measurement records. Create one in Measurements"
-                                            : "Pick reference record"
-                                } />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {customerMeasurements.map((m) => (
-                                    <SelectItem key={m.id} value={m.id}>
-                                        {m.measurement_id ?? m.id.slice(0, 8)} · {m.type ?? "-"} · {m.reference ?? "-"}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <p className="text-xs text-slate-500">
-                        Reference record used to seed full-set picker and show baseline values for changes-only fields.
-                    </p>
-                </section>
 
                 <section className="rounded-xl border border-slate-300/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
                     <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -382,7 +338,7 @@ function NewAlterationOrder() {
                             >
                                 Garment {idx + 1}/{garments.length}
                                 <span className="ml-2 text-[10px] opacity-70">
-                                    {g.mode === "changes_only" ? "Changes" : "Full"}
+                                    {g.source === "internal" ? "Internal" : g.source === "external" ? "External" : "Pick source"}
                                 </span>
                             </button>
                         ))}
@@ -393,7 +349,6 @@ function NewAlterationOrder() {
                             customerId={customerId}
                             value={active}
                             onChange={(next) => updateGarment(activeTab, next)}
-                            masterMeasurement={masterMeasurement}
                         />
                     </fieldset>
                 </section>
@@ -586,12 +541,12 @@ function GarmentSummaryRow({
                 <div className="flex-1">
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-slate-800">
-                            {garment.bufi_ext ?? "Garment"}
+                            Garment {index + 1}
                         </span>
                         <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">
-                            {garment.mode === "changes_only" ? "Changes" : "Full set"}
+                            {garment.source === "internal" ? "Internal" : garment.source === "external" ? "External" : "No source"}
                         </span>
-                        {garment.original_garment_id && (
+                        {garment.source === "internal" && garment.original_garment_id && (
                             <span className="text-[10px] text-slate-500">linked</span>
                         )}
                     </div>

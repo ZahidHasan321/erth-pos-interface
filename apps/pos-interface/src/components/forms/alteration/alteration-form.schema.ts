@@ -21,10 +21,13 @@ export const ALTERATION_STYLE_FIELDS = [
 
 export type AlterationStyleField = (typeof ALTERATION_STYLE_FIELDS)[number];
 
+/** Whether the garment being altered is one we made (internal) or one made
+ *  elsewhere (external). Internal garments must reference a prior garment. */
+export type AlterationGarmentSource = "internal" | "external";
+
 export const alterationGarmentSchema = z.object({
     key: z.string(),
-    mode: z.enum(["changes_only", "full_set"]),
-    full_measurement_set_id: z.string().uuid().nullable(),
+    source: z.enum(["internal", "external"]).nullable(),
     original_garment_id: z.string().uuid().nullable(),
     bufi_ext: z.string().nullable(),
     delivery_date: z.string().nullable(),
@@ -33,11 +36,30 @@ export const alterationGarmentSchema = z.object({
     alteration_measurements: z.record(z.string(), z.number()).default({}),
     alteration_styles: z.record(z.string(), z.union([z.string(), z.boolean(), z.number()])).default({}),
 }).superRefine((g, ctx) => {
-    if (g.mode === "full_set" && !g.full_measurement_set_id) {
+    if (!g.source) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ["full_measurement_set_id"],
-            message: "Pick a measurement record",
+            path: ["source"],
+            message: "Choose internal or external for each garment",
+        });
+        return;
+    }
+    if (g.source === "internal" && !g.original_garment_id) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["original_garment_id"],
+            message: "Pick the original garment for an internal alteration",
+        });
+    }
+    const measurementChanges = Object.keys(g.alteration_measurements ?? {}).length;
+    const styleChanges = Object.entries(g.alteration_styles ?? {}).filter(
+        ([, v]) => v !== false && v !== null && v !== "" && v !== undefined,
+    ).length;
+    if (measurementChanges === 0 && styleChanges === 0) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["alteration_measurements"],
+            message: "Enter at least one measurement or style change per garment",
         });
     }
 });
@@ -57,8 +79,7 @@ export type AlterationOrderSchema = z.infer<typeof alterationOrderSchema>;
 
 export const createEmptyAlterationGarment = (): AlterationGarmentSchema => ({
     key: crypto.randomUUID(),
-    mode: "changes_only",
-    full_measurement_set_id: null,
+    source: null,
     original_garment_id: null,
     bufi_ext: null,
     delivery_date: null,

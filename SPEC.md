@@ -48,7 +48,7 @@ The **verbatim specification** of this product's features and workflows (§1–�
 | `trip_number` | `0` on a fresh garment (pre-dispatch). +1 each time the garment is sent back to the workshop. Dispatch from shop only picks `trip_number = 0`; alteration thresholds treat a missing value as `1` |
 | `garment_type` | `brova` (trial garment), `final`, or `alteration` (customer-brought; `order_type: ALTERATION`; never auto-discarded) |
 | `trip_history` | Per-trip record incl. `qc_attempts` (QC pass/fail breadcrumb) |
-| `needs_investigation` | Auto-set when repeated returns cross the §2.10 threshold; holds the garment out of production until a manager records the investigation |
+| `needs_investigation` | Vestigial — the §2.10 repeated-returns auto-hold was removed; never set true, no writer, retained (no destructive drop) |
 
 ### 2.2 Piece-stage set
 
@@ -68,7 +68,7 @@ awaiting_trial / ready_for_pickup → brova_trialed → completed
 - **Brova & final, unified:** trip 1 = initial; trip 2+ = alteration (alteration # = trip − 1). Finals have no trial step; a brova returning at trip 2+ is also treated as an alteration.
 - **QC-fail rework:** **no trip increment** — detected via a `result: "fail"` entry in the current trip's `qc_attempts`. Labeled `alt_p`, which **wins over** the trip-based `alt_N` label.
 - **No maximum** trip / alteration / QC-attempt count — unbounded by design.
-- **Return counters (§2.10):** *alteration returns* = `trip_number − 1` (this trip-based count); *quality returns* = QC fails. They feed the repeated-returns investigation trigger.
+- **Return counters (§2.10):** *alteration returns* = `trip_number − 1` (this trip-based count); *quality returns* = QC fails. Derived metrics only (QC analytics / performance attribution, §6) — the repeated-returns auto-hold they once drove was removed.
 
 ### 2.4 Step-by-step flow
 
@@ -125,7 +125,7 @@ awaiting_trial / ready_for_pickup → brova_trialed → completed
 | Accept – delivered (home delivery) | `completed` | `delivered` | Terminal |
 | Needs Repair | `brova_trialed` | — | Alteration cycle (trip+1) |
 | Needs Redo (non-alteration) | `discarded` | — | Replacement row — same fabric-auto-consume / material-waste / `root_cause`-capture / OUT-parking / material-unavailable rules as Reject-Redo above |
-| Needs Redo (alteration-type order) | NOT discarded | `needs_redo` | Same row loops back (customer property never discarded) |
+| Needs Redo (alteration-type order) | NOT discarded | `needs_redo` | Same row loops back (customer property never discarded) — **but `order_type: ALTERATION` (alteration-out, §2.14) has no feedback/trial form, so this verdict is unreachable for it; a still-wrong alteration-out is re-issued as a fresh alteration order** |
 
 **Sending garments back** (Shop "Return to Workshop"): `piece_stage: waiting_cut`, `location: transit_to_workshop`, `trip_number += 1`, `in_production: false`, production fields cleared. No max trip.
 
@@ -186,7 +186,7 @@ Per-component (fabric/stitching/style/express/soaking) or shelf-qty refund, take
 | Label | Condition | Staff action |
 |-------|-----------|--------------|
 | `alteration_in` | Alteration garment at shop needing trial/action (trip 2+ `awaiting_trial`, or `needs_repair`/`needs_redo` at alteration threshold) | Trial returning alteration |
-| `alteration_out` | Alteration-type order (`order_type: ALTERATION`) — single label | Handle customer-brought alteration |
+| `alteration_out` | Alteration-type order (`order_type: ALTERATION`) — single label (§2.14) | View the order; collect/hand over at the cashier (no feedback form) |
 | `brova_trial` | Brova at shop, `piece_stage: awaiting_trial` | Customer tries brovas |
 | `needs_action` | Any garment at shop with `feedback_status: needs_repair/needs_redo` | Send rejected garment back |
 | `ready_for_pickup` | Everything else visible (incl. partial: some at shop, others out) | Customer collects ready items |
@@ -213,7 +213,7 @@ Worked scenarios: B1 accepted + B2 rejected → `needs_action`. B1 accepted, fin
 
 ### 2.9 Root-cause taxonomy (shared attribution vocabulary)
 
-A single canonical **"who is responsible / why did this happen"** vocabulary, shared by everything that attributes a quality event: redo + scrap recording (§2.5), redo material waste (§4), the repeated-returns investigation workflow (§6), performance attribution (§6). No feature redefines the set.
+A single canonical **"who is responsible / why did this happen"** vocabulary, shared by everything that attributes a quality event: redo + scrap recording (§2.5), redo material waste (§4), performance attribution (§6). No feature redefines the set.
 
 The enum (`root_cause`); each value carries a **responsible party** that is a deterministic *derivation* of the value, not a separately stored field (this is what performance impact keys off):
 
@@ -235,26 +235,17 @@ The enum (`root_cause`); each value carries a **responsible party** that is a de
 
 ---
 
-### 2.10 Repeated-returns investigation (auto-hold) (Q3)
+### 2.10 Repeated-returns investigation — auto-hold removed (Q3)
 
-A garment that keeps coming back is auto-flagged for a **manual manager investigation** and **held** until that investigation is recorded.
+A garment that keeps coming back is **no longer auto-flagged, hidden, or blocked**. The earlier auto-hold — flag `needs_investigation` at **≥ 2 quality / ≥ 3 total returns**, drop the garment out of production, and reject any restart until a manager recorded an investigation, with a manager-resolution dialog (root cause / decision / corrective actions) on a workshop **Decisions** surface — has been **removed in both apps**. Nothing holds or blocks a garment on repeated returns.
 
-**Two return counters, per garment — both DERIVED, never hand-maintained:**
+**Two return counters survive as derived metrics** — both computed, never hand-maintained, and now feeding only QC analytics / performance attribution (§6), no auto-hold:
 
 - **Quality returns** = the count of **QC fails** in the garment's history (each `result: "fail"` quality-check attempt in `trip_history`). QC-fail rework does not bump the trip, so this is independent of trip number.
 - **Alteration returns** = **`trip_number − 1`** (trip 1 = initial production; each later trip is one customer-driven return to the workshop, §2.3).
 - **Total** = quality + alteration.
 
-**Trigger.** **≥ 2 quality returns OR ≥ 3 total returns** flags the garment `needs_investigation` (e.g. 1 customer return + 2 QC fails ⇒ investigate). Set **server-side** the moment a return pushes the counts past the threshold — fired on the *increase* (so it re-arms only on a genuinely new return, never re-fires on an unrelated update), and independent of which app wrote the return.
-
-**Auto-hold — per garment, NEVER the order.** Flagging also drops the garment out of active production (`in_production: false`); while flagged it **cannot be put back into production** (the `in_production` false→true "start" transition is rejected server-side) and it surfaces in a workshop **"Needs Investigation"** list. The hold is strictly **per garment** — the flag lives on the garment row, so its order-siblings schedule and produce normally and are never blocked.
-
-**Manager resolution** (manager-only, idempotent) records in one step: the **`root_cause` (§2.9)**, a note comparing the QC/return history vs the actual return reason, the **decision** (`continue` correction / `redo` remake / `refund`), and **short-term** + **long-term** corrective actions. It is retained for history. Recording it clears the hold; then:
-
-- **`continue` → resumes production**: the same write clears `needs_investigation` **and** sets `in_production: true`, so the garment re-enters the production flow at its current stage (the guard permits it because the flag is already cleared in that write). This is the "resume after investigation" path — without resolution nothing un-holds the garment.
-- **`redo` / `refund`** clear the hold only; the actual remake (§2.5 replacement) or refund (§2.6) is taken through its existing flow.
-
-**Re-arming & reset.** After resolution the garment does not re-flag until a **new** return arrives (a later QC fail or customer return that increases the total again). A **redo replacement is a brand-new garment row** (fresh `trip_history`, trip 1), so its counters start at 0 (§2.5). No maximum — repeated investigations on a lineage are unbounded.
+**Investigation / root-cause handling is being redesigned and will live elsewhere** (not a workshop auto-hold surface); it is unspecified here until that design lands. The `needs_investigation` column and the `garment_investigations` table are **retained but vestigial** (no writer, the column never set true) — no destructive drop, matching the `redo_priority` precedent (§6).
 
 ### 2.11 Toggle option fields — explicit choice, no silent default
 
@@ -281,6 +272,15 @@ A customer with multiple in-flight orders can have them **linked** so they share
 - **Link-group key.** The group an order belongs to is keyed by **`COALESCE(linked_order_id, order_id)`** — i.e. the **primary's order id**. Every member (primary + children) resolves to the same key; an unlinked order is a group of one (key = its own id). All workshop-side grouping derives from this key; nothing new is stored.
 - **Production Tracker shows the group together.** In the workshop Production Tracker the orders of a link group are **clustered adjacently** under a shared "Linked" treatment (a group header carrying the shared delivery date), so staff read them as one deliverable rather than unrelated rows. Members sort to the position of the group's most-urgent member so the cluster stays contiguous; a lone order is rendered exactly as before.
 - **Dispatch warns when the group would be split — workshop-side stranding (workshop dispatch only; UI-only).** A linked group is meant to reach the shop together, so dispatching one order's garments while a **linked sibling still has garments on the workshop side** strands the group. When a dispatch batch's order belongs to a link group **and another order in that group has ≥1 garment still at the workshop** not in this batch — `location: workshop`/`transit_to_workshop`, `piece_stage NOT IN (completed, discarded)` (a `ready_for_dispatch` sibling counts: it's ready but not yet selected; a sibling already `transit_to_shop` does **not**, it is already heading to the shop) — show a **blocking confirm** naming the linked order and the count, with the option to send anyway or cancel. This is purely a UI guard: confirming dispatches exactly the selected garments, cancelling aborts; **no lifecycle/RPC state changes**, and the link itself is untouched. It composes with the §2.4·6 Accept-with-Fix stranded-finals confirmation (either or both reasons may apply to one batch).
+
+### 2.14 Alteration-out — customer-brought garment repair
+
+A customer brings in a **completed** garment to be fixed. This is distinct from **alteration-in** (the brova-trial alteration cycle, §2.3/§2.5, where a garment we are mid-producing returns at trip 2+ off a feedback verdict). Alteration-out is its own order: `order_type: ALTERATION`, garments `garment_type: alteration` (created `trip 0`, `waiting_cut`, `location: shop`), a separate invoice sequence, a **manually-entered order total** (not fabric/style-derived), and **never auto-discarded** (it is the customer's property). It runs the **same production flow** as any garment (dispatch → workshop receive → produce → dispatch back).
+
+- **Internal vs external is the primary per-garment choice (required, no default).** **Internal** = a garment **we made**; the order-taker must link the **source garment** from the customer's prior orders (`original_garment_id` — the reference). **External** = made by another shop; no source. The choice is also stored explicitly as `bufi_ext` = `"Internal"` / `"External"` (deletion-robust marker; `original_garment_id` is `ON DELETE SET NULL`).
+- **Record only the changes.** Intake captures only the fields that change, as sparse `alteration_measurements` (field → new value) + `alteration_styles` (field → new value). There is **no full-measurement-set mode** and **no current/baseline value shown** — only the **new target value** is entered/displayed, for **both** internal and external (consistency; an external garment has no recorded original, so showing current-vs-new for only internal would confuse). For internal, the source garment's spec is available as a **read-only reference** only; it never pre-fills or mixes into the change set. A garment needs ≥1 change to confirm.
+- **Workshop QC checks only the changed fields**, for both internal and external — the flagged measurement keys and the flagged style keys, never the full spec (an external garment has no full spec, and untouched parts must not fail). Expected values come from the recorded changes (changed style expected from `alteration_styles`, not the empty style columns). Quality ratings still apply.
+- **Collect-only — no feedback.** After the workshop returns it, the garment lands `ready_for_pickup` and is **collected/handed over at the cashier** like a final (§3, pickup ungated on payment). Alteration-out has **no feedback / satisfaction / trial form** at any point. If a returned alteration is still wrong, staff create a **fresh alteration order**.
 
 ---
 
@@ -336,7 +336,7 @@ The store/inventory area is **4 surfaces per app**: Inventory, Transfers, Stockt
 - **Quantity damaged** (the amount removed, not a new total), **optional photo**, per-unit **cost** (prefilled from last restock cost or price, editable). Cost impact = qty × unit cost recorded on the ledger row.
 - **Manager-approval gate by cost.** Below a configured cost threshold, any waste-permitted user records it directly (stock drops immediately). At/above, **only a manager/admin** may — the RPC rejects an over-threshold waste from a non-manager (`needs manager approval`). No pending state; the gate is authorization, not a workflow.
 
-**Redo material waste** (resolves §2.9's forward-reference). When a redo discards a garment (§2.5), its already-cut fabric is scrap — but that length already left stock as a `-L consumption` at order confirmation, so a second decrement would double-count and break conservation. Instead the scrap is recorded as a **net-zero `waste` annotation**: a `stock_movements` row with `qty_delta = 0` carrying the wasted length in `annotated_qty` (a column alongside `qty_delta`) and the per-unit `unit_cost`. The `stock_movements.root_cause` column is left **null** — the shop redo (§2.5) no longer captures attribution; if a redo later needs a responsible party, the investigation flow (§2.10/§6, deferred) records it. The replacement's fresh cut is a **real `-L consumption`**; net ledger change is `-2L` (one wasted cut + one good replacement physically gone) → conservation holds exactly.
+**Redo material waste** (resolves §2.9's forward-reference). When a redo discards a garment (§2.5), its already-cut fabric is scrap — but that length already left stock as a `-L consumption` at order confirmation, so a second decrement would double-count and break conservation. Instead the scrap is recorded as a **net-zero `waste` annotation**: a `stock_movements` row with `qty_delta = 0` carrying the wasted length in `annotated_qty` (a column alongside `qty_delta`) and the per-unit `unit_cost`. The `stock_movements.root_cause` column is left **null** — the shop redo (§2.5) no longer captures attribution; if a redo later needs a responsible party, the redesigned investigation flow (§2.10, TBD) records it. The replacement's fresh cut is a **real `-L consumption`**; net ledger change is `-2L` (one wasted cut + one good replacement physically gone) → conservation holds exactly.
 
 - **Company vs. customer fabric.** Company fabric (catalogue-linked) → the replacement auto-consumes a fresh `-L` and the scrap is annotated as above. Customer-brought fabric (`fabric_source: OUT`) → **neither** consumed nor wasted from our stock (never part of either count); the replacement is flagged customer-must-provide and parked (§2.5). These two axes are keyed independently at redo: the scrap annotation follows the **original's** fabric source (company `IN` only), while consume/park follows the **replacement's** chosen source (§2.5).
 - **Waste report surfaces it.** Aggregates count waste via `SUM(ABS(qty_delta) + COALESCE(annotated_qty, 0))` so annotations (real qty `0`, length in `annotated_qty`) and real wastes (length in `qty_delta`, `annotated_qty` null) sum without double-counting. A **waste-by-`root_cause`** aggregate (qty + cost, `cost = Σ qty × unit_cost`) joins the existing by-reason-category breakdown.
@@ -386,7 +386,7 @@ transfers:cancel   → manager + admin
 
 **Worker team (unit) assignment — explicit, never silently defaulted.** A worker (a `resources` row) belongs to a **unit** (team) within its production stage. In create/edit, the manager **explicitly picks the team** for **every station the worker runs** — cutting, sewing, finishing, ironing, quality-check — via a visible, required picker (with inline "create team" when a station's first/second team is needed). Never silently default to the first/lowest-id unit (that silently re-pins e.g. a second-cutting-table worker back to "Team A" on every routine edit). On edit, each picker is pre-filled from the worker's *actual* current unit (not recomputed), so saving an unrelated field never moves their team. **Soaking is excluded** (all-hands, negligible labor; not on the Performance page) and keeps auto-assignment; `post_cutting` is disabled.
 
-**Redo replacements arrive shop-initiated (§2.5); the redo-priority queue is dropped.** Redo is decided at the brova trial in the shop: `root_cause` (§2.9) is captured there and the replacement is created **at the shop**, waiting in the **shop dispatch queue**. The only special state is the dispatch wait, marked by `redo_parked_reason` — a replacement short on company fabric is `waiting_material`, a customer-fabric (`OUT`) replacement is `customer_decision` — and the **shop resume** action un-parks it (re-running the deferred `-L` consumption for `waiting_material`; just clearing the flag for `customer_decision`, since the customer's cloth never touches our stock; the scrap annotation written at creation is **not** re-recorded), then dispatches it. Once dispatched the replacement is a **100% normal garment** in the workshop — there is no `immediate`/`next_slot`/`parked` redo prioritisation, no workshop "redo to create" / "parked redos" sections, and no workshop create/resume actions. (The `redo_priority` column is retained but unused/vestigial — no destructive drop. Investigation handling is unchanged for now — §2.10.)
+**Redo replacements arrive shop-initiated (§2.5); the redo-priority queue is dropped.** Redo is decided at the brova trial in the shop: `root_cause` (§2.9) is captured there and the replacement is created **at the shop**, waiting in the **shop dispatch queue**. The only special state is the dispatch wait, marked by `redo_parked_reason` — a replacement short on company fabric is `waiting_material`, a customer-fabric (`OUT`) replacement is `customer_decision` — and the **shop resume** action un-parks it (re-running the deferred `-L` consumption for `waiting_material`; just clearing the flag for `customer_decision`, since the customer's cloth never touches our stock; the scrap annotation written at creation is **not** re-recorded), then dispatches it. Once dispatched the replacement is a **100% normal garment** in the workshop — there is no `immediate`/`next_slot`/`parked` redo prioritisation, no workshop "redo to create" / "parked redos" sections, and no workshop create/resume actions. (The `redo_priority` column is retained but unused/vestigial — no destructive drop. The repeated-returns investigation auto-hold was removed — §2.10.)
 
 **Linked orders are visible, not editable (§2.13).** Order linking is a shop action; the workshop only **sees** it. The Production Tracker **clusters a link group's orders adjacently** under a shared "Linked" header so they read as one deliverable, and the **dispatch page warns** before sending one order's garments while a linked sibling still has garments on the workshop side (the stranded-sibling confirmation, §2.4·6 / §2.13). The workshop never links or unlinks.
 
@@ -421,6 +421,4 @@ transfers:cancel   → manager + admin
 
 Headline attempt-level pass rate (passes / inspections) and inspection count anchor the page; garment-level first-pass yield (no QC fail across all attempts) stays on the Performance page. Ranged on each attempt's own inspection date, so a garment still in production counts from the moment it was inspected.
 
-**Needs Investigation view (Q3, §2.10).** A workshop list of garments auto-held for repeated returns. Each row shows the garment/order, its quality- and alteration-return counts, and its QC + return history. A manager opens a **review dialog** to record the investigation (root cause, history-comparison note, decision, short-/long-term corrective actions); resolving with **continue** resumes the garment's production, while redo/refund hand off to their existing flows (§2.5/§2.6). The held garment is excluded from the schedulable queues until resolved; siblings are unaffected. The list lives on the consolidated **Decisions hub** (below), not a standalone page.
-
-**Decisions hub (workshop) — one place for every garment awaiting a manager decision.** Rather than scattering manager decisions across the dashboard, scheduler, and order pages, a single **Decisions** surface — a prominent top-level sidebar item badged with the pending count — collects them as actionable per-garment sections. The first is repeated-returns **investigations** (§2.10); it is built to absorb future decision types as additional sections. (Redo replacement creation and the parked-redo resume have moved **shop-side**: redo is decided at the brova trial (§2.5) and the replacement waits/resumes in the shop dispatch queue, so they no longer appear here or as "Create replacement" actions on the workshop order/garment pages.) Hub actions are manager-gated; non-managers see the held rows read-only. The hub does **not** own scheduling. **Sidebar organization:** Investigations is folded into Decisions (no standalone page; the old `/investigations` route redirects to it); **QC Analytics and Performance** move out of the *People* group into an **Insights** group (analytics, not people management), leaving *People* for team + user management.
+**No Decisions / Needs-Investigation surface in the workshop.** The repeated-returns auto-hold and its manager-resolution dialog were **removed** (§2.10) — no garment is held or surfaces for a decision on repeated returns. Redo replacement creation and the parked-redo resume are **shop-side** (redo is decided at the brova trial, §2.5; the replacement waits/resumes in the shop dispatch queue), so they do **not** appear as a workshop decision surface or as "Create replacement" actions on the workshop order/garment pages. **Sidebar organization:** **QC Analytics and Performance** live in an **Insights** group (analytics, not people management), leaving *People* for team + user management.

@@ -28,6 +28,11 @@ export interface AlterationFilter {
   fieldReasons: Map<string, AlterationReason>;
   /** sidebar sections that should render (something changed in them) */
   visibleSections: Set<AlterationStyleSection>;
+  /** Exact style/option keys (QC_OPTIONS keys) the shop changed. Only populated
+   *  for alt-out garments, where QC must verify precisely the changed style keys
+   *  (not whole visual sections). Left undefined for alt-in / QC-fail filters,
+   *  which scope options by visibleSections as before. */
+  optionKeys?: Set<string>;
   /** When true, hide unchanged measurement cells entirely (used when no
    *  baseline measurement is available — only the sparse changes can be shown).
    *  When false, render the full template and only color-flag the changed
@@ -333,14 +338,15 @@ const STYLE_KEY_TO_SECTIONS: Record<string, AlterationStyleSection[]> = {
  *  All changed cells flagged "Customer Request". Returns null when nothing
  *  changed (which means full_set mode — render the full table without flags).
  *
- *  `hasBaseline` controls whether unchanged cells are hidden (no baseline →
- *  only sparse changes are renderable) or kept visible with just the changed
- *  cells flagged (baseline present → full table with highlights). */
+ *  Alt-out always hides unchanged cells: QC verifies only the changed fields
+ *  for both internal (baseline present) and external garments, so a baseline
+ *  must not re-expand the view to the full spec. `optionKeys` carries the exact
+ *  changed style keys so QC scopes options precisely (not by whole section). */
 export function buildAltOutFilter(garment: {
   garment_type?: string | null;
   alteration_measurements?: unknown;
   alteration_styles?: unknown;
-}, hasBaseline: boolean): AlterationFilter | null {
+}): AlterationFilter | null {
   if (garment.garment_type !== "alteration") return null;
 
   const altMeas = parseJson<Record<string, unknown>>(garment.alteration_measurements) ?? {};
@@ -355,19 +361,23 @@ export function buildAltOutFilter(garment: {
   }
 
   const visibleSections = new Set<AlterationStyleSection>();
+  const optionKeys = new Set<string>();
   for (const key of measurementKeys) {
     const sec = MEASUREMENT_TO_SECTION[key];
     if (sec) visibleSections.add(sec);
   }
   for (const k of Object.keys(altStyles)) {
     if (altStyles[k] == null || altStyles[k] === "") continue;
+    // The changed style key is exactly a QC_OPTIONS key (intake writes the same
+    // names) — record it so QC verifies precisely this field.
+    optionKeys.add(k);
     for (const sec of STYLE_KEY_TO_SECTIONS[k] ?? []) {
       visibleSections.add(sec);
     }
   }
 
-  if (measurementKeys.size === 0 && visibleSections.size === 0) return null;
-  return { measurementKeys, fieldReasons, visibleSections, hideUnchanged: !hasBaseline };
+  if (measurementKeys.size === 0 && visibleSections.size === 0 && optionKeys.size === 0) return null;
+  return { measurementKeys, fieldReasons, visibleSections, optionKeys, hideUnchanged: true };
 }
 
 /**

@@ -102,8 +102,21 @@ export const WASTE_REASONS = [
 
 export type WasteReasonValue = (typeof WASTE_REASONS)[number]["value"];
 
+// Waste rows aren't only staff-recorded fault categories: the system also writes
+// net-zero `waste` annotations with its own reason strings (redo scrap, partial
+// transfer loss). They must read cleanly in reports but must NOT appear in the
+// staff Damage/Waste dropdown, so they live here rather than in WASTE_REASONS.
+const SYSTEM_WASTE_REASON_LABELS: Record<string, string> = {
+  redo: "Redo scrap",
+  "lost in transit": "Lost in transit",
+};
+
 export function getWasteReasonLabel(value: string): string {
-  return WASTE_REASONS.find((r) => r.value === value)?.label ?? value;
+  return (
+    WASTE_REASONS.find((r) => r.value === value)?.label ??
+    SYSTEM_WASTE_REASON_LABELS[value] ??
+    value
+  );
 }
 
 // Cost at/above which a Damage/Waste record requires a manager. Mirror of

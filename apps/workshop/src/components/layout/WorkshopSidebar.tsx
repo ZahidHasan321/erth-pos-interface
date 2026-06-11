@@ -36,7 +36,6 @@ import {
   ChevronDown,
   TrendingUp,
   ShieldCheck,
-  ListChecks,
   UserCog,
   Package,
   Building2,
@@ -52,9 +51,6 @@ export function WorkshopSidebar() {
   const { data: receivingDeliveries = [] } = useTransferRequests({ status: "dispatched", direction: "shop_to_workshop" });
   // Requests the shop made that the workshop must send (no approve step — §4).
   const { data: sendRequests = [] } = useTransferRequests({ status: ["requested"], direction: "workshop_to_shop" });
-  // Garments awaiting a manager decision — investigations (§2.10). Drives the
-  // prominent Decisions badge.
-  const decisionsBadge = counts?.investigations ?? 0;
   const { isMobile, setOpenMobile, state } = useSidebar();
   const routerState = useRouterState({ select: (s) => s.location.pathname });
   const { user: authUser } = useAuth();
@@ -88,8 +84,7 @@ export function WorkshopSidebar() {
   ];
 
   // Insights — analytics surfaces, separated from People (team management).
-  // QC Analytics + Performance moved out of People; Investigations folded into
-  // the Decisions hub (CLAUDE.md §6).
+  // QC Analytics + Performance moved out of People (CLAUDE.md §6).
   const insightsItems = [
     { label: "Performance",  icon: TrendingUp,  href: "/performance" },
     { label: "QC Analytics", icon: ShieldCheck, href: "/qc-analytics" },
@@ -152,19 +147,6 @@ export function WorkshopSidebar() {
                     <span>Dashboard</span>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/decisions")}>
-                  <Link to="/decisions">
-                    <ListChecks className="w-4 h-4" aria-hidden="true" />
-                    <span>Decisions</span>
-                  </Link>
-                </SidebarMenuButton>
-                {!!decisionsBadge && (
-                  <SidebarMenuBadge className="bg-[var(--status-warn-bg)] text-[var(--status-warn)]">
-                    {decisionsBadge}
-                  </SidebarMenuBadge>
-                )}
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>

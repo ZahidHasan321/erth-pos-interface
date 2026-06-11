@@ -14,15 +14,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  *  - `orders` row with `order_type = 'ALTERATION'`
  *  - `alteration_orders` extension row (invoice_number, received_date, comments, alteration_total, order_phase)
  *  - N `garments` rows with garment_type='alteration', piece_stage='waiting_cut',
- *    location='shop'. Each garment is either:
- *      - changes_only mode: sparse `alteration_measurements` jsonb (field → value),
- *        sparse `alteration_styles` jsonb (field → value), `full_measurement_set_id` null
- *      - full_set mode: `full_measurement_set_id` → existing measurements row,
- *        sparse maps are empty
- *    Optional `original_garment_id` links to a prior garment when "link prior" was used.
- *
- * Customer master measurements are also updated in `measurements` for any field
- * the cashier edited across all changes_only garments (last-write-wins per field).
+ *    location='shop'. Each garment records only the per-field changes:
+ *    sparse `alteration_measurements` jsonb (field → value) and sparse
+ *    `alteration_styles` jsonb (field → value); `full_measurement_set_id` stays
+ *    null. `bufi_ext` marks Internal vs External; for internal garments
+ *    `original_garment_id` references the prior garment being altered.
  *
  * Separate invoice sequence: `alteration_invoice_seq`.
  */
@@ -35,8 +31,6 @@ const ALTERATION_DETAILS_QUERY = `
 `;
 
 export type AlterationGarmentInput = {
-    mode: "changes_only" | "full_set";
-    full_measurement_set_id: string | null;
     original_garment_id: string | null;
     bufi_ext: string | null;
     delivery_date: string | null;
@@ -183,9 +177,9 @@ export const createAlterationOrder = async (
         garment_id: `${invoiceNumber}-${idx + 1}`,
         quantity: 1,
         bufi_ext: g.bufi_ext,
-        alteration_measurements: g.mode === "changes_only" ? g.alteration_measurements : null,
-        alteration_styles: g.mode === "changes_only" ? g.alteration_styles : null,
-        full_measurement_set_id: g.mode === "full_set" ? g.full_measurement_set_id : null,
+        alteration_measurements: g.alteration_measurements,
+        alteration_styles: g.alteration_styles,
+        full_measurement_set_id: null,
         original_garment_id: g.original_garment_id,
         delivery_date: g.delivery_date,
         notes: g.notes,
@@ -280,7 +274,7 @@ export const listAlterationOrders = async (): Promise<ApiResponse<Order[]>> => {
 export const getCustomerGarmentsForLink = async (customerId: number) => {
     const { data, error } = await db
         .from("garments")
-        .select("id, garment_id, garment_type, alteration_measurements, alteration_styles, full_measurement_set_id, measurement_id, collar_type, collar_button, collar_position, collar_thickness, cuffs_type, cuffs_thickness, front_pocket_type, front_pocket_thickness, wallet_pocket, pen_holder, mobile_pocket, small_tabaggi, jabzour_1, jabzour_2, jabzour_thickness, lines, order_id, orders!inner(customer_id, order_date)")
+        .select("id, garment_id, garment_type, alteration_measurements, alteration_styles, full_measurement_set_id, measurement_id, measurement:measurements!measurement_id(*), collar_type, collar_button, collar_position, collar_thickness, cuffs_type, cuffs_thickness, front_pocket_type, front_pocket_thickness, wallet_pocket, pen_holder, mobile_pocket, small_tabaggi, jabzour_1, jabzour_2, jabzour_thickness, lines, order_id, orders!inner(customer_id, order_date)")
         .eq("orders.customer_id", customerId)
         .order("order_id", { ascending: false })
         .limit(50);
@@ -288,7 +282,14 @@ export const getCustomerGarmentsForLink = async (customerId: number) => {
     if (error) {
         return { status: "error" as const, message: error.message, data: [] as PriorGarmentForLink[] };
     }
-    return { status: "success" as const, data: (data ?? []) as PriorGarmentForLink[] };
+    // Supabase types embedded resources as arrays. Flatten `measurement` to a
+    // single row (or null) so it matches PriorGarmentForLink.measurement.
+    const rows = (data ?? []).map((row) => {
+        const { measurement, ...rest } = row as Record<string, unknown> & { measurement?: unknown };
+        const flat = Array.isArray(measurement) ? (measurement[0] ?? null) : (measurement ?? null);
+        return { ...rest, measurement: flat };
+    });
+    return { status: "success" as const, data: rows as unknown as PriorGarmentForLink[] };
 };
 
 export type PriorGarmentForLink = {
@@ -299,6 +300,10 @@ export type PriorGarmentForLink = {
     alteration_styles: Record<string, string | boolean | number> | null;
     full_measurement_set_id: string | null;
     measurement_id: string | null;
+    /** Joined source measurement row, used to render the read-only "Original
+     *  spec" reference panel for internal alterations. Null when the garment
+     *  has no linked measurement record. */
+    measurement: Measurement | null;
     collar_type: string | null;
     collar_button: string | null;
     collar_position: "up" | "down" | null;

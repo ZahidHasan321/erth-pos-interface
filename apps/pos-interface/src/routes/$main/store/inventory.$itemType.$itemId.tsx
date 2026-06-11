@@ -305,7 +305,15 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
             )}
           </div>
           {subtitleOf(item) && (
-            <p className="text-sm text-muted-foreground mt-1">{subtitleOf(item)}</p>
+            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+              {item.kind === "fabric" && item.row.color_hex && (
+                <span
+                  className="inline-block h-3.5 w-3.5 rounded-full border shrink-0"
+                  style={{ backgroundColor: item.row.color_hex }}
+                />
+              )}
+              {subtitleOf(item)}
+            </p>
           )}
         </div>
       </div>
@@ -567,10 +575,10 @@ function StockBreakdown({
     <Card className="shadow-none">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold">Stock</h2>
+          <h2 className="text-base font-semibold">Stock</h2>
           <span className="text-xs text-muted-foreground">
             Low threshold: <span className="font-medium tabular-nums text-foreground">{formatQty(itemType, threshold, unit)}</span>
-            {isThresholdOverridden && <span className="ml-1 text-[10px] uppercase text-muted-foreground">(custom)</span>}
+            {isThresholdOverridden && <span className="ml-1 text-xs uppercase text-muted-foreground">(custom)</span>}
           </span>
         </div>
         <StockCard label="At shop" qty={shopStock} itemType={itemType} unit={unit} low={low} icon={Store} />
@@ -594,11 +602,11 @@ function StockCard({
       "rounded-lg border px-3 py-3",
       low ? "bg-red-50 border-red-200" : "bg-card",
     )}>
-      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-        {Icon && <Icon className="h-3 w-3" />}
+      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+        {Icon && <Icon className="h-3.5 w-3.5" />}
         {label}
       </p>
-      <p className={cn("text-xl font-bold tabular-nums mt-0.5", low && "text-red-700")}>
+      <p className={cn("text-2xl font-bold tabular-nums mt-1", low && "text-red-700")}>
         {formatQty(itemType, qty, unit)}
       </p>
     </div>
@@ -742,7 +750,7 @@ function MetadataCard({
     <Card className="shadow-none">
       <CardContent className="p-5 space-y-5">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold">Details</h2>
+          <h2 className="text-base font-semibold">Details</h2>
           {!canEdit && <span className="text-xs text-muted-foreground">Read only</span>}
         </div>
 
@@ -926,9 +934,9 @@ const LOW_STOCK_DEFAULTS: Record<ItemTypeParam, number> = { fabric: 5, shelf: 3,
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-1">
-        <Label className="text-xs text-muted-foreground">{label}</Label>
-        {hint && <span className="text-[10px] text-muted-foreground">{hint}</span>}
+      <div className="flex items-baseline justify-between gap-2 mb-1.5">
+        <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+        {hint && <span className="text-xs text-muted-foreground shrink-0">{hint}</span>}
       </div>
       {children}
     </div>
@@ -950,30 +958,30 @@ function UsageSection({
   return (
     <Card className="shadow-none">
       <CardContent className="p-5 space-y-4">
-        <h2 className="text-sm font-semibold">Usage in orders</h2>
+        <h2 className="text-base font-semibold">Usage in orders</h2>
         <div className="grid grid-cols-3 gap-3">
           <UsageCard label="Yesterday" qty={stats?.yesterday ?? 0} itemType={itemType} unit={unit} loading={isLoading} />
           <UsageCard label="Last 7 days" qty={stats?.last7d ?? 0} itemType={itemType} unit={unit} loading={isLoading} />
           <UsageCard label="Last 30 days" qty={stats?.last30d ?? 0} itemType={itemType} unit={unit} loading={isLoading} />
         </div>
 
-        <div className="pt-2">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Top orders (30d)</p>
+        <div className="pt-1">
+          <p className="text-sm font-medium text-muted-foreground mb-2">Top orders (30d)</p>
           {isTopLoading ? (
             <div className="space-y-1.5">
-              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-7 w-full" />)}
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}
             </div>
           ) : topOrders.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">No order consumption recorded in the last 30 days.</p>
+            <p className="text-sm text-muted-foreground italic">No order consumption recorded in the last 30 days.</p>
           ) : (
-            <ul className="space-y-1">
+            <ul className="divide-y rounded-lg border">
               {topOrders.map((o) => (
-                <li key={o.order_id} className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
+                <li key={o.order_id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40">
                   <span className="text-sm font-medium">Order #{o.order_id}</span>
                   <span className="text-xs text-muted-foreground">
                     last {new Date(o.last_at).toLocaleDateString()}
                   </span>
-                  <span className="text-sm font-semibold tabular-nums">
+                  <span className="ml-auto text-sm font-semibold tabular-nums">
                     {formatQty(itemType, o.total, unit)}
                   </span>
                 </li>
@@ -991,11 +999,11 @@ function UsageCard({
 }: { label: string; qty: number; itemType: StockItemType; unit: UnitOfMeasure | null; loading: boolean }) {
   return (
     <div className="rounded-lg border bg-card px-3 py-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
       {loading ? (
         <Skeleton className="h-6 w-16 mt-1" />
       ) : (
-        <p className="text-xl font-bold tabular-nums mt-0.5">{formatQty(itemType, qty, unit)}</p>
+        <p className="text-xl font-bold tabular-nums mt-1">{formatQty(itemType, qty, unit)}</p>
       )}
     </div>
   );
@@ -1055,7 +1063,7 @@ function MovementsTab({
                 return (
                   <TableRow key={m.id}>
                     <TableCell>
-                      <Badge className={cn(MOVEMENT_TYPE_COLORS[m.movement_type as keyof typeof MOVEMENT_TYPE_COLORS], "font-medium text-[10px] uppercase hover:bg-current")}>
+                      <Badge className={cn(MOVEMENT_TYPE_COLORS[m.movement_type as keyof typeof MOVEMENT_TYPE_COLORS], "font-medium text-xs uppercase hover:bg-current")}>
                         {MOVEMENT_TYPE_LABELS[m.movement_type as keyof typeof MOVEMENT_TYPE_LABELS]}
                       </Badge>
                     </TableCell>
@@ -1075,12 +1083,12 @@ function MovementsTab({
                           target="_blank"
                           rel="noreferrer"
                           aria-label="Open waste photo in a new tab"
-                          className="ml-2 inline-flex items-center gap-0.5 text-[11px] text-primary underline align-middle"
+                          className="ml-2 inline-flex items-center gap-0.5 text-xs text-primary underline align-middle"
                         >
                           <ImageIcon className="h-3 w-3" /> photo
                         </a>
                       )}
-                      {m.user?.name && <span className="ml-2 text-[11px] opacity-70">by {m.user.name}</span>}
+                      {m.user?.name && <span className="ml-2 text-xs opacity-70">by {m.user.name}</span>}
                     </TableCell>
                     <TableCell className="text-right text-xs text-muted-foreground">
                       {new Date(m.created_at).toLocaleString()}

@@ -13,15 +13,15 @@ import { cn } from "./lib/utils";
  *   sloped_down  ╲   line high on the left, dropping to the right
  *   sloped_up    ╱   line low on the left, rising to the right
  *   straight    ───  flat / level shoulders
- *   peaked       ╱╲  rises to a centre point, drops to both sides
+ *   peaked       ╱╲  rises to a centre point, drops to both sides (labelled "Normal" — the default human shoulder)
  */
 export type ShoulderSlopeValue = "sloped_down" | "sloped_up" | "straight" | "peaked";
 
 export const SHOULDER_SLOPE_UI: { value: ShoulderSlopeValue; label: string }[] = [
+  { value: "peaked", label: "Normal" },
   { value: "sloped_down", label: "Sloped Down" },
   { value: "sloped_up", label: "Sloped Up" },
   { value: "straight", label: "Straight" },
-  { value: "peaked", label: "Peaked" },
 ];
 
 const isSlope = (v: unknown): v is ShoulderSlopeValue =>

@@ -50,8 +50,6 @@ const PERMISSIONS: PermissionMatrix = {
   "/team":        { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "own",  "staff:shop": "none" },
   "/performance": { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "own",  "staff:shop": "none" },
   "/qc-analytics": { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/investigations": { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/decisions":      { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
   "/receiving":   { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
   "/parking":     { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
   "/scheduler":   { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },

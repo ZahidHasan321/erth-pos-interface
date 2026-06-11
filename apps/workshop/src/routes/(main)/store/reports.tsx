@@ -71,7 +71,11 @@ function ReportsPage() {
     const map = new Map<string, { qty: number; cost: number }>();
     for (const m of wasteMovements) {
       const key = m.reason ?? "unspecified";
-      const qty = Math.abs(Number(m.qty_delta));
+      // Mirror the server measure SUM(ABS(qty_delta) + COALESCE(annotated_qty,0)):
+      // net-zero annotations (e.g. partial transfer loss) carry the amount in
+      // annotated_qty with qty_delta 0, so include it or they read as 0 units
+      // while the "Lost" KPI (from the RPC) counts them.
+      const qty = Math.abs(Number(m.qty_delta)) + Number(m.annotated_qty ?? 0);
       const cost = qty * Number(m.unit_cost ?? 0);
       const cur = map.get(key) ?? { qty: 0, cost: 0 };
       cur.qty += qty;

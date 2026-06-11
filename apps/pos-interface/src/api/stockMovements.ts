@@ -135,6 +135,8 @@ export async function recordWaste(args: WasteArgs): Promise<{ success: boolean; 
 export type AggregatesResult = {
   totals: Partial<Record<StockMovementType, number>>;
   count: number;
+  // True signed net stock change for the window (SUM of qty_delta across types).
+  net: number;
 };
 
 export async function getMovementAggregates(args: {
@@ -160,12 +162,16 @@ export async function getTopItemsByMovement(args: {
   from: string;
   to: string;
   limit?: number;
+  location?: StockLocation;
+  itemType?: StockItemType;
 }): Promise<TopItem[]> {
   const { data, error } = await db.rpc("get_top_items_by_movement", {
     p_movement_type: args.movementType,
     p_from: args.from,
     p_to: args.to,
     p_limit: args.limit ?? 10,
+    p_location: args.location ?? null,
+    p_item_type: args.itemType ?? null,
   });
   if (error) throw new Error(`Could not load top items: ${error.message}`);
   return (data ?? []) as TopItem[];

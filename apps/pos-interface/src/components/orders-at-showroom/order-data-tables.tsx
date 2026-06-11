@@ -185,7 +185,11 @@ function MobileOrderRow({
   const overdue = daysOverdue(row.deliveryDate);
   const balance = row.balance || 0;
   const status = statusBadge(row);
-  const showFeedback = row.showroomStatus.hasPhysicalItems;
+  // Alteration-out is received + handed over at the cashier, not fed back — its
+  // action opens the read-only alteration view instead of the feedback form.
+  const isAlterationOut = row.showroomStatus.label === "alteration_out";
+  const showFeedback = row.showroomStatus.hasPhysicalItems && !isAlterationOut;
+  const showAlterationView = isAlterationOut;
   const showDispatch = row.showroomStatus.label === "needs_action";
   const garments = row.order.garments || [];
   const atShop = garments.filter(
@@ -307,6 +311,23 @@ function MobileOrderRow({
             >
               <ClipboardCheck className="h-4 w-4 mr-1.5" aria-hidden="true" />
               Feedback
+            </Link>
+          </Button>
+        )}
+        {showAlterationView && (
+          <Button
+            variant="outline"
+            asChild
+            className="flex-1 h-11 text-xs font-bold uppercase tracking-wider bg-card text-purple-700 border-purple-200 hover:bg-purple-50"
+          >
+            <Link
+              to="/$main/orders/new-alteration-order"
+              search={{ orderId: row.order.id }}
+              onClick={(e) => e.stopPropagation()}
+              aria-label="View alteration order"
+            >
+              <ClipboardCheck className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              View
             </Link>
           </Button>
         )}

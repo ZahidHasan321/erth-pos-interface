@@ -1100,7 +1100,7 @@ BEGIN
             PERFORM set_config('app.movement_ref_type', 'order', true);
             PERFORM set_config('app.movement_ref_id', p_order_id::text, true);
             PERFORM set_config('app.movement_user_id', COALESCE(p_cashier_id::text, ''), true);
-            PERFORM set_config('app.movement_reason', 'garment cancelled — fabric returned', true);
+            PERFORM set_config('app.movement_reason', 'garment cancelled, fabric returned', true);
             PERFORM set_config('app.movement_notes', COALESCE(p_refund_reason, ''), true);
 
             UPDATE fabrics
@@ -1518,13 +1518,12 @@ ALTER TABLE garments ADD COLUMN IF NOT EXISTS promoted_to_brova_at TIMESTAMPTZ;
 ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS annotated_qty NUMERIC(10,2);
 ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS root_cause root_cause;
 
--- ─── Group C: repeated-returns investigation (CLAUDE.md §2.10) ────────────
--- needs_investigation holds a garment out of production after repeated returns
--- (≥2 quality / ≥3 total) until a manager records the investigation. Detection
--- + the start-guard live in the BEFORE-UPDATE trigger _garment_investigation_gate
--- (further below); record_investigation resolves it. garment_investigations is
--- the append-only resolution history. Created here so both the trigger and the
--- RPC (defined later in this single batch) find the column/table.
+-- ─── Group C: repeated-returns investigation — REMOVED, kept vestigial (CLAUDE.md §2.10) ───
+-- The auto-hold was removed (see the Group C DROPs further below): needs_investigation
+-- is never set true and has no writer; garment_investigations has no writer. Both the
+-- column and the table are retained vestigial — no destructive drop (matches the
+-- redo_priority precedent). Investigation/root-cause handling is being redesigned
+-- elsewhere. Kept here so a fresh DB still has the (unused) column/table.
 ALTER TABLE garments ADD COLUMN IF NOT EXISTS needs_investigation BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS garment_investigations (
@@ -2201,10 +2200,34 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- normalize_phone: reduce a phone (stored value OR search query) to its national
+-- digits so the two compare equal regardless of how a country code was entered.
+-- Rule: a leading '+' or '00' marks an international form -> strip it and the
+-- Kuwait country code 965. A bare number (no marker) is national and kept as-is,
+-- so a local number that itself begins with 965 (e.g. 9651xxxx) is never mis-stripped.
+--   '+965 5009 0123' -> '50090123'   '0096550090123' -> '50090123'   '50090123' -> '50090123'
+CREATE OR REPLACE FUNCTION normalize_phone(p TEXT)
+RETURNS TEXT AS $$
+DECLARE
+  d TEXT;
+BEGIN
+  IF p IS NULL THEN RETURN ''; END IF;
+  d := regexp_replace(p, '[^0-9]', '', 'g');            -- digits only
+  IF btrim(p) LIKE '+%' OR LEFT(d, 2) = '00' THEN       -- explicit international marker
+    IF LEFT(d, 2) = '00' THEN d := SUBSTR(d, 3); END IF; -- drop 00 access prefix
+    IF LEFT(d, 3) = '965' THEN d := SUBSTR(d, 4); END IF; -- drop Kuwait country code
+  END IF;
+  RETURN d;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
 DROP FUNCTION IF EXISTS search_customers_fuzzy(TEXT, INT);
--- 15. RPC: Fuzzy customer search using pg_trgm similarity
--- Returns customers as JSONB array ranked by best match across name, phone, arabic_name, nick_name.
--- Uses trigram similarity for typo tolerance + ILIKE as fallback for substring matches.
+-- 15. RPC: Customer search.
+-- Phone query (digits, optionally with + / spaces / dashes) = national-number
+--   PREFIX match via normalize_phone, no fuzziness (so "50090" returns only
+--   phones whose national number starts with 50090, with or without a country code).
+-- Text query = pg_trgm fuzzy + substring over name/arabic_name/nick_name,
+--   typo-tolerant and ranked by similarity.
 -- Always returns a bounded result set (p_limit, default 15).
 CREATE OR REPLACE FUNCTION search_customers_fuzzy(
   p_query TEXT,
@@ -2213,37 +2236,51 @@ CREATE OR REPLACE FUNCTION search_customers_fuzzy(
 RETURNS JSONB AS $$
 DECLARE
   v_query TEXT := LOWER(TRIM(p_query));
+  -- Phone-like: only digits and phone punctuation (+ space - ()), with >=1 digit.
+  v_is_phone BOOLEAN := v_query ~ '^[+0-9 ()\-]+$' AND regexp_replace(v_query, '[^0-9]', '', 'g') <> '';
+  v_nat TEXT := normalize_phone(v_query);
   v_result JSONB;
 BEGIN
   IF LENGTH(v_query) < 1 THEN
     RETURN '[]'::jsonb;
   END IF;
 
-  -- Set similarity threshold (lower = more fuzzy, default 0.3)
-  PERFORM set_config('pg_trgm.similarity_threshold', '0.15', TRUE);
+  IF v_is_phone THEN
+    -- Phone query: national-number prefix match, no fuzziness. normalize_phone
+    -- strips any country code on both sides so "50090" matches +96550090123 too.
+    SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_result
+    FROM (
+      SELECT c.*
+      FROM customers c
+      WHERE normalize_phone(c.phone) LIKE v_nat || '%'
+      ORDER BY normalize_phone(c.phone) ASC
+      LIMIT p_limit
+    ) sub;
+  ELSE
+    -- Text query: trigram fuzzy + substring over name fields, typo-tolerant.
+    -- Set similarity threshold (lower = more fuzzy, default 0.3)
+    PERFORM set_config('pg_trgm.similarity_threshold', '0.15', TRUE);
 
-  SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_result
-  FROM (
-    SELECT c.*,
-      GREATEST(
-        COALESCE(similarity(LOWER(c.name), v_query), 0),
-        COALESCE(similarity(LOWER(c.phone), v_query), 0),
-        COALESCE(similarity(LOWER(c.arabic_name), v_query), 0),
-        COALESCE(similarity(LOWER(c.nick_name), v_query), 0)
-      ) AS match_score
-    FROM customers c
-    WHERE
-      LOWER(c.name) % v_query
-      OR LOWER(c.phone) % v_query
-      OR LOWER(c.arabic_name) % v_query
-      OR LOWER(c.nick_name) % v_query
-      OR c.name ILIKE '%' || v_query || '%'
-      OR c.phone ILIKE '%' || v_query || '%'
-      OR c.arabic_name ILIKE '%' || v_query || '%'
-      OR c.nick_name ILIKE '%' || v_query || '%'
-    ORDER BY match_score DESC, c.name ASC
-    LIMIT p_limit
-  ) sub;
+    SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_result
+    FROM (
+      SELECT c.*,
+        GREATEST(
+          COALESCE(similarity(LOWER(c.name), v_query), 0),
+          COALESCE(similarity(LOWER(c.arabic_name), v_query), 0),
+          COALESCE(similarity(LOWER(c.nick_name), v_query), 0)
+        ) AS match_score
+      FROM customers c
+      WHERE
+        LOWER(c.name) % v_query
+        OR LOWER(c.arabic_name) % v_query
+        OR LOWER(c.nick_name) % v_query
+        OR c.name ILIKE '%' || v_query || '%'
+        OR c.arabic_name ILIKE '%' || v_query || '%'
+        OR c.nick_name ILIKE '%' || v_query || '%'
+      ORDER BY match_score DESC, c.name ASC
+      LIMIT p_limit
+    ) sub;
+  END IF;
 
   RETURN v_result;
 END;
@@ -2259,6 +2296,8 @@ CREATE OR REPLACE FUNCTION search_customers_paginated(
 RETURNS JSONB AS $$
 DECLARE
   v_query TEXT := LOWER(TRIM(COALESCE(p_query, '')));
+  v_is_phone BOOLEAN := v_query ~ '^[+0-9 ()\-]+$' AND regexp_replace(v_query, '[^0-9]', '', 'g') <> '';
+  v_nat TEXT := normalize_phone(v_query);
   v_offset INT := (p_page - 1) * p_page_size;
   v_data JSONB;
   v_count BIGINT;
@@ -2289,18 +2328,45 @@ BEGIN
       ORDER BY c.phone ASC, c.account_type ASC, c.created_at DESC
       OFFSET v_offset LIMIT p_page_size
     ) c;
+  ELSIF v_is_phone THEN
+    -- Phone query: national-number prefix match (normalize_phone strips any
+    -- country code on both sides), no fuzziness.
+    SELECT COUNT(*) INTO v_count
+    FROM customers c
+    WHERE normalize_phone(c.phone) LIKE v_nat || '%';
+
+    SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_data
+    FROM (
+      SELECT c.*,
+        COALESCE(o.orders_count, 0)::int      AS orders_count,
+        o.last_order_at,
+        COALESCE(o.outstanding_total, 0)::numeric AS outstanding_total,
+        EXISTS (SELECT 1 FROM measurements m WHERE m.customer_id = c.id) AS has_measurements
+      FROM customers c
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*)                                                          AS orders_count,
+          MAX(o.order_date)                                                 AS last_order_at,
+          SUM(GREATEST(COALESCE(o.order_total, 0) - COALESCE(o.paid, 0), 0))
+            FILTER (WHERE o.checkout_status = 'confirmed')                  AS outstanding_total
+        FROM orders o
+        WHERE o.customer_id = c.id
+          AND o.checkout_status <> 'cancelled'
+      ) o ON TRUE
+      WHERE normalize_phone(c.phone) LIKE v_nat || '%'
+      ORDER BY normalize_phone(c.phone) ASC
+      OFFSET v_offset LIMIT p_page_size
+    ) sub;
   ELSE
-    -- Fuzzy search with count
+    -- Text query: trigram fuzzy + substring over name fields, typo-tolerant.
     PERFORM set_config('pg_trgm.similarity_threshold', '0.15', TRUE);
 
     SELECT COUNT(*) INTO v_count
     FROM customers c
     WHERE LOWER(c.name) % v_query
-      OR LOWER(c.phone) % v_query
       OR LOWER(c.arabic_name) % v_query
       OR LOWER(c.nick_name) % v_query
       OR c.name ILIKE '%' || v_query || '%'
-      OR c.phone ILIKE '%' || v_query || '%'
       OR c.arabic_name ILIKE '%' || v_query || '%'
       OR c.nick_name ILIKE '%' || v_query || '%';
 
@@ -2309,7 +2375,6 @@ BEGIN
       SELECT c.*,
         GREATEST(
           COALESCE(similarity(LOWER(c.name), v_query), 0),
-          COALESCE(similarity(LOWER(c.phone), v_query), 0),
           COALESCE(similarity(LOWER(c.arabic_name), v_query), 0),
           COALESCE(similarity(LOWER(c.nick_name), v_query), 0)
         ) AS match_score,
@@ -2329,11 +2394,9 @@ BEGIN
           AND o.checkout_status <> 'cancelled'
       ) o ON TRUE
       WHERE LOWER(c.name) % v_query
-        OR LOWER(c.phone) % v_query
         OR LOWER(c.arabic_name) % v_query
         OR LOWER(c.nick_name) % v_query
         OR c.name ILIKE '%' || v_query || '%'
-        OR c.phone ILIKE '%' || v_query || '%'
         OR c.arabic_name ILIKE '%' || v_query || '%'
         OR c.nick_name ILIKE '%' || v_query || '%'
       ORDER BY match_score DESC, c.name ASC
@@ -4078,13 +4141,15 @@ BEGIN
     -- dispatch (transfer_out -dispatched). Booking another -missing here would
     -- DOUBLE-COUNT the loss in the ledger: the per-item sum of qty_delta would
     -- read more negative than the real physical change. So this row is a
-    -- net-zero audit annotation — qty_delta = 0 keeps the ledger conserving
-    -- (sum of qty_delta == net physical change) while the lost quantity stays
-    -- auditable in the notes. Direct INSERT — no column change, so the
-    -- auto-trigger doesn't fire.
+    -- net-zero audit annotation: qty_delta = 0 keeps the ledger conserving
+    -- (sum of qty_delta == net physical change). The lost quantity goes in
+    -- annotated_qty so reports surface it under "Lost" exactly like redo scrap
+    -- (the reports measure is ABS(qty_delta) + COALESCE(annotated_qty,0)),
+    -- instead of hiding only in the notes. Direct INSERT so the auto-trigger
+    -- (which fires on stock-column changes) doesn't double-log.
     IF v_missing_qty > 0 THEN
       INSERT INTO stock_movements (
-        item_type, item_id, location, movement_type, qty_delta,
+        item_type, item_id, location, movement_type, qty_delta, annotated_qty,
         ref_type, ref_id, user_id, reason, notes
       )
       VALUES (
@@ -4099,13 +4164,13 @@ BEGIN
           ELSE 'workshop'::stock_location
         END,
         'waste'::stock_movement_type,
-        0,
+        0, v_missing_qty,
         'transfer', p_transfer_id, p_received_by,
         'lost in transit',
         format('lost in transit: %s unit(s) dispatched but not received%s',
                v_missing_qty,
                CASE WHEN COALESCE(v_item->>'discrepancy_note', '') <> ''
-                    THEN ' — ' || (v_item->>'discrepancy_note')
+                    THEN ' - ' || (v_item->>'discrepancy_note')
                     ELSE '' END)
       );
     END IF;
@@ -4225,7 +4290,7 @@ BEGIN
       v_brand,
       'garment_redo_requested',
       'URGENT: Redo required',
-      format('Garment %s (Order #%s) needs a full redo — create replacement now', NEW.garment_id, v_order_display),
+      format('Garment %s (Order #%s) needs a full redo. Create replacement now', NEW.garment_id, v_order_display),
       jsonb_build_object(
         'order_id', NEW.order_id,
         'garment_id', NEW.id,
@@ -5582,7 +5647,6 @@ AS $$
         'finishing',     COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'finishing'),
         'ironing',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'ironing'),
         'quality_check', COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'quality_check'),
-        'investigations', COUNT(*) FILTER (WHERE needs_investigation IS TRUE),
         'dispatch',      COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'ready_for_dispatch')
     )
     FROM scoped;
@@ -6137,7 +6201,12 @@ DECLARE
 BEGIN
   SELECT jsonb_build_object(
     'totals', COALESCE(jsonb_object_agg(movement_type, total), '{}'::jsonb),
-    'count', SUM(cnt)
+    'count', COALESCE(SUM(cnt), 0),
+    -- True signed net stock change for the period: SUM(qty_delta) across every
+    -- type (restock +, consumption/transfer_out/waste -, return/transfer_in +,
+    -- adjustment ±). Net-zero annotations (qty_delta=0) don't move it. This is
+    -- only meaningful within ONE unit, so the reports scope by item_type.
+    'net', COALESCE(SUM(net_delta), 0)
   )
   INTO v_result
   FROM (
@@ -6146,6 +6215,7 @@ BEGIN
            -- (qty_delta=0); add it so redo scrap surfaces without double-counting
            -- real wastes (which have annotated_qty NULL).
            SUM(ABS(qty_delta) + COALESCE(annotated_qty, 0)) AS total,
+           SUM(qty_delta) AS net_delta,
            COUNT(*) AS cnt
     FROM stock_movements
     WHERE created_at >= p_from AND created_at < p_to
@@ -6154,16 +6224,25 @@ BEGIN
     GROUP BY movement_type
   ) AS t;
 
-  RETURN COALESCE(v_result, jsonb_build_object('totals', '{}'::jsonb, 'count', 0));
+  RETURN COALESCE(v_result, jsonb_build_object('totals', '{}'::jsonb, 'count', 0, 'net', 0));
 END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- ─── Top-N items by movement type ────────────────────────────────────
+-- p_location scopes to one side (§4: each side is blind to the other) and
+-- p_item_type scopes to fabric/shelf/accessory so per-unit reports never mix
+-- meters with pieces; NULL on either means no filter. Each added parameter
+-- changes the signature, so DROP every prior overload before re-creating
+-- (CREATE OR REPLACE cannot add a parameter in place).
+DROP FUNCTION IF EXISTS get_top_items_by_movement(stock_movement_type, timestamptz, timestamptz, int);
+DROP FUNCTION IF EXISTS get_top_items_by_movement(stock_movement_type, timestamptz, timestamptz, int, stock_location);
 CREATE OR REPLACE FUNCTION get_top_items_by_movement(
   p_movement_type stock_movement_type,
   p_from TIMESTAMPTZ,
   p_to TIMESTAMPTZ,
-  p_limit INT DEFAULT 10
+  p_limit INT DEFAULT 10,
+  p_location stock_location DEFAULT NULL,
+  p_item_type stock_item_type DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -6175,6 +6254,8 @@ BEGIN
     FROM stock_movements
     WHERE created_at >= p_from AND created_at < p_to
       AND movement_type = p_movement_type
+      AND (p_location IS NULL OR location = p_location)
+      AND (p_item_type IS NULL OR item_type = p_item_type)
     GROUP BY item_type, item_id
     ORDER BY total DESC
     LIMIT p_limit
@@ -6415,134 +6496,19 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- ════════════════════════════════════════════════════════════════════════
--- GROUP C — Repeated-returns investigation (auto-hold)  (CLAUDE.md §2.10)
+-- GROUP C — Repeated-returns investigation: REMOVED  (CLAUDE.md §2.10)
 -- ════════════════════════════════════════════════════════════════════════
-
--- Quality returns = # of QC fails (result='fail') across a garment's trip_history.
--- jsonb_typeof guards: a row may hold JSON null / a scalar (jsonb_array_elements
--- RAISEs on those). Alteration returns are trip_number-1, computed inline.
-CREATE OR REPLACE FUNCTION _count_qc_fails(p_trip_history JSONB)
-RETURNS INT LANGUAGE sql IMMUTABLE AS $$
-  SELECT COUNT(*)::int
-  FROM jsonb_array_elements(
-    CASE WHEN jsonb_typeof(p_trip_history) = 'array' THEN p_trip_history ELSE '[]'::jsonb END
-  ) AS trip
-  CROSS JOIN LATERAL jsonb_array_elements(
-    CASE WHEN jsonb_typeof(trip->'qc_attempts') = 'array' THEN trip->'qc_attempts' ELSE '[]'::jsonb END
-  ) AS att
-  WHERE att->>'result' = 'fail';
-$$;
-
--- BEFORE-UPDATE on garments: (1) DETECTION — when a NEW return crosses the §2.10
--- threshold (≥2 quality OR ≥3 total), flag needs_investigation and drop the
--- garment out of active production; fired on the *increase* so it re-arms only on
--- a genuinely new return, never on an unrelated update. (2) HOLD GUARD — while
--- flagged, the in_production false→true "start" transition is rejected. The hold
--- is per-garment (the flag is on the row) — siblings are never affected.
-CREATE OR REPLACE FUNCTION _garment_investigation_gate()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-DECLARE
-  v_old_q INT; v_new_q INT; v_old_total INT; v_new_total INT;
-BEGIN
-  -- (1) Detection — only recompute when returns actually changed.
-  IF NEW.trip_history IS DISTINCT FROM OLD.trip_history
-     OR NEW.trip_number IS DISTINCT FROM OLD.trip_number THEN
-    v_new_q := _count_qc_fails(NEW.trip_history);
-    v_new_total := v_new_q + GREATEST(COALESCE(NEW.trip_number, 0) - 1, 0);
-    v_old_q := _count_qc_fails(OLD.trip_history);
-    v_old_total := v_old_q + GREATEST(COALESCE(OLD.trip_number, 0) - 1, 0);
-    IF v_new_total > v_old_total AND (v_new_q >= 2 OR v_new_total >= 3) THEN
-      NEW.needs_investigation := true;
-      NEW.in_production := false;  -- drop out of active production while held
-    END IF;
-  END IF;
-
-  -- (2) Hold guard — a flagged garment cannot be (re)started.
-  IF NEW.needs_investigation AND NEW.in_production AND NOT COALESCE(OLD.in_production, false) THEN
-    RAISE EXCEPTION 'garment % needs investigation (repeated returns) — record the investigation before resuming production', NEW.id;
-  END IF;
-
-  RETURN NEW;
-END;
-$$;
-
+-- The auto-hold is gone: no garment is ever flagged, dropped from production, or
+-- blocked from restarting on repeated returns, and there is no manager-resolution
+-- RPC. The DROPs below clear the trigger + functions from a live DB on re-run.
+-- The needs_investigation column and the garment_investigations table are kept
+-- vestigial (no writer; column never set true) — no destructive drop, matching
+-- the redo_priority precedent. Investigation/root-cause handling is being
+-- redesigned elsewhere (SPEC §2.10).
 DROP TRIGGER IF EXISTS trg_garment_investigation_gate ON garments;
-CREATE TRIGGER trg_garment_investigation_gate
-  BEFORE UPDATE ON garments
-  FOR EACH ROW EXECUTE FUNCTION _garment_investigation_gate();
-
--- Manager resolves a held garment's investigation (CLAUDE.md §2.10). Records the
--- root_cause / decision / corrective actions (append-only history) and clears the
--- hold. decision='continue' RESUMES production in the same write (sets
--- in_production=true; the guard permits it because needs_investigation is now
--- false). redo/refund clear the hold only — the §2.5 remake / §2.6 refund run
--- through their own flows. Idempotent; manager-gated.
-CREATE OR REPLACE FUNCTION record_investigation(
-  p_garment_id UUID,
-  p_root_cause root_cause,
-  p_decision TEXT,                        -- continue | redo | refund
-  p_history_note TEXT DEFAULT NULL,
-  p_corrective_short TEXT DEFAULT NULL,
-  p_corrective_long TEXT DEFAULT NULL,
-  p_user_id UUID DEFAULT NULL,
-  p_idempotency_key UUID DEFAULT NULL
-)
-RETURNS JSONB AS $$
-DECLARE
-  v_g garments%ROWTYPE;
-  v_q INT;
-  v_alt INT;
-  v_inv_id UUID;
-  v_result JSONB;
-BEGIN
-  IF NOT idem_claim(p_idempotency_key, 'record_investigation') THEN
-    RETURN idem_replay(p_idempotency_key);
-  END IF;
-  IF NOT is_manager_or_above() THEN
-    RAISE EXCEPTION 'record_investigation: only a manager may resolve an investigation';
-  END IF;
-  IF p_decision NOT IN ('continue', 'redo', 'refund') THEN
-    RAISE EXCEPTION 'record_investigation: invalid decision % (expected continue|redo|refund)', p_decision;
-  END IF;
-
-  SELECT * INTO v_g FROM garments WHERE id = p_garment_id FOR UPDATE;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'record_investigation: garment % not found', p_garment_id;
-  END IF;
-  IF NOT v_g.needs_investigation THEN
-    RAISE EXCEPTION 'record_investigation: garment % is not flagged for investigation', p_garment_id;
-  END IF;
-
-  v_q := _count_qc_fails(v_g.trip_history);
-  v_alt := GREATEST(COALESCE(v_g.trip_number, 0) - 1, 0);
-
-  INSERT INTO garment_investigations (
-    garment_id, order_id, root_cause, decision, history_note,
-    corrective_short, corrective_long, quality_returns, alteration_returns, resolved_by
-  ) VALUES (
-    p_garment_id, v_g.order_id, p_root_cause, p_decision, p_history_note,
-    p_corrective_short, p_corrective_long, v_q, v_alt, p_user_id
-  ) RETURNING id INTO v_inv_id;
-
-  IF p_decision = 'continue' THEN
-    -- Resume: clear the hold AND return to production in one write.
-    UPDATE garments SET needs_investigation = false, in_production = true WHERE id = p_garment_id;
-  ELSE
-    -- redo / refund: release the hold; the remake / refund is taken elsewhere.
-    UPDATE garments SET needs_investigation = false WHERE id = p_garment_id;
-  END IF;
-
-  v_result := jsonb_build_object(
-    'investigation_id', v_inv_id,
-    'decision', p_decision,
-    'resumed', (p_decision = 'continue'),
-    'quality_returns', v_q,
-    'alteration_returns', v_alt
-  );
-  PERFORM idem_store(p_idempotency_key, v_result);
-  RETURN v_result;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
+DROP FUNCTION IF EXISTS _garment_investigation_gate();
+DROP FUNCTION IF EXISTS record_investigation(uuid, root_cause, text, text, text, text, uuid, uuid);
+DROP FUNCTION IF EXISTS _count_qc_fails(jsonb);
 
 -- ════════════════════════════════════════════════════════════════════════
 -- GROUP A — Redo lifecycle, material & waste  (CLAUDE.md §2.5/§4/§6)
@@ -6605,8 +6571,8 @@ ALTER TABLE stocktake_counts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "stocktake_counts_select" ON stocktake_counts;
 CREATE POLICY "stocktake_counts_select" ON stocktake_counts FOR SELECT USING (is_active_user());
 
--- garment_investigations (CLAUDE.md §2.10): reads direct; writes only via the
--- manager-gated record_investigation RPC (SECURITY DEFINER) below.
+-- garment_investigations (CLAUDE.md §2.10): vestigial — the record_investigation
+-- writer was removed with the auto-hold; kept readable, no writer (no destructive drop).
 ALTER TABLE garment_investigations ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "garment_investigations_select" ON garment_investigations;
 CREATE POLICY "garment_investigations_select" ON garment_investigations FOR SELECT USING (is_active_user());

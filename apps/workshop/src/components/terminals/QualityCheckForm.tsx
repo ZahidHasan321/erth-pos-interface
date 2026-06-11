@@ -86,6 +86,17 @@ function coupleOptionGroups(flagged: Set<string>): Set<string> {
   return flagged;
 }
 
+/** Parse a garment's sparse alteration_styles jsonb (styleKey -> new value).
+ *  The column may arrive as a string or already-parsed object; tolerate both. */
+function parseAltStyles(garment: WorkshopGarment): Record<string, unknown> {
+  const raw = (garment as unknown as Record<string, unknown>).alteration_styles;
+  if (raw == null) return {};
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
+  }
+  return raw as Record<string, unknown>;
+}
+
 interface Props {
   garment: WorkshopGarment;
   measurement: Measurement | null | undefined;
@@ -110,6 +121,11 @@ export function QualityCheckForm({
 
   const plan = garment.production_plan as ProductionPlan | null;
   const plannedQC = plan?.quality_checker ?? "";
+
+  // Alt-out garment (customer-brought, garment_type='alteration'). Its requested
+  // changes live sparsely in alteration_styles, not the style columns, so QC must
+  // scope to the changed keys and source expected option values from that JSON.
+  const isAltOut = garment.garment_type === "alteration";
 
   // ── Rework mode detection ─────────────────────────────────────────────────
   // Find the most recent fail attempt in the current trip; if present, only
@@ -149,9 +165,16 @@ export function QualityCheckForm({
         for (const k of alterationFilter.measurementKeys) {
           if (visibleMeasurementKeys.has(k)) flagged.add(k);
         }
-        for (const o of QC_OPTIONS) {
-          const sec = QC_OPTION_TO_SECTION[o.key];
-          if (sec && alterationFilter.visibleSections.has(sec)) flagged.add(o.key);
+        if (isAltOut && alterationFilter.optionKeys) {
+          // Alt-out: verify exactly the changed style keys (sparse intake), not
+          // whole visual sections — unchanged options in an affected section have
+          // no reliable expected value to check against.
+          for (const k of alterationFilter.optionKeys) flagged.add(k);
+        } else {
+          for (const o of QC_OPTIONS) {
+            const sec = QC_OPTION_TO_SECTION[o.key];
+            if (sec && alterationFilter.visibleSections.has(sec)) flagged.add(o.key);
+          }
         }
         coupleOptionGroups(flagged);
       }
@@ -164,7 +187,7 @@ export function QualityCheckForm({
       ...QC_OPTIONS.map((o) => o.key),
       ...QC_QUALITY.map((q) => q.key),
     ]);
-  }, [lastFail, isAlteration, alterationFilter, visibleMeasurementKeys]);
+  }, [lastFail, isAlteration, isAltOut, alterationFilter, visibleMeasurementKeys]);
 
   // In alteration mode, hide measurements not flagged by the shop. In all
   // other modes (full QC, QC-fail rework), keep the full template visible —
@@ -290,14 +313,29 @@ export function QualityCheckForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [measurement]);
   const expectedOptions: Record<string, unknown> = {};
-  for (const o of QC_OPTIONS) expectedOptions[o.key] = (garment as unknown as Record<string, unknown>)[o.key];
-  // jabzour_1/2 are stored in DB as enum + text; QC operator sees visual values.
-  const j = normalizeExpectedJabzour(expectedOptions.jabzour_1, expectedOptions.jabzour_2);
-  expectedOptions.jabzour_1 = j.jabzour_1;
-  expectedOptions.jabzour_2 = j.jabzour_2;
-  // shoulder_slope lives on the measurement snapshot, not the garment record —
-  // override the garment-sourced (undefined) value with the measured spec.
-  expectedOptions.shoulder_slope = expectedMeasurements.shoulder_slope ?? null;
+  if (isAltOut) {
+    // Alt-out: the intake writes the requested style changes into the
+    // alteration_styles JSON (the style columns are empty), so the expected
+    // value of each CHANGED key comes from there. Only changed keys are sourced
+    // (and only those are enabled / QC'd). The intake stores values already in
+    // the QC picker's visual space — jabzour_1 holds JAB_SHAAB / a visual style
+    // directly and jabzour_2 the secondary, so no enum normalization is needed.
+    const altStyles = parseAltStyles(garment);
+    for (const k of Object.keys(altStyles)) {
+      const v = altStyles[k];
+      if (v == null || v === "") continue;
+      expectedOptions[k] = v;
+    }
+  } else {
+    for (const o of QC_OPTIONS) expectedOptions[o.key] = (garment as unknown as Record<string, unknown>)[o.key];
+    // jabzour_1/2 are stored in DB as enum + text; QC operator sees visual values.
+    const j = normalizeExpectedJabzour(expectedOptions.jabzour_1, expectedOptions.jabzour_2);
+    expectedOptions.jabzour_1 = j.jabzour_1;
+    expectedOptions.jabzour_2 = j.jabzour_2;
+    // shoulder_slope lives on the measurement snapshot, not the garment record —
+    // override the garment-sourced (undefined) value with the measured spec.
+    expectedOptions.shoulder_slope = expectedMeasurements.shoulder_slope ?? null;
+  }
 
   // Option fields the garment record specifies. Marked with * in the form.
   // §2.11 toggles always count — an explicit Yes/No (or Up/Down/Standard) is
