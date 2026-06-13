@@ -672,7 +672,7 @@ BEGIN
       fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot,
       collar_type, collar_button, collar_position, collar_thickness, cuffs_type, cuffs_thickness,
       front_pocket_type, front_pocket_thickness,
-      wallet_pocket, pen_holder, small_tabaggi,
+      wallet_pocket, pen_holder, mobile_pocket, small_tabaggi,
       jabzour_1, jabzour_2, jabzour_thickness,
       lines, notes, soaking, soaking_hours, express, garment_type,
       delivery_date, style, shop_name, home_delivery, color,
@@ -701,6 +701,7 @@ BEGIN
       v_garment->>'front_pocket_thickness',
       COALESCE((v_garment->>'wallet_pocket')::BOOLEAN, false),
       COALESCE((v_garment->>'pen_holder')::BOOLEAN, false),
+      COALESCE((v_garment->>'mobile_pocket')::BOOLEAN, false),
       COALESCE((v_garment->>'small_tabaggi')::BOOLEAN, false),
       (v_garment->>'jabzour_1')::jabzour_type,
       v_garment->>'jabzour_2',
@@ -748,6 +749,7 @@ BEGIN
       front_pocket_thickness   = EXCLUDED.front_pocket_thickness,
       wallet_pocket            = EXCLUDED.wallet_pocket,
       pen_holder               = EXCLUDED.pen_holder,
+      mobile_pocket            = EXCLUDED.mobile_pocket,
       small_tabaggi            = EXCLUDED.small_tabaggi,
       jabzour_1                = EXCLUDED.jabzour_1,
       jabzour_2                = EXCLUDED.jabzour_2,
@@ -1038,7 +1040,8 @@ BEGIN
           WHEN home_delivery THEN 'delivered'::fulfillment_type
           ELSE 'collected'::fulfillment_type
         END,
-        piece_stage = 'completed'
+        piece_stage = 'completed',
+        collected_at = now()
       WHERE id = v_garment_id
         AND order_id = p_order_id
         AND location = 'shop'
@@ -1277,7 +1280,8 @@ BEGIN
         WHEN home_delivery THEN 'delivered'::fulfillment_type
         ELSE 'collected'::fulfillment_type
       END,
-      piece_stage = 'completed'
+      piece_stage = 'completed',
+      collected_at = now()
     WHERE id = v_garment_id
       AND order_id = p_order_id
       AND location = 'shop'
@@ -3260,15 +3264,20 @@ BEGIN
     AND checkout_status = 'confirmed'
     AND order_total::decimal > paid::decimal;
 
-  -- 1e. Garments collected/delivered in range (customer hand-over events)
-  SELECT COUNT(DISTINCT gf.garment_id)
+  -- 1e. Garments collected/delivered in range (customer hand-over events).
+  -- Counted from the garment's collected_at stamp (set by collect_garments /
+  -- record_payment_transaction at handover), NOT garment_feedback — finals are
+  -- collected at handover with NO feedback form (SPEC §2.5/§3), so no feedback
+  -- row is ever written with action 'collected'/'delivered' and the old query
+  -- always returned 0.
+  SELECT COUNT(*)
   INTO v_delivered_count
-  FROM garment_feedback gf
-  JOIN orders o ON o.id = gf.order_id
+  FROM garments g
+  JOIN orders o ON o.id = g.order_id
   WHERE o.brand = p_brand::brand
-    AND gf.action IN ('collected', 'delivered')
-    AND gf.created_at >= v_tx_start
-    AND gf.created_at < v_tx_end;
+    AND g.fulfillment_type IN ('collected', 'delivered')
+    AND g.collected_at >= v_tx_start
+    AND g.collected_at < v_tx_end;
 
   -- 2. Transaction-level aggregates (actual money movement)
   --    created_at is UTC, so use timezone-corrected boundaries.
@@ -4662,17 +4671,23 @@ BEGIN
         ) alt_meta ON o.order_type::text = 'ALTERATION'
         CROSS JOIN LATERAL (
             SELECT
+                -- Labels MUST match the canonical ShowroomLabel set in utils.ts
+                -- getShowroomStatus (the §2.8 oracle): the former awaiting_finals /
+                -- partial_ready cases all collapse to ready_for_pickup — the x/y
+                -- received count on the list carries the detail. Emitting the old
+                -- labels here produced a gray no-op badge the UI couldn't render,
+                -- filter, or check out.
                 CASE
                     WHEN o.order_type::text = 'ALTERATION' AND g.has_shop_items THEN 'alteration_out'
                     WHEN o.order_type::text = 'ALTERATION' THEN NULL
-                    WHEN NOT g.has_shop_items AND g.finals_in_transit THEN 'awaiting_finals'
+                    WHEN NOT g.has_shop_items AND g.finals_in_transit THEN 'ready_for_pickup'
                     WHEN NOT g.has_shop_items THEN NULL
                     WHEN g.has_alteration_needing_work THEN 'alteration_in'
                     WHEN g.has_brova_awaiting_trial THEN 'brova_trial'
                     WHEN g.has_garment_needing_action THEN 'needs_action'
-                    WHEN g.has_shop_brova AND g.finals_still_out THEN 'awaiting_finals'
+                    WHEN g.has_shop_brova AND g.finals_still_out THEN 'ready_for_pickup'
                     WHEN g.all_shop_items_done AND NOT g.garments_still_out THEN 'ready_for_pickup'
-                    WHEN g.garments_still_out THEN 'partial_ready'
+                    WHEN g.garments_still_out THEN 'ready_for_pickup'
                     ELSE NULL
                 END AS showroom_label,
                 g.has_shop_items,
@@ -5638,7 +5653,11 @@ AS $$
     )
     SELECT jsonb_build_object(
         'receiving',     COUNT(*) FILTER (WHERE location::text IN ('transit_to_workshop','lost_in_transit')),
-        'parking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND NOT in_production AND piece_stage::text <> 'discarded' AND (piece_stage::text <> 'waiting_for_acceptance' OR garment_type::text = 'final')),
+        -- WFA-final clause restricted to trip 1 to match the Parking page list
+        -- (parking.tsx only lists waiting_for_acceptance finals at trip 1; a WFA
+        -- final is always trip 1 in practice, so this is the same set — the
+        -- restriction just keeps the badge count and the list from diverging).
+        'parking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND NOT in_production AND piece_stage::text <> 'discarded' AND (piece_stage::text <> 'waiting_for_acceptance' OR (garment_type::text = 'final' AND COALESCE(trip_number, 1) = 1))),
         'scheduler',     COUNT(*) FILTER (WHERE location::text = 'workshop' AND in_production AND production_plan IS NULL AND piece_stage::text = 'waiting_cut'),
         'soaking',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND soaking IS TRUE AND soaking_completed_at IS NULL AND trip_number = 1),
         'cutting',       COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'cutting'),

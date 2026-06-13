@@ -915,6 +915,12 @@ export const garments = pgTable("garments", {
     acceptance_status: boolean("acceptance_status"),
     feedback_status: text("feedback_status"), // "accepted" | "needs_repair" | "needs_redo" | null
     fulfillment_type: fulfillmentTypeEnum("fulfillment_type"),
+    // Stamped when the garment is handed over (collect_garments /
+    // record_payment_transaction collection). Distinct from completion_time
+    // (which marks production completion) so the EOD report can count
+    // collected/delivered garments within a date range without polluting
+    // production performance analytics.
+    collected_at: timestamp("collected_at", { withTimezone: true }),
     // 0 = created, never dispatched from shop. Bumped to 1 on first dispatchOrder
     // (shop → workshop). Subsequent returns/alterations increment from there, so
     // workshop logic (alteration thresholds, receiving tabs) still sees trip ≥ 1.
