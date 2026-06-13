@@ -28,7 +28,7 @@ type Mode = "payment" | "handover" | "refund";
 
 const shortDateFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
 
-export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack: () => void }) {
+export function OrderDetailShell({ orderId, onBack, canTakeMoney = true }: { orderId: string; onBack: () => void; canTakeMoney?: boolean }) {
     const { data: searchResult, isFetching: isOrderLoading } = useCashierOrderSearch(orderId);
     const order = searchResult?.status === "success" ? searchResult.data : null;
 
@@ -94,17 +94,21 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
     const [historyOpen, setHistoryOpen] = useState(false);
 
     // Default-mode-on-order-switch logic: if fully paid + ready garments → handover, else payment.
+    // When the register can't take money (closed/stale), prefer handover — it's
+    // ungated — so a customer can still collect. Re-runs when the session resolves.
     useEffect(() => {
         setHistoryOpen(false);
-        if (isFullyPaid && eligibleGarments.length > 0 && showHandoverTab) {
+        if (!canTakeMoney && showHandoverTab) {
             setMode("handover");
-        } else if (cancelledWithPayments) {
+        } else if (isFullyPaid && eligibleGarments.length > 0 && showHandoverTab) {
+            setMode("handover");
+        } else if (cancelledWithPayments && canTakeMoney) {
             setMode("refund");
         } else {
             setMode("payment");
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [orderId]);
+    }, [orderId, canTakeMoney]);
 
     // If current mode tab disappears (e.g. handover finishes), fall back to payment.
     useEffect(() => {
@@ -160,20 +164,24 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
             {/* Content */}
             <div className="flex-1 min-h-0 lg:overflow-hidden overflow-y-auto px-4 pb-4 max-w-[1400px] mx-auto w-full">
                 {mode === "payment" && (
-                    <PaymentMode
-                        order={order}
-                        orderTotal={orderTotal}
-                        totalPaid={totalPaid}
-                        advance={advance}
-                        remainingBalance={remainingBalance}
-                        isFullyPaid={isFullyPaid}
-                        transactionsCount={transactions.length}
-                        totalPayments={totalPayments}
-                        totalRefunds={totalRefunds}
-                        onOpenHistory={() => setHistoryOpen(true)}
-                        isHomeDelivery={isHomeDelivery}
-                        isOrderCompleted={!!isOrderCompleted}
-                    />
+                    canTakeMoney ? (
+                        <PaymentMode
+                            order={order}
+                            orderTotal={orderTotal}
+                            totalPaid={totalPaid}
+                            advance={advance}
+                            remainingBalance={remainingBalance}
+                            isFullyPaid={isFullyPaid}
+                            transactionsCount={transactions.length}
+                            totalPayments={totalPayments}
+                            totalRefunds={totalRefunds}
+                            onOpenHistory={() => setHistoryOpen(true)}
+                            isHomeDelivery={isHomeDelivery}
+                            isOrderCompleted={!!isOrderCompleted}
+                        />
+                    ) : (
+                        <RegisterRequiredNotice action="record a payment" onBack={onBack} />
+                    )
                 )}
                 {mode === "handover" && showHandoverTab && (
                     <HandoverMode
@@ -183,16 +191,20 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
                     />
                 )}
                 {mode === "refund" && showRefundTab && (
-                    <RefundMode
-                        order={order}
-                        garments={garments}
-                        shelfItems={shelfItems}
-                        orderTotal={orderTotal}
-                        totalPaid={totalPaid}
-                        advance={advance}
-                        remainingBalance={remainingBalance}
-                        cancelledWithPayments={cancelledWithPayments}
-                    />
+                    canTakeMoney ? (
+                        <RefundMode
+                            order={order}
+                            garments={garments}
+                            shelfItems={shelfItems}
+                            orderTotal={orderTotal}
+                            totalPaid={totalPaid}
+                            advance={advance}
+                            remainingBalance={remainingBalance}
+                            cancelledWithPayments={cancelledWithPayments}
+                        />
+                    ) : (
+                        <RegisterRequiredNotice action="process a refund" onBack={onBack} />
+                    )
                 )}
             </div>
 
@@ -234,6 +246,28 @@ export function OrderDetailShell({ orderId, onBack }: { orderId: string; onBack:
                     </div>
                 </SheetContent>
             </Sheet>
+        </div>
+    );
+}
+
+// Shown in the payment/refund modes when the register can't take money (no open
+// session for today). Handover stays available — only money is gated (SPEC §3).
+function RegisterRequiredNotice({ action, onBack }: { action: string; onBack: () => void }) {
+    return (
+        <div className="h-full flex items-center justify-center p-6">
+            <Card className="max-w-md w-full p-6 text-center space-y-3">
+                <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                    <Info className="h-6 w-6 text-amber-600" />
+                </div>
+                <h3 className="text-base font-semibold">Register not open</h3>
+                <p className="text-sm text-muted-foreground">
+                    Open today's register to {action}. You can still hand over or
+                    deliver this order without an open register.
+                </p>
+                <Button variant="outline" size="sm" onClick={onBack}>
+                    Go to register
+                </Button>
+            </Card>
         </div>
     );
 }

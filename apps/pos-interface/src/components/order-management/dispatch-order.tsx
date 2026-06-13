@@ -93,10 +93,37 @@ function OrderListItem({ order, onDispatch, isUpdating, hasReturning, onGoToTab 
     // Everything dispatchable selected by default — parked finals are dispatched
     // alongside brovas and stay parked at the workshop (spec §2.4). A redo
     // replacement still waiting in dispatch (§2.5) is excluded until resumed.
-    const dispatchable = garments.filter(g => !isWaitingReplacement(g));
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(
-        () => new Set(dispatchable.map(g => g.id))
+    const dispatchable = useMemo(
+        () => (order.garments || []).filter(g => !isWaitingReplacement(g)),
+        [order.garments],
     );
+    const dispatchableIds = useMemo(() => dispatchable.map(g => g.id), [dispatchable]);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(
+        () => new Set(dispatchableIds)
+    );
+
+    // Re-sync the selection when the dispatchable set changes after mount — e.g.
+    // a redo replacement waiting in dispatch is resumed (handleResume) and, after
+    // the refetch, becomes dispatchable. The lazy initializer above only ran once,
+    // so without this the resumed replacement stayed unchecked and was silently
+    // left behind on "Dispatch" (it dispatches only the selected subset). Newly
+    // dispatchable garments are auto-selected (the select-all-by-default intent);
+    // ids that vanished from the set are pruned. Manual deselections are kept.
+    const prevDispatchableIdsRef = useRef<Set<string>>(new Set(dispatchableIds));
+    useLayoutEffect(() => {
+        const current = new Set(dispatchableIds);
+        const prevKnown = prevDispatchableIdsRef.current;
+        prevDispatchableIdsRef.current = current;
+        setSelectedIds(prev => {
+            const next = new Set<string>();
+            // Keep prior selections that are still dispatchable.
+            for (const id of prev) if (current.has(id)) next.add(id);
+            // Auto-select garments that just became dispatchable.
+            for (const id of dispatchableIds) if (!prevKnown.has(id)) next.add(id);
+            if (next.size === prev.size && [...next].every(id => prev.has(id))) return prev;
+            return next;
+        });
+    }, [dispatchableIds]);
 
     const toggleGarment = (id: string, checked: boolean) => {
         setSelectedIds(prev => {

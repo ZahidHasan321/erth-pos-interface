@@ -103,12 +103,29 @@ export function buildBrovaStyleUpdates(args: {
         if (parsed === 1 || parsed === 2) updates.lines = parsed;
       }
     }
-    // Boolean accessory toggles — reject = flip current value.
+    // Boolean accessory toggles — a rejection flips the spec away from what the
+    // customer saw on the brova. We apply an ABSOLUTE target, not a relative
+    // `!current` flip: `mainNewValue` carries the "Yes"/"No" target frozen at
+    // rejection time (and persisted as the option's new_value), so re-submitting
+    // the same feedback after the spec was already corrected and the garment
+    // refetched is idempotent. A relative flip would toggle BACK on every
+    // re-submit — corrupting the spec and re-moving money for the priced
+    // small_tabaggi. First pass (no frozen target yet) derives it from the
+    // as-built garment, which is correct because the garment is still as-built.
     if (mainRejected) {
-      if (id === "smallTabaggi") updates.small_tabaggi = !garment.small_tabaggi;
-      else if (id === "penHolder") updates.pen_holder = !garment.pen_holder;
-      else if (id === "walletPocket") updates.wallet_pocket = !garment.wallet_pocket;
-      else if (id === "mobilePocket") updates.mobile_pocket = !garment.mobile_pocket;
+      const boolCol: Record<string, "small_tabaggi" | "pen_holder" | "wallet_pocket" | "mobile_pocket"> = {
+        smallTabaggi: "small_tabaggi",
+        penHolder: "pen_holder",
+        walletPocket: "wallet_pocket",
+        mobilePocket: "mobile_pocket",
+      };
+      const col = boolCol[id];
+      if (col) {
+        updates[col] =
+          mainNewValue === "Yes" ? true
+          : mainNewValue === "No" ? false
+          : !garment[col];
+      }
     }
     if (hashwaRejected && hashwaNewValue) {
       if (id === "frontPocket") updates.front_pocket_thickness = hashwaNewValue;

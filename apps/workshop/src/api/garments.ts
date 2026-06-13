@@ -3,11 +3,11 @@ import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
 import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry } from '@repo/database';
 import type { PieceStage, Location, QcDefectAttribution } from '@repo/database';
 import {
-  QC_OPTIONS,
   evaluateQc,
-  normalizeExpectedJabzour,
+  deriveExpectedQcOptions,
   type QcInputs,
 } from '@/lib/qc-spec';
+import { getAltOutEffectiveMeasurement } from '@/lib/alteration-filter';
 import { PRODUCTION_STAGES } from '@/lib/constants';
 import {
   buildScheduleTripHistoryEntry,
@@ -1183,25 +1183,21 @@ export const submitQc = async (
   returnStages: PieceStage[] | null,
   defectAttributions: QcDefectAttribution[] | null = null,
 ): Promise<{ result: "pass" | "fail" }> => {
-  const { data: existingData, error: fetchErr } = await db
-    .from('garments')
-    .select(`
-      worker_history, trip_history, trip_number, stage_timings,
-      ${QC_OPTIONS.map((o) => o.key).join(', ')},
-      measurement:measurements!measurement_id(*)
-    `)
-    .eq('id', id)
-    .single();
+  // Fetch the full garment (alteration context + measurement joins included) so
+  // the server verdict is derived from EXACTLY the same expected values the
+  // operator saw on screen. Deriving from a hand-picked column list previously
+  // (a) referenced shoulder_slope — a measurements column, not a garments one —
+  // which 400'd every QC submit, and (b) ignored alt-out's sparse intake, so
+  // alteration QC could never pass.
+  const garment = await getGarmentById(id);
+  if (!garment) throw new Error(`submitQc: failed to fetch garment ${id} for QC`);
+  const existing = garment as unknown as Record<string, unknown>;
 
-  if (fetchErr) throw new Error(`submitQc: failed to fetch garment for QC: ${fetchErr.message}`);
-
-  const existing = existingData as unknown as Record<string, unknown>;
-  const expectedMeasurements = (existing?.measurement ?? {}) as Record<string, unknown>;
-  const expectedOptions: Record<string, unknown> = {};
-  for (const o of QC_OPTIONS) expectedOptions[o.key] = existing?.[o.key];
-  const j = normalizeExpectedJabzour(expectedOptions.jabzour_1, expectedOptions.jabzour_2);
-  expectedOptions.jabzour_1 = j.jabzour_1;
-  expectedOptions.jabzour_2 = j.jabzour_2;
+  const isAltOut = garment.garment_type === 'alteration';
+  const expectedMeasurements = ((isAltOut
+    ? getAltOutEffectiveMeasurement(garment)
+    : garment.measurement) ?? {}) as Record<string, unknown>;
+  const expectedOptions = deriveExpectedQcOptions(existing, expectedMeasurements);
 
   const evalResult = evaluateQc(expectedMeasurements, expectedOptions, inputs, enabledKeys);
 

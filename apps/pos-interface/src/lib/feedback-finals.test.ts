@@ -100,7 +100,7 @@ describe("buildBrovaStyleUpdates", () => {
     expect(u.collar_position).toBeNull();
   });
 
-  it("a rejected boolean toggle flips the current value", () => {
+  it("a rejected boolean toggle flips the current value (first pass, no frozen target)", () => {
     const u = buildBrovaStyleUpdates({
       optionIds: ["smallTabaggi"],
       optionChecks: { "smallTabaggi-main": false },
@@ -109,6 +109,31 @@ describe("buildBrovaStyleUpdates", () => {
       garment: g({ small_tabaggi: false }),
     });
     expect(u.small_tabaggi).toBe(true);
+  });
+
+  it("a rejected boolean applies the frozen Yes/No target absolutely, so a re-submit is idempotent", () => {
+    // After the first feedback corrected the spec (small_tabaggi now true) and
+    // the garment was refetched, re-submitting the SAME rejection must not flip
+    // it back. The frozen "Yes" target (persisted as new_value) keeps it true —
+    // a relative flip would revert it and re-move money (the §2.5 bug).
+    const kept = buildBrovaStyleUpdates({
+      optionIds: ["smallTabaggi"],
+      optionChecks: { "smallTabaggi-main": false },
+      styleChanges: { smallTabaggi: "Yes" },
+      hashwaChanges: {},
+      garment: g({ small_tabaggi: true }),
+    });
+    expect(kept.small_tabaggi).toBe(true);
+
+    // A "No" target removes it regardless of the live value.
+    const removed = buildBrovaStyleUpdates({
+      optionIds: ["smallTabaggi"],
+      optionChecks: { "smallTabaggi-main": false },
+      styleChanges: { smallTabaggi: "No" },
+      hashwaChanges: {},
+      garment: g({ small_tabaggi: true }),
+    });
+    expect(removed.small_tabaggi).toBe(false);
   });
 
   it("a rejected hashwa sets the thickness field", () => {

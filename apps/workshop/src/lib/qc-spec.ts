@@ -167,9 +167,12 @@ export const QC_QUALITY: QcQualitySpec[] = [
   { key: "hemming",      label: "Rating Hemming" },
 ];
 
-/** Stages operator can choose from on QC fail. Cutting → Ironing range. */
+/** Stages operator can choose from on QC fail. Cutting → Ironing range.
+ *  post_cutting is excluded — it's disabled in the production flow (§2.2), and a
+ *  garment sent there can't advance (getNextPlanStage returns null for a stage
+ *  absent from PRODUCTION_STAGES), stranding it off every worklist. */
 export const QC_RETURN_STAGES: PieceStage[] = [
-  "cutting", "post_cutting", "sewing", "finishing", "ironing",
+  "cutting", "sewing", "finishing", "ironing",
 ];
 
 /**
@@ -191,6 +194,49 @@ export function normalizeExpectedJabzour(
     return { jabzour_1: "JAB_SHAAB", jabzour_2: (rawJ2 as string | null) ?? null };
   }
   return { jabzour_1: null, jabzour_2: null };
+}
+
+/** Parse a sparse alteration JSON column that may arrive as a string or an
+ *  already-parsed object (tolerate both). */
+function parseSparseStyles(raw: unknown): Record<string, unknown> {
+  if (raw == null) return {};
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
+  }
+  return raw as Record<string, unknown>;
+}
+
+/**
+ * Derive the expected option values QC verifies against. Shared by the QC form
+ * (preview) and the server submit so the verdict can never diverge from what
+ * the operator saw on screen:
+ *  - alt-out (customer-brought, garment_type='alteration'): only the changed
+ *    style keys, sourced from the sparse `alteration_styles` JSON (the style
+ *    columns are empty); values are already in the QC picker's visual space.
+ *  - otherwise: the garment's own style columns, with jabzour enum→visual
+ *    normalization, and `shoulder_slope` pulled from the measurement snapshot
+ *    (it lives on `measurements`, never on `garments`).
+ */
+export function deriveExpectedQcOptions(
+  garment: Record<string, unknown>,
+  expectedMeasurements: Record<string, unknown>,
+): Record<string, unknown> {
+  const expected: Record<string, unknown> = {};
+  if (garment.garment_type === "alteration") {
+    const altStyles = parseSparseStyles(garment.alteration_styles);
+    for (const k of Object.keys(altStyles)) {
+      const v = altStyles[k];
+      if (v == null || v === "") continue;
+      expected[k] = v;
+    }
+    return expected;
+  }
+  for (const o of QC_OPTIONS) expected[o.key] = garment[o.key];
+  const j = normalizeExpectedJabzour(expected.jabzour_1, expected.jabzour_2);
+  expected.jabzour_1 = j.jabzour_1;
+  expected.jabzour_2 = j.jabzour_2;
+  expected.shoulder_slope = expectedMeasurements.shoulder_slope ?? null;
+  return expected;
 }
 
 /** The three collar positions. `standard` is the neutral choice, stored as the

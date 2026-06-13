@@ -1473,10 +1473,31 @@ function UnifiedFeedbackInterface() {
     });
   }, [selectedGarmentId]);
 
+  // Option ids whose rejection toggles a boolean garment column.
+  const BOOL_OPTION_COL: Record<string, "small_tabaggi" | "pen_holder" | "wallet_pocket" | "mobile_pocket"> = {
+    smallTabaggi: "small_tabaggi",
+    penHolder: "pen_holder",
+    walletPocket: "wallet_pocket",
+    mobilePocket: "mobile_pocket",
+  };
+
   const handleCheck = (key: string, checked: boolean) => {
-    updateGarmentState(selectedGarmentId, {
+    const optId = key.endsWith("-main") ? key.slice(0, -"-main".length) : null;
+    const col = optId ? BOOL_OPTION_COL[optId] : undefined;
+    const patch: Partial<GarmentFeedbackState> = {
       optionChecks: { ...currentState.optionChecks, [key]: checked },
-    });
+    };
+    // Freeze the resulting boolean target as the option's new_value the moment
+    // it is rejected — while the form still shows the as-built spec. Persisting
+    // the absolute target (vs a relative flip applied at submit) keeps re-submits
+    // idempotent: see buildBrovaStyleUpdates.
+    if (optId && col && activeGarment && !checked) {
+      patch.styleChanges = {
+        ...currentState.styleChanges,
+        [optId]: activeGarment[col] ? "No" : "Yes",
+      };
+    }
+    updateGarmentState(selectedGarmentId, patch);
   };
 
   const handleStyleChange = (optionId: string, value: string) => {
@@ -1837,6 +1858,17 @@ function UnifiedFeedbackInterface() {
           const created = await createMeasurement(base);
           if (created.status === "success" && created.data) {
             newMeasurementId = created.data.id;
+          } else {
+            // Minting the corrected measurement is the whole point of a
+            // spec-correcting feedback row. If it fails we must NOT continue:
+            // the override assignments below resolve the staged id to null and
+            // silently no-op, leaving the garment advanced but still pointing at
+            // the old (wrong) measurement with no error shown. Abort instead —
+            // the create is idempotent (keyed on the staged localId), so a retry
+            // is safe.
+            throw new Error(
+              `Failed to create the corrected measurement: ${created.status === "error" ? created.message : "unknown error"}`,
+            );
           }
         }
 
@@ -1881,6 +1913,20 @@ function UnifiedFeedbackInterface() {
         // discard/replacement lifecycle owns its own pricing) and when no priced
         // field moved. orders.paid is never touched here — collection stays the
         // cashier's job at settlement.
+        // NOTE on atomicity: the feedback submit applies several writes (stage,
+        // measurement, style/overrides, reprice, feedback record) as separate
+        // calls — it is not a single DB transaction. It is safe because EVERY
+        // write is idempotent on a re-submit: the stage advance and style/override
+        // patches set absolute values, createMeasurement is keyed on the staged
+        // localId (no duplicate), reprice_order_styles assigns absolute totals,
+        // and the feedback record is an upsert. So a mid-sequence failure is a
+        // transient partial state that re-submitting fully heals (the catch makes
+        // every failure visible). A future hardening is a single server-side
+        // apply RPC — see the bug report. The reprice below is deliberately
+        // NON-FATAL: it is the least critical write (pricing is the cashier's
+        // domain at settlement, orders.paid is never touched here), so a reprice
+        // failure must not discard the just-uploaded photos and the feedback
+        // record that follow.
         if (state.feedbackAction !== "needs_redo" && repricePreview?.changed) {
           const res = await repriceOrderStyles({
             orderId: activeOrder.id,
@@ -1892,12 +1938,15 @@ function UnifiedFeedbackInterface() {
             idempotencyKey: crypto.randomUUID(),
           });
           if (res.status === "error") {
-            toast.error(`Failed to update order price: ${res.message}`);
-            return;
+            toast.warning(
+              `Spec saved, but the order price was not updated: ${res.message}. Re-submit to retry, or adjust the total at the cashier.`,
+              { duration: 8000 },
+            );
+          } else {
+            toast.success(
+              `Order total updated to KWD ${repricePreview.newOrderTotal.toFixed(3)} (${repricePreview.delta >= 0 ? "+" : ""}${repricePreview.delta.toFixed(3)}).`,
+            );
           }
-          toast.success(
-            `Order total updated to KWD ${repricePreview.newOrderTotal.toFixed(3)} (${repricePreview.delta >= 0 ? "+" : ""}${repricePreview.delta.toFixed(3)}).`,
-          );
         }
 
         // --- Redo outcome execution (§2.5) ---
@@ -2199,7 +2248,7 @@ function UnifiedFeedbackInterface() {
         // Stay on page - don't navigate away. User can submit other garments.
     } catch (err) {
         console.error(err);
-        toast.error("Failed to save feedback results");
+        toast.error(`Failed to save feedback results: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
         setIsSubmitting(false);
     }
@@ -3607,7 +3656,16 @@ function UnifiedFeedbackInterface() {
                       const parkedFinals = (activeOrder?.garments ?? []).filter(
                           g => g.garment_type === "final" && g.piece_stage === "waiting_for_acceptance"
                       );
-                      const fabrics = (redoFabricsData ?? []).filter(f => Number(f.shop_stock) > 0);
+                      // Show ALL catalogue fabrics, not just in-stock ones: a
+                      // replacement cut from a short/empty fabric is valid —
+                      // create_replacement_garment parks it (waiting_material)
+                      // until the shop restocks. Hiding zero-stock fabrics made
+                      // that fabric unpickable, blocking the redo entirely.
+                      // In-stock first for usability.
+                      const redoRequired = Number(activeGarment?.fabric_length ?? 0);
+                      const fabrics = [...(redoFabricsData ?? [])].sort(
+                          (a, b) => Number(b.shop_stock) - Number(a.shop_stock),
+                      );
                       return (
                           <div className="space-y-3 p-3 rounded-md border border-border bg-muted/30">
                               <Label className="text-sm font-medium text-muted-foreground">
@@ -3649,9 +3707,15 @@ function UnifiedFeedbackInterface() {
                                       >
                                           <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select fabric…" /></SelectTrigger>
                                           <SelectContent>
-                                              {fabrics.map(f => (
-                                                  <SelectItem key={f.id} value={String(f.id)}>{f.name} ({Number(f.shop_stock)}m)</SelectItem>
-                                              ))}
+                                              {fabrics.map(f => {
+                                                  const stock = Number(f.shop_stock);
+                                                  const willPark = redoRequired > 0 && stock < redoRequired;
+                                                  return (
+                                                      <SelectItem key={f.id} value={String(f.id)}>
+                                                          {f.name} ({stock}m){willPark ? " - will wait for restock" : ""}
+                                                      </SelectItem>
+                                                  );
+                                              })}
                                           </SelectContent>
                                       </Select>
                                   </div>

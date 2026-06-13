@@ -60,7 +60,7 @@ import {
   QC_TOLERANCE,
   QC_QUALITY_THRESHOLD,
   evaluateQc,
-  normalizeExpectedJabzour,
+  deriveExpectedQcOptions,
   type QcInputs,
   type QcOptionSpec,
   type CollarPosition,
@@ -133,17 +133,6 @@ function coupleOptionGroups(flagged: Set<string>): Set<string> {
     for (const k of QC_ACCESSORY_KEYS) flagged.add(k);
   }
   return flagged;
-}
-
-/** Parse a garment's sparse alteration_styles jsonb (styleKey -> new value).
- *  The column may arrive as a string or already-parsed object; tolerate both. */
-function parseAltStyles(garment: WorkshopGarment): Record<string, unknown> {
-  const raw = (garment as unknown as Record<string, unknown>).alteration_styles;
-  if (raw == null) return {};
-  if (typeof raw === "string") {
-    try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
-  }
-  return raw as Record<string, unknown>;
 }
 
 interface Props {
@@ -361,30 +350,14 @@ export function QualityCheckForm({
     return set;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [measurement]);
-  const expectedOptions: Record<string, unknown> = {};
-  if (isAltOut) {
-    // Alt-out: the intake writes the requested style changes into the
-    // alteration_styles JSON (the style columns are empty), so the expected
-    // value of each CHANGED key comes from there. Only changed keys are sourced
-    // (and only those are enabled / QC'd). The intake stores values already in
-    // the QC picker's visual space — jabzour_1 holds JAB_SHAAB / a visual style
-    // directly and jabzour_2 the secondary, so no enum normalization is needed.
-    const altStyles = parseAltStyles(garment);
-    for (const k of Object.keys(altStyles)) {
-      const v = altStyles[k];
-      if (v == null || v === "") continue;
-      expectedOptions[k] = v;
-    }
-  } else {
-    for (const o of QC_OPTIONS) expectedOptions[o.key] = (garment as unknown as Record<string, unknown>)[o.key];
-    // jabzour_1/2 are stored in DB as enum + text; QC operator sees visual values.
-    const j = normalizeExpectedJabzour(expectedOptions.jabzour_1, expectedOptions.jabzour_2);
-    expectedOptions.jabzour_1 = j.jabzour_1;
-    expectedOptions.jabzour_2 = j.jabzour_2;
-    // shoulder_slope lives on the measurement snapshot, not the garment record —
-    // override the garment-sourced (undefined) value with the measured spec.
-    expectedOptions.shoulder_slope = expectedMeasurements.shoulder_slope ?? null;
-  }
+  // Expected option values — same derivation the server submit uses, so the
+  // on-screen verdict can't diverge from the recorded one (alt-out reads the
+  // sparse alteration_styles; otherwise garment columns + jabzour normalization
+  // + shoulder_slope from the measurement snapshot).
+  const expectedOptions = deriveExpectedQcOptions(
+    garment as unknown as Record<string, unknown>,
+    expectedMeasurements,
+  );
 
   // Option fields the garment record specifies. Marked with * in the form.
   // §2.11 toggles always count — an explicit Yes/No (or Up/Down/Standard) is
@@ -566,7 +539,13 @@ export function QualityCheckForm({
       return next;
     });
 
-  if (!measurement) {
+  // A missing measurement snapshot only blocks QC for a regular garment (its
+  // measurements can't be verified without one). An alt-out garment may have no
+  // snapshot at all — an external, style-only alteration carries only the
+  // sparse alteration_styles changes — and QC still proceeds on the flagged
+  // options + the quality ratings (which are always enabled). Without this, such
+  // a garment would strand at quality_check with no way to advance.
+  if (!measurement && !isAltOut) {
     return (
       <div className="bg-card border rounded-xl p-4 shadow-sm">
         <Skeleton className="h-8 w-40 mb-3" />

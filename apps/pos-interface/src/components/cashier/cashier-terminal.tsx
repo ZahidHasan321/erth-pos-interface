@@ -18,7 +18,7 @@ import type { CashierOrderListItem, CashierSummary } from "@/api/cashier";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
 import { DonutChart } from "@/components/charts/donut-chart";
 import { OrderDetailShell } from "./order-detail-shell";
-import { RegisterGate } from "./register-gate";
+import { RegisterGate, useRegisterReady } from "./register-gate";
 import "./cashier-keyframes";
 
 const PAGE_SIZE = 15;
@@ -574,9 +574,11 @@ export function CashierListBody({ onSelectOrder }: { onSelectOrder: (id: string)
 }
 
 export function CashierOrderDetailBody({ orderId, onBack }: { orderId: string; onBack: () => void }) {
-    return (
-        <RegisterGate>
-            <OrderDetailShell orderId={orderId} onBack={onBack} />
-        </RegisterGate>
-    );
+    // No hard RegisterGate here: handover/collection is ungated on the register
+    // session (SPEC §3 — pickup is ungated; only money is gated). The detail is
+    // reachable directly (e.g. the showroom "checkout" link) so a customer can
+    // collect even when the register is closed/stale. Only the money modes
+    // (payment, refund) inside the shell are gated on an open today's session.
+    const { ready: canTakeMoney } = useRegisterReady();
+    return <OrderDetailShell orderId={orderId} onBack={onBack} canTakeMoney={canTakeMoney} />;
 }

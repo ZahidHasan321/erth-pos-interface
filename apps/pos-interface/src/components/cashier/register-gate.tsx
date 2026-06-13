@@ -290,6 +290,21 @@ export function RegisterMenu({ session }: { session: RegisterSessionData }) {
 
 // ── Register Gate (wraps cashier terminal) ────────────────────────────────────
 
+/**
+ * Whether the brand's register can RECORD MONEY right now: an open session that
+ * belongs to today. Mirrors the gate's open/closed/stale logic. Used to gate
+ * only the money actions (payment, refund) — handover/collection is ungated on
+ * the register session (SPEC §3: "frozen day rejects money"; pickup is ungated),
+ * so the order detail stays usable for handover even with no/stale/closed
+ * register. `isLoading` is true while the session is still being fetched.
+ */
+export function useRegisterReady(): { ready: boolean; isLoading: boolean } {
+    const { data: sessionResult, isLoading } = useRegisterSession();
+    const session = sessionResult?.data;
+    const ready = !!session && session.status !== "closed" && session.date >= getLocalDateStr();
+    return { ready, isLoading };
+}
+
 interface RegisterGateProps {
     children: ReactNode;
 }
