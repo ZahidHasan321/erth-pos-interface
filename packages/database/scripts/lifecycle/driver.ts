@@ -196,7 +196,7 @@ export async function saveWorkOrderGarments(
 /**
  * Phase C only — complete_work_order RPC. `idempotencyKey` defaults to a fresh
  * UUID (one-shot, as before); pass a FIXED key and call twice to exercise the
- * idem_claim / idem_replay path (triggers.sql:125).
+ * idem_claim / idem_replay path (triggers.sql:128).
  */
 export async function completeWorkOrder(
   tx: Tx,
@@ -464,7 +464,7 @@ export async function workshopReceive(
 
 /**
  * Production chain. Mirrors scheduleGarments + completeAndAdvance
- * (apps/workshop/src/api/garments.ts:928 / :1037): waiting_cut → cutting →
+ * (apps/workshop/src/api/garments.ts:1009 / :1118): waiting_cut → cutting →
  * sewing → finishing → ironing → quality_check. Stops at quality_check (QC is
  * a separate explicit step). Skips parked finals.
  */
@@ -491,7 +491,7 @@ export async function runProduction(tx: Tx, ids: string[]) {
  * (apps/workshop/src/lib/production-logic.ts:194) — the same functions
  * apps/workshop submitQc calls. The trip_history qc_attempt accumulation +
  * UPDATE shape still mirror the app's submitQc persistence
- * (apps/workshop/src/api/garments.ts:1097). NO trip increment.
+ * (apps/workshop/src/api/garments.ts:1178). NO trip increment.
  */
 export async function submitQc(
   tx: Tx,
@@ -554,11 +554,11 @@ export async function submitQc(
 
 /**
  * QC driven end-to-end by REAL shared logic:
- *   - verdict: evaluateQc (apps/workshop/src/lib/qc-spec.ts:213)
+ *   - verdict: evaluateQc (apps/workshop/src/lib/qc-spec.ts:252)
  *   - outcome + return-stage ordering: orderQcReturnStages + resolveQcOutcome
  *     (apps/workshop/src/lib/production-logic.ts:194)
  * The trip_history qc_attempt accumulation + UPDATE shape still mirror the
- * app's submitQc persistence (apps/workshop/src/api/garments.ts:1177). The
+ * app's submitQc persistence (apps/workshop/src/api/garments.ts:1275). The
  * recorded attempt carries the failed-key breadcrumb (failed_measurements /
  * failed_options / failed_quality) so the iterative rework loop — where each
  * round re-checks ONLY the previously-failed keys — is observable and
@@ -677,7 +677,7 @@ export async function shopReceive(tx: Tx, ids: string[]) {
 /**
  * Brova trial verdict. Uses the real evaluateBrovaFeedback (src/utils.ts:329)
  * to compute newStage/acceptance/feedback, then applies the same updateGarment
- * payload the feedback page issues (feedback.$orderId.tsx:876).
+ * payload the feedback page issues (feedback.$orderId.tsx:1705).
  */
 export async function brovaFeedback(
   tx: Tx,
@@ -982,7 +982,7 @@ export async function runProductionTo(
   }
 }
 
-/** open_register RPC (triggers.sql:2718). */
+/** open_register RPC (triggers.sql:3492). */
 export async function openRegister(
   tx: Tx,
   openingFloat: number,
@@ -1000,7 +1000,7 @@ export async function openRegister(
   return res.r;
 }
 
-/** close_register RPC (triggers.sql:2764). idempotencyKey defaults fresh. */
+/** close_register RPC (triggers.sql:3538). idempotencyKey defaults fresh. */
 export async function closeRegister(
   tx: Tx,
   sessionId: number,
@@ -1021,7 +1021,7 @@ export async function closeRegister(
   return res.r;
 }
 
-/** reopen_register RPC (triggers.sql:2950). */
+/** reopen_register RPC (triggers.sql:3736). */
 export async function reopenRegister(tx: Tx, sessionId: number) {
   // Spec: reopen requires manager approval (CLAUDE.md §EOD / register close).
   await actAs(tx, MANAGER.id);
@@ -1032,7 +1032,7 @@ export async function reopenRegister(tx: Tx, sessionId: number) {
   return res.r;
 }
 
-/** get_register_session RPC (triggers.sql:2628) — current session for BRAND. */
+/** get_register_session RPC (triggers.sql:3402) — current session for BRAND. */
 export async function getRegisterSession(tx: Tx, opts: { date?: string } = {}) {
   const res = only(
     await tx`SELECT get_register_session(${BRAND}, ${opts.date ?? null}::date) AS r`,
@@ -1041,7 +1041,7 @@ export async function getRegisterSession(tx: Tx, opts: { date?: string } = {}) {
   return res.r as Record<string, unknown> | null;
 }
 
-/** get_eod_report RPC (triggers.sql:2417). */
+/** get_eod_report RPC (triggers.sql:3183). */
 export async function getEodReport(
   tx: Tx,
   opts: { from?: string; to?: string } = {},

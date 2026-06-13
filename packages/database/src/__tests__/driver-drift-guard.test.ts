@@ -230,9 +230,9 @@ const CITATIONS: Citation[] = [
   // ── runProduction (scheduleGarments) — still a faithful mirror ─────────────
   {
     driverFn: "runProduction (scheduleGarments)",
-    rawCitation: "apps/workshop/src/api/garments.ts:928",
+    rawCitation: "apps/workshop/src/api/garments.ts:1009",
     citedPath: "apps/workshop/src/api/garments.ts",
-    citedLine: 928,
+    citedLine: 1009,
     anchorTokens: ["scheduleGarments", "production_plan", "in_production"],
   },
 
@@ -241,9 +241,9 @@ const CITATIONS: Citation[] = [
   // documentation + anchor coverage of the second mirrored function.
   {
     driverFn: "runProduction (completeAndAdvance)",
-    rawCitation: "apps/workshop/src/api/garments.ts:1037",
+    rawCitation: "apps/workshop/src/api/garments.ts:1118",
     citedPath: "apps/workshop/src/api/garments.ts",
-    citedLine: 1037,
+    citedLine: 1118,
     anchorTokens: ["completeAndAdvance", "piece_stage", "completion_time"],
   },
 
@@ -259,18 +259,18 @@ const CITATIONS: Citation[] = [
   // ── submitQc (persistence shape — still mirrors app submitQc) ──────────────
   {
     driverFn: "submitQc (persistence)",
-    rawCitation: "apps/workshop/src/api/garments.ts:1097",
+    rawCitation: "apps/workshop/src/api/garments.ts:1178",
     citedPath: "apps/workshop/src/api/garments.ts",
-    citedLine: 1097,
+    citedLine: 1178,
     anchorTokens: ["submitQc", "trip_history", "evaluateQc"],
   },
 
   // ── submitQcReal (evaluateQc — REAL verdict) ──────────────────────────────
   {
     driverFn: "submitQcReal (evaluateQc)",
-    rawCitation: "apps/workshop/src/lib/qc-spec.ts:213",
+    rawCitation: "apps/workshop/src/lib/qc-spec.ts:252",
     citedPath: "apps/workshop/src/lib/qc-spec.ts",
-    citedLine: 213,
+    citedLine: 252,
     anchorTokens: ["evaluateQc", "enabledKeys", "failed_measurements"],
   },
 
@@ -286,9 +286,9 @@ const CITATIONS: Citation[] = [
   // ── submitQcReal (persistence shape — still mirrors app submitQc) ──────────
   {
     driverFn: "submitQcReal (persistence)",
-    rawCitation: "apps/workshop/src/api/garments.ts:1177",
+    rawCitation: "apps/workshop/src/api/garments.ts:1275",
     citedPath: "apps/workshop/src/api/garments.ts",
-    citedLine: 1177,
+    citedLine: 1275,
     anchorTokens: ["resolveQcOutcome", "qc_rework_stages", "trip_history"],
   },
 
@@ -330,9 +330,9 @@ const CITATIONS: Citation[] = [
   // ── brovaFeedback (updateGarment call in feedback page) ───────────────────
   {
     driverFn: "brovaFeedback (feedback page updateGarment)",
-    rawCitation: "feedback.$orderId.tsx:876",
+    rawCitation: "feedback.$orderId.tsx:1705",
     citedPath: "feedback.$orderId.tsx",
-    citedLine: 876,
+    citedLine: 1705,
     anchorTokens: [
       "evaluateBrovaFeedback",
       "piece_stage",
@@ -438,6 +438,60 @@ const CITATIONS: Citation[] = [
     citedPath: "customer-demographics/pending-orders-dialog.tsx",
     citedLine: 200,
     anchorTokens: ["checkout_status", "cancelled", "updateOrder"],
+  },
+
+  // ── completeWorkOrder idempotency path → idem_claim / idem_replay (REAL) ───
+  {
+    driverFn: "completeWorkOrder (idem path)",
+    rawCitation: "triggers.sql:128",
+    citedPath: "triggers.sql",
+    citedLine: 128,
+    anchorTokens: ["idem_claim", "idem_replay", "complete_work_order"],
+  },
+
+  // ── getEodReport → get_eod_report RPC (REAL) ───────────────────────────────
+  {
+    driverFn: "getEodReport",
+    rawCitation: "triggers.sql:3183",
+    citedPath: "triggers.sql",
+    citedLine: 3183,
+    anchorTokens: ["get_eod_report", "p_brand", "p_date_from"],
+  },
+
+  // ── getRegisterSession → get_register_session RPC (REAL) ───────────────────
+  {
+    driverFn: "getRegisterSession",
+    rawCitation: "triggers.sql:3402",
+    citedPath: "triggers.sql",
+    citedLine: 3402,
+    anchorTokens: ["get_register_session", "p_brand", "expected_cash"],
+  },
+
+  // ── openRegister → open_register RPC (REAL) ────────────────────────────────
+  {
+    driverFn: "openRegister",
+    rawCitation: "triggers.sql:3492",
+    citedPath: "triggers.sql",
+    citedLine: 3492,
+    anchorTokens: ["open_register", "p_opening_float", "register_sessions"],
+  },
+
+  // ── closeRegister → close_register RPC (REAL) ──────────────────────────────
+  {
+    driverFn: "closeRegister",
+    rawCitation: "triggers.sql:3538",
+    citedPath: "triggers.sql",
+    citedLine: 3538,
+    anchorTokens: ["close_register", "p_session_id", "register_sessions"],
+  },
+
+  // ── reopenRegister → reopen_register RPC (REAL, manager-only) ──────────────
+  {
+    driverFn: "reopenRegister",
+    rawCitation: "triggers.sql:3736",
+    citedPath: "triggers.sql",
+    citedLine: 3736,
+    anchorTokens: ["reopen_register", "p_session_id", "reopened_by"],
   },
 ];
 
