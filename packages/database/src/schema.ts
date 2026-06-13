@@ -757,6 +757,27 @@ export interface QCFlag {
     note?: string;
 }
 
+/**
+ * Per-defect team/worker attribution (§6). On a QC fail the inspector tags each
+ * failed row with the production stage that caused it; the responsible individual
+ * (cutting / finishing / ironing) or sewing unit is resolved from this trip's
+ * worker_history / production_plan and frozen here. Soaking and QC are never
+ * attributable. Optional per defect — manual for now (an automatic error→stage
+ * suggestion is a planned future enhancement).
+ */
+export interface QcDefectAttribution {
+    /** Which failed_* list this defect came from. */
+    category: "measurement" | "option" | "quality";
+    /** The failed field / option / aspect key (matches an entry in the failed_* array). */
+    key: string;
+    /** Production stage the inspector blamed. */
+    stage: "cutting" | "sewing" | "finishing" | "ironing";
+    /** Sewing is scored at unit level; the others are individual workers. */
+    scope: "worker" | "unit";
+    /** Resolved worker/unit name at QC time; null when no name was on record. */
+    responsible: string | null;
+}
+
 export interface QcAttempt {
     inspector: string;
     date: string;
@@ -779,6 +800,8 @@ export interface QcAttempt {
     failed_quality?: string[] | null;
     /** Stages garment must re-run on fail; null on pass. */
     return_stages?: string[] | null;
+    /** Per-defect team/worker blame (§6); null on pass / when nothing attributed. */
+    defect_attributions?: QcDefectAttribution[] | null;
 
     // ── Legacy fields (deprecated, read-only fallback for historical records) ──
     /** @deprecated use quality_ratings */

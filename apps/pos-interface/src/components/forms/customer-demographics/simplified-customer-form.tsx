@@ -40,12 +40,13 @@ export function SimplifiedCustomerForm({
     const countries = getSortedCountries();
 
     // Watch values from the form
-    const [customerId, customerPhone] = useWatch({
+    const [customerId, customerPhone, customerName] = useWatch({
         control: form.control,
-        name: ["id", "phone"],
+        name: ["id", "phone", "name"],
     });
 
     const hasCustomer = !!customerId;
+    const canCreate = !!(customerName?.trim() && customerPhone?.trim());
 
     // Search Logic
     useEffect(() => {
@@ -149,7 +150,7 @@ export function SimplifiedCustomerForm({
                             <Phone className="size-3" /> Mobile Number
                         </label>
                         <div className="flex gap-2 relative">
-                            <div className="w-28 shrink-0">
+                            <div className="w-32 shrink-0">
                                 <Controller
                                     name="country_code"
                                     control={form.control}
@@ -159,7 +160,7 @@ export function SimplifiedCustomerForm({
                                             options={countries.map((c) => ({
                                                 value: c.phoneCode,
                                                 label: `${c.name} ${c.phoneCode}`,
-                                                node: <span className="flex items-center gap-2"><FlagIcon code={c.code} /> {c.phoneCode}</span>,
+                                                node: <span className="flex items-center gap-2 whitespace-nowrap"><FlagIcon code={c.code} /> {c.phoneCode}</span>,
                                             }))}
                                             value={field.value || "+965"}
                                             onChange={field.onChange}
@@ -198,11 +199,11 @@ export function SimplifiedCustomerForm({
                                 <AnimatePresence>
                                     {showResults && (
                                         <motion.div
-                                            initial={{ opacity: 0, y: 6 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: 6 }}
-                                            transition={{ duration: 0.15 }}
-                                            className="absolute left-0 right-0 top-full mt-2 bg-popover border border-border shadow-md rounded-lg overflow-hidden z-50 max-h-[320px] overflow-y-auto scrollbar-thin"
+                                            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                                            transition={{ duration: 0.16, ease: [0.23, 1, 0.32, 1] }}
+                                            className="absolute left-0 right-0 top-full mt-2 origin-top bg-popover border border-border shadow-md rounded-lg overflow-hidden z-50 max-h-[320px] overflow-y-auto scrollbar-thin"
                                         >
                                             {customers.length > 0 ? (
                                                 <div className="p-1">
@@ -290,9 +291,9 @@ export function SimplifiedCustomerForm({
                     <div className="sm:col-span-1 lg:col-span-2 flex justify-end">
                         {!hasCustomer && !isOrderClosed && (
                             <Button
-                                className="h-9 w-full gap-2"
+                                className="h-9 w-full gap-2 active:scale-[0.98]"
                                 onClick={handleCreateQuickly}
-                                disabled={isCreating}
+                                disabled={isCreating || !canCreate}
                             >
                                 {isCreating ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
                                 Create

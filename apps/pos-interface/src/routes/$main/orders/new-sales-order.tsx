@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { getOrderDetails } from "@/api/orders";
 import { SimplifiedCustomerForm } from "@/components/forms/customer-demographics/simplified-customer-form";
+import { useAuth } from "@/context/auth";
 
 type OrderSearch = {
     orderId?: number;
@@ -83,11 +84,20 @@ function NewSalesOrder() {
     });
 
     const { orderId: searchOrderId } = Route.useSearch();
+    const { user } = useAuth();
     // ============================================================================
     // NAVIGATION
     // ============================================================================
     const navigate = useNavigate();
     usePricing();
+
+    // Auto-fill order taker with the logged-in user for new orders
+    React.useEffect(() => {
+        if (!user?.id || searchOrderId) return;
+        if (!OrderForm.getValues("order_taker_id")) {
+            OrderForm.setValue("order_taker_id", user.id);
+        }
+    }, [user?.id, searchOrderId, OrderForm]);
 
     // ============================================================================
     // DATA FETCHING & STORE

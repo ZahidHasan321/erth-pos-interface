@@ -6408,7 +6408,8 @@ $$ LANGUAGE sql STABLE;
 -- trip_history whose `date` is in [from, to) and returns: totals
 -- (attempts/pass/fail), per-aspect avg + fail count (defect-category breakdown),
 -- measurement- and option-defect counts (the same analytical lens extended to
--- spec defects), defect origin by return_stage, and a per-day quality trend.
+-- spec defects), defect origin by return_stage, inspector-attributed defect
+-- blame by team/worker (attributed_defects, §6), and a per-day quality trend.
 -- Ranged on the attempt's own date (set by the app's buildQcAttempt) so a
 -- garment still in production counts the moment it was inspected.
 CREATE OR REPLACE FUNCTION get_qc_analytics(
@@ -6431,7 +6432,8 @@ BEGIN
       CASE WHEN jsonb_typeof(att->'quality_ratings')     = 'object' THEN att->'quality_ratings'     ELSE '{}'::jsonb END AS ratings,
       CASE WHEN jsonb_typeof(att->'failed_measurements') = 'array'  THEN att->'failed_measurements' ELSE '[]'::jsonb END AS failed_meas,
       CASE WHEN jsonb_typeof(att->'failed_options')      = 'array'  THEN att->'failed_options'      ELSE '[]'::jsonb END AS failed_opts,
-      CASE WHEN jsonb_typeof(att->'return_stages')       = 'array'  THEN att->'return_stages'       ELSE '[]'::jsonb END AS return_stages
+      CASE WHEN jsonb_typeof(att->'return_stages')       = 'array'  THEN att->'return_stages'       ELSE '[]'::jsonb END AS return_stages,
+      CASE WHEN jsonb_typeof(att->'defect_attributions') = 'array'  THEN att->'defect_attributions' ELSE '[]'::jsonb END AS attributions
     FROM garments g
     CROSS JOIN LATERAL jsonb_array_elements(
       CASE WHEN jsonb_typeof(g.trip_history) = 'array' THEN g.trip_history ELSE '[]'::jsonb END
@@ -6481,6 +6483,34 @@ BEGIN
         GROUP BY s.value
       ) t
     ), '{}'::jsonb),
+    -- Inspector-attributed defect blame (§6): one row per (stage, scope,
+    -- responsible) with a total count and a measurement/option/quality split.
+    -- responsible JSON-null or '' buckets as '(unassigned)'. Distinct from
+    -- stage_defects above (which is routing — where the piece was sent back).
+    'attributed_defects', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+               'stage',       stage,
+               'scope',       scope,
+               'responsible', responsible,
+               'count',       cnt,
+               'by_category', jsonb_build_object(
+                 'measurement', meas_cnt,
+                 'option',      opt_cnt,
+                 'quality',     qual_cnt
+               )
+             ) ORDER BY cnt DESC, responsible) FROM (
+        SELECT da->>'stage' AS stage,
+               da->>'scope' AS scope,
+               COALESCE(NULLIF(da->>'responsible', ''), '(unassigned)') AS responsible,
+               count(*) AS cnt,
+               count(*) FILTER (WHERE da->>'category' = 'measurement') AS meas_cnt,
+               count(*) FILTER (WHERE da->>'category' = 'option')      AS opt_cnt,
+               count(*) FILTER (WHERE da->>'category' = 'quality')     AS qual_cnt
+        FROM attempts a
+        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(a.attributions, '[]'::jsonb)) AS da
+        GROUP BY 1, 2, 3
+      ) t
+    ), '[]'::jsonb),
     'trend', COALESCE((
       SELECT jsonb_agg(jsonb_build_object('date', cnt.d, 'avg', sc.avg_score, 'attempts', cnt.n) ORDER BY cnt.d)
       FROM (SELECT to_char(adate, 'YYYY-MM-DD') AS d, count(*) AS n FROM attempts GROUP BY 1) cnt

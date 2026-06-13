@@ -293,7 +293,7 @@ export function StageChip({ label, isSelected, onClick }: StageChipProps) {
       onClick={onClick}
       aria-pressed={isSelected}
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-sm transition-colors",
+        "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border text-sm font-medium transition-colors touch-manipulation pointer-coarse:active:scale-[0.98]",
         isSelected
           ? "border-[var(--status-bad)] bg-[var(--status-bad-bg)] text-[var(--status-bad)]"
           : "border-border bg-card text-foreground hover:bg-muted",

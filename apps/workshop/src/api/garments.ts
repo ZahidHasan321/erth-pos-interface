@@ -1,7 +1,7 @@
 import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
 import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry } from '@repo/database';
-import type { PieceStage, Location } from '@repo/database';
+import type { PieceStage, Location, QcDefectAttribution } from '@repo/database';
 import {
   QC_OPTIONS,
   evaluateQc,
@@ -1181,6 +1181,7 @@ export const submitQc = async (
   inputs: QcInputs,
   enabledKeys: Set<string>,
   returnStages: PieceStage[] | null,
+  defectAttributions: QcDefectAttribution[] | null = null,
 ): Promise<{ result: "pass" | "fail" }> => {
   const { data: existingData, error: fetchErr } = await db
     .from('garments')
@@ -1238,6 +1239,8 @@ export const submitQc = async (
     inputs,
     evalResult,
     orderedStages,
+    // Attribution is fail-only; pass attempts carry none.
+    defectAttributions: evalResult.result === 'fail' ? defectAttributions : null,
   });
   tripEntry.qc_attempts.push(attempt);
 

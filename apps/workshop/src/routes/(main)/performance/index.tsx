@@ -8,7 +8,7 @@ import { SlidingPillSwitcher } from "@repo/ui/sliding-pill-switcher";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Input } from "@repo/ui/input";
 import { FilterChip, FilterChipGroup } from "@/components/shared/FilterChip";
-import { PageHeader, SectionCard, EmptyState } from "@/components/shared/PageShell";
+import { PageHeader, SectionCard, EmptyState, KpiCard } from "@/components/shared/PageShell";
 import { cn, getLocalDateStr, getKuwaitDayRange, TIMEZONE } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -152,34 +152,6 @@ const PARTY_LABEL: Record<string, string> = {
 // performance. Showroom / customer / supplier / unattributed are external — the
 // material cost is real, but the factory is NOT penalized for it.
 const INTERNAL_PARTIES = new Set(["production", "qc"]);
-
-// ── KPI Card ────────────────────────────────────────────────────────
-
-function KpiCard({
-  icon: Icon,
-  label,
-  value,
-  subtitle,
-  tone,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string | number;
-  subtitle?: string;
-  /** Color the value by status. The number is the one signal — icon + label stay muted. */
-  tone?: "ok" | "warn" | "bad" | null;
-}) {
-  return (
-    <div className="bg-card border border-border rounded-md p-4">
-      <div className="flex items-center gap-1.5 text-muted-foreground">
-        <Icon className="w-3.5 h-3.5 shrink-0" />
-        <p className="text-xs">{label}</p>
-      </div>
-      <p className={cn("text-2xl font-semibold tabular-nums tracking-tight mt-2", tone ? TONE_TEXT[tone] : "")}>{value}</p>
-      {subtitle && <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p>}
-    </div>
-  );
-}
 
 // ── Secondary stat (inline, no card chrome) ─────────────────────────
 

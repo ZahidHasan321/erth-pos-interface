@@ -102,6 +102,40 @@ export function StatusBanner({ tone, icon: Icon, children, className }: StatusBa
   );
 }
 
+// ── KPI Card ──────────────────────────────────────────────────────────────
+// Headline metric tile for the analytics pages. The value is the one signal —
+// icon + label stay muted, and `tone` colors the number green/amber/red so a
+// manager reads status without parsing the figure. Shared by Performance and
+// QC Analytics (single source of truth).
+
+const KPI_TONE: Record<"ok" | "warn" | "bad", string> = {
+  ok:   "text-[var(--status-ok)]",
+  warn: "text-[var(--status-warn)]",
+  bad:  "text-[var(--status-bad)]",
+};
+
+interface KpiCardProps {
+  icon: IconComponent;
+  label: string;
+  value: string | number;
+  subtitle?: string;
+  /** Color the value by status. Omit/null leaves it neutral foreground. */
+  tone?: "ok" | "warn" | "bad" | null;
+}
+
+export function KpiCard({ icon: Icon, label, value, subtitle, tone }: KpiCardProps) {
+  return (
+    <div className="bg-card border border-border rounded-md p-4">
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Icon className="w-3.5 h-3.5 shrink-0" />
+        <p className="text-xs">{label}</p>
+      </div>
+      <p className={cn("text-2xl font-semibold tabular-nums tracking-tight mt-2", tone ? KPI_TONE[tone] : "")}>{value}</p>
+      {subtitle && <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p>}
+    </div>
+  );
+}
+
 // ── Stats Card ──────────────────────────────────────────────────────────────
 
 interface StatsCardProps {

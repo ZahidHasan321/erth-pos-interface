@@ -33,7 +33,7 @@ import {
 } from './useWorkshopGarments';
 import { SIDEBAR_COUNTS_KEY } from './useSidebarCounts';
 import type { WorkshopGarment, Location } from '@repo/database';
-import type { PieceStage } from '@repo/database';
+import type { PieceStage, QcDefectAttribution } from '@repo/database';
 import type { QcInputs } from '@/lib/qc-spec';
 
 function errorMsg(err: unknown): string {
@@ -289,7 +289,8 @@ export function useSubmitQc() {
       inputs: QcInputs;
       enabledKeys: Set<string>;
       returnStages: PieceStage[] | null;
-    }) => submitQc(args.id, args.inspector, args.inputs, args.enabledKeys, args.returnStages),
+      defectAttributions?: QcDefectAttribution[] | null;
+    }) => submitQc(args.id, args.inspector, args.inputs, args.enabledKeys, args.returnStages, args.defectAttributions ?? null),
     onError: (err) => {
       toast.error(`QC submit failed: ${errorMsg(err)}`);
     },

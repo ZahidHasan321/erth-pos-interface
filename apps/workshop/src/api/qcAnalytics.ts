@@ -17,6 +17,17 @@ export interface QcTrendPoint {
   attempts: number;
 }
 
+/** One inspector-attributed defect bucket (§6): a worker (cutting/finishing/
+ *  ironing) or unit (sewing) and how many defects QC blamed on them, split by
+ *  defect category. `responsible` is '(unassigned)' when no name was recorded. */
+export interface AttributedDefect {
+  stage: "cutting" | "sewing" | "finishing" | "ironing";
+  scope: "worker" | "unit";
+  responsible: string;
+  count: number;
+  by_category: { measurement: number; option: number; quality: number };
+}
+
 /** Shape of get_qc_analytics(from, to). Objects are keyed by aspect/field/option/stage. */
 export interface QcAnalytics {
   total_attempts: number;
@@ -26,6 +37,8 @@ export interface QcAnalytics {
   measurement_defects: Record<string, number>;
   option_defects: Record<string, number>;
   stage_defects: Record<string, number>;
+  /** Defect blame by team/worker (§6), worst-first. Empty until attributions exist. */
+  attributed_defects: AttributedDefect[];
   trend: QcTrendPoint[];
 }
 
@@ -37,6 +50,7 @@ const EMPTY: QcAnalytics = {
   measurement_defects: {},
   option_defects: {},
   stage_defects: {},
+  attributed_defects: [],
   trend: [],
 };
 

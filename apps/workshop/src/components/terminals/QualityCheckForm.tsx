@@ -13,6 +13,13 @@ import {
   DialogTitle,
 } from "@repo/ui/dialog";
 import { Skeleton } from "@repo/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/select";
 import { ShoulderSlopeSelect, ShoulderSlopeDisplay, type ShoulderSlopeValue } from "@repo/ui/shoulder-slope";
 import { parseMeasurementParts } from "@repo/database";
 
@@ -20,7 +27,8 @@ import { cn } from "@/lib/utils";
 import { useSubmitQc } from "@/hooks/useGarmentMutations";
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
 import { StageChip } from "@/components/shared/plan-dialog-shared";
-import { PIECE_STAGE_LABELS } from "@/lib/constants";
+import { PIECE_STAGE_LABELS, STAGE_TO_PLAN_KEY } from "@/lib/constants";
+import { getStageShape } from "@/lib/stage-shape";
 import { QC_OPTION_TO_SECTION } from "@/lib/qc-corrections";
 import { deriveReworkEnabledKeys } from "@/lib/production-logic";
 import type { AlterationFilter } from "@/lib/alteration-filter";
@@ -65,7 +73,48 @@ import type {
   ProductionPlan,
   TripHistoryEntry,
   QcAttempt,
+  QcDefectAttribution,
 } from "@repo/database";
+
+/** Defect category → which failed_* list it came from. Keys the attribution state. */
+type QcDefectCategory = QcDefectAttribution["category"];
+const attrId = (category: QcDefectCategory, key: string) => `${category}:${key}`;
+
+/** One garment contributor a QC defect can be blamed on (§6). Soaking (a water
+ *  dunk) and QC (the inspection itself) are never attributable, so only the four
+ *  production stages appear; sewing resolves to a unit, the rest to individuals. */
+interface QcContributor {
+  stage: QcDefectAttribution["stage"];
+  scope: QcDefectAttribution["scope"];
+  /** Resolved worker/unit name for this trip, or null when none on record. */
+  name: string | null;
+  /** Stage label, e.g. "Sewing". */
+  label: string;
+}
+
+const QC_ATTRIBUTION_STAGES: QcDefectAttribution["stage"][] = [
+  "cutting",
+  "sewing",
+  "finishing",
+  "ironing",
+];
+
+/** Resolve who did each attributable stage on this trip: actual worker_history
+ *  first, production_plan as fallback. Scope (worker vs unit) comes from the
+ *  shared stage-shape rule so sewing is the only unit-scoped stage. */
+function buildQcContributors(garment: WorkshopGarment): QcContributor[] {
+  const history = (garment.worker_history ?? {}) as Record<string, string>;
+  const plan = (garment.production_plan ?? {}) as Record<string, string>;
+  return QC_ATTRIBUTION_STAGES.map((stage) => {
+    const planKey = STAGE_TO_PLAN_KEY[stage];
+    return {
+      stage,
+      scope: getStageShape(stage) === "unit" ? "unit" : "worker",
+      name: history[planKey] ?? plan[planKey] ?? null,
+      label: PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage,
+    };
+  });
+}
 
 /** The three pocket accessories scope as a unit: an alteration/rework that
  *  flags any one surfaces all three, so the visually grouped "Accessories" row
@@ -429,6 +478,14 @@ export function QualityCheckForm({
   const [failDialogOpen, setFailDialogOpen] = useState(false);
   const [returnStages, setReturnStages] = useState<Set<PieceStage>>(new Set());
 
+  // Per-defect team attribution (§6): keyed by `${category}:${key}` → the chosen
+  // stage; resolved to a worker/unit at confirm time. Manual and optional — it
+  // never gates submit (an unattributed defect simply isn't blamed on anyone).
+  const contributors = useMemo(() => buildQcContributors(garment), [garment]);
+  const [attributions, setAttributions] = useState<Record<string, string>>({});
+  const onAttribute = (category: QcDefectCategory, key: string, stage: string) =>
+    setAttributions((p) => ({ ...p, [attrId(category, key)]: stage }));
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
 
@@ -449,21 +506,44 @@ export function QualityCheckForm({
         toast.error(`QC submit failed: ${err instanceof Error ? err.message : "Unknown error"}`);
       }
     } else {
-      // Pre-select stages from previous fail if rework, else empty.
+      // Pre-select stages from previous fail if rework, else empty. Attribution
+      // starts blank each time the dialog opens.
       setReturnStages(new Set());
+      setAttributions({});
       setFailDialogOpen(true);
     }
+  };
+
+  // Resolve the inspector's per-defect stage picks into stored attribution
+  // records, scoped to the keys that actually failed this attempt.
+  const buildDefectAttributions = (): QcDefectAttribution[] => {
+    const out: QcDefectAttribution[] = [];
+    const add = (category: QcDefectCategory, keys: string[]) => {
+      for (const key of keys) {
+        const stage = attributions[attrId(category, key)];
+        if (!stage) continue;
+        const c = contributors.find((x) => x.stage === stage);
+        if (!c) continue;
+        out.push({ category, key, stage: c.stage, scope: c.scope, responsible: c.name });
+      }
+    };
+    add("measurement", evaluation.failed_measurements);
+    add("option", evaluation.failed_options);
+    add("quality", evaluation.failed_quality);
+    return out;
   };
 
   const handleConfirmFail = async () => {
     if (returnStages.size === 0) return;
     try {
+      const defectAttributions = buildDefectAttributions();
       await submitMut.mutateAsync({
         id: garment.id,
         inspector,
         inputs: mergedInputsForSave(carryForward, enabledKeys, numericInputs),
         enabledKeys,
         returnStages: [...returnStages],
+        defectAttributions: defectAttributions.length > 0 ? defectAttributions : null,
       });
       const stageNames = QC_RETURN_STAGES
         .filter((s) => returnStages.has(s))
@@ -615,7 +695,7 @@ export function QualityCheckForm({
 
       {/* Fail dialog — show report + stage picker */}
       <Dialog open={failDialogOpen} onOpenChange={setFailDialogOpen}>
-        <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
+        <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-4 pt-4 pb-3 border-b border-border">
             <DialogTitle className="text-base font-medium flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-[var(--status-bad)]" />
@@ -632,19 +712,29 @@ export function QualityCheckForm({
               expectedMeasurements={expectedMeasurements}
               expectedOptions={expectedOptions}
               inputs={numericInputs}
+              contributors={contributors}
+              attributions={attributions}
+              onAttribute={onAttribute}
             />
           </div>
 
-          <div className="px-4 py-3 border-t border-border bg-muted/30">
+          <div className="px-4 py-3.5 border-t border-border">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-muted-foreground">
+              <span className="text-sm font-medium text-foreground">
                 Return through stages
               </span>
-              <span className="text-sm text-muted-foreground tabular-nums">
-                {returnStages.size} selected
+              <span
+                className={cn(
+                  "text-sm tabular-nums",
+                  returnStages.size === 0
+                    ? "text-[var(--status-warn)] font-medium"
+                    : "text-muted-foreground",
+                )}
+              >
+                {returnStages.size === 0 ? "pick at least one" : `${returnStages.size} selected`}
               </span>
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {QC_RETURN_STAGES.map((s) => {
                 const label = PIECE_STAGE_LABELS[s as keyof typeof PIECE_STAGE_LABELS] ?? s;
                 return (
@@ -1310,11 +1400,17 @@ function FailReport({
   expectedMeasurements,
   expectedOptions,
   inputs,
+  contributors,
+  attributions,
+  onAttribute,
 }: {
   evaluation: ReturnType<typeof evaluateQc>;
   expectedMeasurements: Record<string, unknown>;
   expectedOptions: Record<string, unknown>;
   inputs: QcInputs;
+  contributors: QcContributor[];
+  attributions: Record<string, string>;
+  onAttribute: (category: QcDefectCategory, key: string, stage: string) => void;
 }) {
   const m = evaluation.failed_measurements.length;
   const o = evaluation.failed_options.length;
@@ -1332,7 +1428,7 @@ function FailReport({
       {m > 0 && (
         <ReportSection title="Measurements to correct" hint={`±${QC_TOLERANCE}"`}>
           <FoundVsExpectedHeader withDiffSpacer />
-          <div className="rounded-md border border-[color:var(--status-bad)]/30 bg-[var(--status-bad-bg)] divide-y divide-[color:var(--status-bad)]/15">
+          <div className="rounded-md border border-border bg-card divide-y divide-border overflow-hidden">
             {evaluation.failed_measurements.map((k) => {
               const spec = QC_MEASUREMENTS.find((mm) => mm.key === k)!;
               const exp = Number(expectedMeasurements[k]);
@@ -1359,6 +1455,11 @@ function FailReport({
                       ? `${diff > 0 ? "+" : ""}${diff.toFixed(3).replace(/\.?0+$/, "")}"`
                       : ""}
                   </span>
+                  <CausedBySelect
+                    contributors={contributors}
+                    value={attributions[attrId("measurement", k)]}
+                    onChange={(stage) => onAttribute("measurement", k, stage)}
+                  />
                 </div>
               );
             })}
@@ -1378,6 +1479,9 @@ function FailReport({
                   spec={spec}
                   expected={expectedOptions[k]}
                   got={inputs.options[k]}
+                  contributors={contributors}
+                  attribution={attributions[attrId("option", k)]}
+                  onAttribute={(stage) => onAttribute("option", k, stage)}
                 />
               );
             })}
@@ -1390,7 +1494,7 @@ function FailReport({
           title="Quality to improve"
           hint={`needs ≥ ${QC_QUALITY_THRESHOLD}/5`}
         >
-          <div className="rounded-md border border-[color:var(--status-bad)]/30 bg-[var(--status-bad-bg)] divide-y divide-[color:var(--status-bad)]/15">
+          <div className="rounded-md border border-border bg-card divide-y divide-border overflow-hidden">
             {evaluation.failed_quality.map((k) => {
               const spec = QC_QUALITY.find((qq) => qq.key === k)!;
               const score = inputs.quality_ratings[k] ?? 0;
@@ -1418,12 +1522,55 @@ function FailReport({
                   <span className="text-sm tabular-nums text-[var(--status-bad)] min-w-[28px] text-right">
                     {score}/5
                   </span>
+                  <CausedBySelect
+                    contributors={contributors}
+                    value={attributions[attrId("quality", k)]}
+                    onChange={(stage) => onAttribute("quality", k, stage)}
+                  />
                 </div>
               );
             })}
           </div>
         </ReportSection>
       )}
+    </div>
+  );
+}
+
+/** "Caused by" attribution control on each defect row (§6). Lists this trip's
+ *  cutting / sewing / finishing / ironing contributors so the inspector can
+ *  blame the defect on the responsible worker or unit. Optional — leaving it
+ *  blank records no attribution. */
+function CausedBySelect({
+  contributors,
+  value,
+  onChange,
+}: {
+  contributors: QcContributor[];
+  value: string | undefined;
+  onChange: (stage: string) => void;
+}) {
+  return (
+    <div className="w-44 shrink-0">
+      <Select value={value ?? ""} onValueChange={onChange}>
+        <SelectTrigger
+          className={cn(
+            "h-8 w-full text-sm",
+            !value && "border-dashed text-muted-foreground",
+          )}
+          aria-label="Caused by"
+        >
+          <SelectValue placeholder="Optional" />
+        </SelectTrigger>
+        <SelectContent>
+          {contributors.map((c) => (
+            <SelectItem key={c.stage} value={c.stage}>
+              {c.label}
+              {c.name ? ` · ${c.name}` : " · unassigned"}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -1486,10 +1633,16 @@ function OptionFailRow({
   spec,
   expected,
   got,
+  contributors,
+  attribution,
+  onAttribute,
 }: {
   spec: QcOptionSpec;
   expected: unknown;
   got: unknown;
+  contributors: QcContributor[];
+  attribution: string | undefined;
+  onAttribute: (stage: string) => void;
 }) {
   const visual = OPTION_IMAGE_LOOKUP[spec.key];
   const boolIcon = spec.type === "boolean" ? BOOL_ICON_LOOKUP[spec.key] : undefined;
@@ -1502,7 +1655,7 @@ function OptionFailRow({
     spec.key === "lines";
 
   return (
-    <div className="flex items-center gap-3 rounded-md border border-[color:var(--status-bad)]/30 bg-[var(--status-bad-bg)] px-3 py-2">
+    <div className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2">
       <span className="text-sm text-foreground flex-1 min-w-0 truncate">
         {spec.label}
       </span>
@@ -1533,6 +1686,7 @@ function OptionFailRow({
           <TextOptionChip label={formatOptionText(spec, expected)} muted />
         )}
       </div>
+      <CausedBySelect contributors={contributors} value={attribution} onChange={onAttribute} />
     </div>
   );
 }
@@ -1546,6 +1700,7 @@ function FoundVsExpectedHeader({ withDiffSpacer = false }: { withDiffSpacer?: bo
       <ArrowRight className="w-3.5 h-3.5 text-[color:var(--status-bad)]/60 shrink-0" />
       <span className="w-28 text-center text-muted-foreground shrink-0">Should be</span>
       {withDiffSpacer && <span className="w-[52px] shrink-0" aria-hidden />}
+      <span className="w-44 text-center text-muted-foreground shrink-0">Caused by</span>
     </div>
   );
 }

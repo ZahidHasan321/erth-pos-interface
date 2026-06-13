@@ -13,7 +13,7 @@
 // Type-only imports + relative qc-spec import keep this module free of any
 // runtime "@/" alias dependency, so the workflow-test driver can import it
 // directly (cross-package) without the workshop path alias being configured.
-import type { TripHistoryEntry, QcAttempt, PieceStage } from "@repo/database";
+import type { TripHistoryEntry, QcAttempt, QcDefectAttribution, PieceStage } from "@repo/database";
 import type { QcInputs, QcEvaluation } from "./qc-spec";
 
 // ── scheduleGarments helpers ─────────────────────────────────────────────────
@@ -189,6 +189,7 @@ export function buildQcAttempt({
   inputs,
   evalResult,
   orderedStages,
+  defectAttributions,
 }: {
   inspector: string;
   date: string;
@@ -198,6 +199,7 @@ export function buildQcAttempt({
   inputs: QcInputs;
   evalResult: QcEvaluation;
   orderedStages: PieceStage[] | null;
+  defectAttributions?: QcDefectAttribution[] | null;
 }): QcAttempt {
   return {
     inspector,
@@ -212,6 +214,7 @@ export function buildQcAttempt({
     failed_options: evalResult.failed_options,
     failed_quality: evalResult.failed_quality,
     return_stages: orderedStages,
+    defect_attributions: defectAttributions ?? null,
   };
 }
 
