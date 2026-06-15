@@ -17,6 +17,8 @@ export type OrderRow = {
   checkoutStatus?: string;
   orderDate?: string | null;
   deliveryDate?: string | null;
+  // When the items currently at the showroom arrived back from the workshop.
+  shopReceivedDate?: string | null;
 
   // Customer info
   customerId: string;

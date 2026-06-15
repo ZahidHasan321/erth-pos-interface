@@ -113,14 +113,14 @@ export function PaymentMode({
     const garments = (Array.isArray(order?.garments) ? order.garments : []) as GarmentWithFabric[];
     const shelfItems = (Array.isArray(order?.shelf_items) ? order.shelf_items : []) as ShelfItemWithShelf[];
 
+    const deliveryCharge = Number(order?.delivery_charge) || 0;
     const charges: Array<[string, number]> = [
         ["Stitching", Number(order?.stitching_charge) || 0],
         ["Fabric", Number(order?.fabric_charge) || 0],
-        ["Style", Number(order?.style_charge) || 0],
-        ["Delivery", Number(order?.delivery_charge) || 0],
+        ["Add-ons", Number(order?.style_charge) || 0],
         ["Express", Number(order?.express_charge) || 0],
         ["Soaking", Number(order?.soaking_charge) || 0],
-        ["Shelf items", Number(order?.shelf_charge) || 0],
+        ["Shelf Products", Number(order?.shelf_charge) || 0],
     ];
 
     const onTenderedTyped = (raw: string) => {
@@ -196,6 +196,9 @@ export function PaymentMode({
                                     value={`-${fmtK(discountValue)}`}
                                 />
                             </>
+                        )}
+                        {deliveryCharge > 0 && (
+                            <BreakdownRow className="text-muted-foreground pt-1" label="Delivery" value={fmtK(deliveryCharge)} />
                         )}
                         <BreakdownRow className="font-semibold pt-1 text-base" label="Total" value={fmtK(orderTotal)} />
                         <Separator className="my-1.5" />

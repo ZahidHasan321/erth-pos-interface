@@ -28,7 +28,6 @@ function styleRows(prior: PriorGarmentForLink): SpecRow[] {
 
     push("Collar Type", optionLabel(collarTypes, prior.collar_type));
     push("Collar Button", optionLabel(collarButtons, prior.collar_button));
-    push("Collar Position", prior.collar_position ? prior.collar_position.toUpperCase() : null);
     push("Collar Thickness", prior.collar_thickness);
     push("Cuffs Type", optionLabel(cuffTypes, prior.cuffs_type));
     push("Cuffs Thickness", prior.cuffs_thickness);
@@ -56,6 +55,8 @@ function measurementRows(prior: PriorGarmentForLink): SpecRow[] {
             rows.push({ label: getLabel(key), value: String(v) });
         }
     }
+    // collar_position is a categorical body measurement (absence = Standard).
+    rows.push({ label: "Collar Position", value: m.collar_position ? m.collar_position.toUpperCase() : "Standard" });
     return rows;
 }
 

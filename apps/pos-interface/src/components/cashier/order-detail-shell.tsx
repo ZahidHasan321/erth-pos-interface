@@ -20,7 +20,11 @@ import { ORDER_PHASE_LABELS } from "@/lib/constants";
 import type { Order, Garment, OrderShelfItem } from "@repo/database";
 import "./cashier-keyframes";
 
-type GarmentWithFabric = Garment & { fabric?: { id: number; name: string } | null };
+// collar_position lives on the linked measurement now (see cashier query join).
+type GarmentWithFabric = Garment & {
+    fabric?: { id: number; name: string } | null;
+    measurement?: { collar_position: "up" | "down" | null } | null;
+};
 type ShelfItemWithShelf = OrderShelfItem & { shelf?: { type: string; brand: string } | null };
 
 type Mode = "payment" | "handover" | "refund";
@@ -229,7 +233,7 @@ export function OrderDetailShell({ orderId, onBack, canTakeMoney = true }: { ord
                             discountValue={discountValue}
                             garments={(garments as GarmentWithFabric[]).map((g) => ({
                                 garment_type: g.garment_type, style: g.style,
-                                collar_type: g.collar_type, collar_button: g.collar_button, collar_position: g.collar_position, cuffs_type: g.cuffs_type,
+                                collar_type: g.collar_type, collar_button: g.collar_button, collar_position: g.measurement?.collar_position ?? null, cuffs_type: g.cuffs_type,
                                 jabzour_1: g.jabzour_1, jabzour_thickness: g.jabzour_thickness,
                                 fabric_length: Number(g.fabric_length) || 0,
                                 fabric_name: g.fabric?.name, express: g.express,

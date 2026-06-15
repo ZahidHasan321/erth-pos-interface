@@ -64,10 +64,7 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
                     <Row className="text-muted-foreground" label="Fabric" value={`${fmt(fabricCharge)} KD`} />
                 )}
                 {(isWorkOrder || styleCharge > 0) && (
-                    <Row className="text-muted-foreground" label="Style" value={`${fmt(styleCharge)} KD`} />
-                )}
-                {(isWorkOrder || deliveryCharge > 0) && (
-                    <Row className="text-muted-foreground" label="Delivery" value={`${fmt(deliveryCharge)} KD`} />
+                    <Row className="text-muted-foreground" label="Add-ons" value={`${fmt(styleCharge)} KD`} />
                 )}
                 {expressCharge > 0 && (
                     <Row className="text-muted-foreground" label="Express" value={`${fmt(expressCharge)} KD`} />
@@ -76,7 +73,7 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
                     <Row className="text-muted-foreground" label="Soaking" value={`${fmt(soakingCharge)} KD`} />
                 )}
                 {shelfCharge > 0 && (
-                    <Row className="text-muted-foreground" label="Shelf Items" value={`${fmt(shelfCharge)} KD`} />
+                    <Row className="text-muted-foreground" label="Shelf Products" value={`${fmt(shelfCharge)} KD`} />
                 )}
             </div>
 
@@ -100,6 +97,10 @@ export function PaymentSummary({ order, totalPayments, totalRefunds }: PaymentSu
                         value={`-${fmt(discountValue)} KD`}
                     />
                 </>
+            )}
+
+            {deliveryCharge > 0 && (
+                <Row className="text-muted-foreground" label="Delivery" value={`${fmt(deliveryCharge)} KD`} />
             )}
 
             <Row className="font-medium pt-0.5" label="Order Total" value={`${fmt(orderTotal)} KD`} />

@@ -75,7 +75,7 @@ awaiting_trial / ready_for_pickup → brova_trialed → completed
 **1. Order created** (Shop, order-taker). Three phases:
 - **A — Create:** customer selected → `checkout_status: draft`, `order_phase: new`.
 - **B — Save garments:** created `piece_stage: waiting_cut`, `location: shop`, `trip_number: 0`, `garment_type: brova|final`. **Brova-parking rule:** if the order has ANY brova, ALL finals flip `waiting_cut → waiting_for_acceptance` (parked until a brova is accepted).
-- **C — Confirm:** `checkout_status: confirmed`, invoice # generated, shelf/fabric stock decremented. `order_phase` stays `new`. Idempotent on its key (a lost-response retry must not double-decrement stock or double-issue an invoice). Each garment's five toggle options (§2.11) must be explicitly answered — an unfilled one blocks confirmation.
+- **C — Confirm:** `checkout_status: confirmed`, invoice # generated, shelf/fabric stock decremented. `order_phase` stays `new`. Idempotent on its key (a lost-response retry must not double-decrement stock or double-issue an invoice). Each garment's four toggle options (§2.11) must carry a Yes/No value at confirmation (the shop form defaults them to No; the workshop add-garment form requires an explicit choice) — an unfilled one blocks confirmation.
 
 **2. Cashier payment** — see §3.
 
@@ -247,22 +247,29 @@ A garment that keeps coming back is **no longer auto-flagged, hidden, or blocked
 
 **Investigation / root-cause handling is being redesigned and will live elsewhere** (not a workshop auto-hold surface); it is unspecified here until that design lands. The `needs_investigation` column and the `garment_investigations` table are **retained but vestigial** (no writer, the column never set true) — no destructive drop, matching the `redo_priority` precedent (§6).
 
-### 2.11 Toggle option fields — explicit choice, no silent default
+### 2.11 Toggle option fields — present-or-absent (shop defaults to No)
 
-Five garment style options are **present-or-absent** answers the staff must make deliberately, never inherit from a default:
+Four garment style options are **present-or-absent** answers — **Yes** (the garment has it) or **No** (it does not):
 
-- **`wallet_pocket`, `pen_holder`, `mobile_pocket`, `small_tabaggi`** — each is **Yes** (the garment has it) or **No** (it does not).
-- **`collar_position`** — **Up**, **Down**, or **Standard** (Standard is the neutral position; it is a real choice, stored as the absence of up/down).
+- **`wallet_pocket`, `pen_holder`, `mobile_pocket`, `small_tabaggi`**.
 
-**No silent default.** At garment creation the order-taker (shop) or workshop add-garment user is shown each field **unselected** ("not filled in") and **must pick an answer before the order/garment can be confirmed** — a missing answer blocks confirmation. "Not filled in" is only the transient entry state that forces a choice; it is **never a persisted value**. Editing an existing garment pre-selects the stored answer (a stored `false` reads as **No**, an absent `collar_position` reads as **Standard** — historical rows are explicit answers, not blanks).
+(`collar_position` was previously a fifth toggle here; it is now a **categorical body measurement** — see §2.12.)
 
-**QC verifies both directions.** Because the spec always carries an explicit answer, QC checks each of these fields **whether the spec says Yes or No** (not only when Yes): the inspector must record what is actually on the garment, and a mismatch in **either** direction is a non-conformity (spec Yes + built absent → fail; spec No + built present → fail; collar Up/Down/Standard must match). The inspector likewise **cannot leave any of the five blank** — each must be answered to submit QC. (This closes the prior gap where a `false`/absent field was indistinguishable from "not asked," so a Yes-spec field would silently appear pre-flagged and a No-spec field was never checked at all.)
+**Shop order entry defaults to No (a tick).** On the shop new-work-order garment form each toggle is a single **tick mark** that defaults to **No** — the order-taker ticks only the ones the garment has, and an un-ticked toggle persists as an explicit **No**. There is no "not filled" entry state and no toggle-driven confirmation block on this form: a default-No garment confirms. Editing an existing garment shows the stored answer (a stored `true` is ticked; a stored `false`/null reads as **No**). (The workshop add-garment form still presents each toggle unselected and requires an explicit Yes/No.)
 
-The same explicit answer flows through feedback/redo/replacement like any other style change (§2.5).
+**QC is deliberately not defaulted — explicit answer, both directions.** QC keeps the "not filled" entry state: the inspector is shown each field **unselected** and **cannot leave any of the four blank** — each must be answered to submit QC. Because the spec always carries a real answer (Yes or No), QC checks each field **whether the spec says Yes or No** (not only when Yes): the inspector records what is actually on the garment, and a mismatch in **either** direction is a non-conformity (spec Yes + built absent → fail; spec No + built present → fail).
 
-### 2.12 Shoulder slope — categorical body measurement
+The answer flows through feedback/redo/replacement like any other style change (§2.5).
 
-Shoulder slope is a **body measurement** (stored on the `measurements` row, per customer, alongside the numeric dimensions) recorded as one of four fixed shapes — **Sloped Down** (high on the left, dropping to the right), **Sloped Up** (low on the left, rising to the right), **Straight** (level), **Peaked** (rises to a centre point, drops to both sides). Unlike the numeric tape dimensions it is **categorical**, entered as a required shape-dropdown with **no silent default**: shown unfilled, it must be picked before a measurement / add-garment record is saved (an absent value on a legacy row reads as unfilled and must be answered on edit). It appears wherever measurements are entered, updated, fed back, QC'd, or shown read-only. In feedback it is corrected like any spec measurement — a spec-correcting reason (Customer Request / Shop Error) re-points it on the newly minted measurement (§2.5). QC verifies it **both directions** by equality (spec value vs. observed), like the §2.11 fields, and the inspector cannot leave it blank. (Printed/positioned diagram templates and the invoice card render the numeric measurements only — the slope is intentionally not placed on those fixed layouts.)
+### 2.12 Categorical body measurements — shoulder slope & collar position
+
+Two body measurements are **categorical** rather than numeric. Both live on the `measurements` row (per customer, alongside the numeric dimensions — **not** on the garment), are entered as a required choice with **no silent default**, and flow through measurement entry/update/feedback/QC/read-out the same way.
+
+**Shoulder slope** is recorded as one of four fixed shapes — **Sloped Down** (high on the left, dropping to the right), **Sloped Up** (low on the left, rising to the right), **Straight** (level), **Peaked** (rises to a centre point, drops to both sides). Shown unfilled, it must be picked before a measurement / add-garment record is saved (an absent value on a legacy row reads as unfilled and must be answered on edit).
+
+**Collar position** is **Up**, **Down**, or **Standard** (Standard is the neutral position; it is a real choice, stored as the **absence** of up/down — null). It was previously a §2.11 garment style toggle; per stakeholder direction it is a body measurement and is entered next to the shoulder slope. An absent stored value reads as **Standard**.
+
+Both are **categorical** (not numeric tape dimensions): they appear wherever measurements are entered, updated, fed back, QC'd, or shown read-only. In feedback each is corrected like any spec measurement — a spec-correcting reason (Customer Request / Shop Error) re-points it on the newly minted measurement (§2.5). QC verifies each **both directions** by equality (spec value vs. observed), like the §2.11 fields, and the inspector cannot leave it blank. (Printed/positioned diagram templates and the invoice card render the numeric measurements only — these categorical fields are not placed on those fixed layouts; the collar Up/Down annotation still appears in the order/cashier invoices.)
 
 ### 2.13 Order linking — deliver several orders together
 
@@ -416,7 +423,7 @@ transfers:cancel   → manager + admin
 **QC analytics (Q2) — the 1–5 ratings, used analytically.** The QC pass/fail rule is unchanged (any quality aspect rated **< 4** = non-conformity → back to production); on top of it a **QC Analytics** surface reads the stored ratings/breadcrumbs (the per-attempt `quality_ratings`, `failed_measurements`, `failed_options`, `return_stages`, `defect_attributions` accumulated in each garment's QC history) for a date range and shows:
 
 - **Defect-category breakdown** — each quality aspect (seam, ironing, front pocket, collar, jabzour, hemming) analyzed separately: average rating + fail count + sample size, worst-first.
-- **Measurement- and option/specification-defect breakdown** — the same lens extended to spec defects (which measurement fields / which options fail most). The five toggle options (§2.11) are checked both ways (spec Yes built absent, or spec No built present), so a defect surfaces in either direction.
+- **Measurement- and option/specification-defect breakdown** — the same lens extended to spec defects (which measurement fields / which options fail most). The four toggle options (§2.11) are checked both ways (spec Yes built absent, or spec No built present), so a defect surfaces in either direction.
 - **Defect origin by stage** — fails grouped by the `return_stages` the QC routed them back to (where quality problems come from).
 - **Defects by team & worker** — every attributed defect (the `defect_attributions` above) grouped by the responsible stage and the worker/unit who did it, with a measurement/option/quality split, worst-first. The headline lens for *who* causes defects, not just *what* fails.
 - **Quality trend over time** — average rating per day, so a team/period rising (3.8 → 4.6) or declining (4.8 → 4.2) is visible.

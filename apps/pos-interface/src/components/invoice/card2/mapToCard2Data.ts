@@ -74,6 +74,7 @@ const buildLineItem = (
   index: number,
   fabrics: Fabric[],
   measurementDisplayById: Record<string, string>,
+  measurement: Measurement | null | undefined,
 ): Card2LineItem => {
   const fabric = fabrics.find((f) => f.id === garment.fabric_id)
   const meters = toNum(garment.fabric_length)
@@ -117,9 +118,10 @@ const buildLineItem = (
             },
           }
         : undefined,
-      // 'standard' (and unfilled) is the neutral position — no up/down annotation.
-      collarPosition: garment.collar_position === 'up' || garment.collar_position === 'down'
-        ? garment.collar_position
+      // collar_position is a body measurement now — read it from the measurement.
+      // 'standard' / null is the neutral position — no up/down annotation.
+      collarPosition: measurement?.collar_position === 'up' || measurement?.collar_position === 'down'
+        ? measurement.collar_position
         : undefined,
       button: garment.collar_button ? { id: garment.collar_button } : undefined,
       jabzoor: garment.jabzour_1
@@ -184,12 +186,15 @@ const buildMeasurements = (m: Measurement | null | undefined): Card2PdfData['mea
 
 export const mapToCard2Data = (input: MapToCard2Input): Card2PdfData => {
   const measurementDisplayById = input.measurementDisplayById ?? {}
-  const lineItems = input.garments.slice(0, 8).map((g, i) => buildLineItem(g, i, input.fabrics, measurementDisplayById))
+  const lineItems = input.garments.slice(0, 8).map((g, i) => buildLineItem(g, i, input.fabrics, measurementDisplayById, input.measurement))
 
   const totalFabric = lineItems.reduce((sum, li) => sum + (typeof li.fabric?.price === 'number' ? li.fabric.price : 0), 0)
   const grandTotal = input.orderTotal ?? 0
   const paid = input.paid ?? 0
   const remaining = Math.max(0, grandTotal - paid)
+  const deliveryCharge = input.charges?.delivery ?? 0
+  // Delivery is shown in the totals block (not as a line item) only when charged.
+  const delivery = deliveryCharge > 0 ? deliveryCharge : undefined
 
   const paymentMethod = input.paymentType ? paymentMethodByDbValue[input.paymentType] : undefined
   const paymentMethods: Card2PaymentMethod[] = paymentMethod ? [paymentMethod] : []
@@ -216,6 +221,7 @@ export const mapToCard2Data = (input: MapToCard2Input): Card2PdfData => {
     specialRequest: input.specialRequest ?? undefined,
     pricing: {
       fabricTotalPrice: Number(totalFabric.toFixed(2)),
+      delivery,
       grandTotal,
       paid,
       remaining,
@@ -227,6 +233,7 @@ export const mapToCard2Data = (input: MapToCard2Input): Card2PdfData => {
       final: null,
     },
     customerCopy: {
+      customerSignature: input.customerSignature ?? null,
       employeeSignature: input.orderTakerName ?? null,
       fabricSummary: {
         inHouse: inHouseTotal || undefined,
@@ -235,6 +242,7 @@ export const mapToCard2Data = (input: MapToCard2Input): Card2PdfData => {
       },
       paymentSummary: {
         total: grandTotal,
+        delivery,
         paid,
         remaining,
         paymentMethods,

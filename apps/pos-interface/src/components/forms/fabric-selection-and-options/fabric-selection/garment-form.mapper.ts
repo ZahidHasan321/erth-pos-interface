@@ -35,10 +35,6 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         quantity: g.quantity || 1,
         collar_type: g.collar_type ?? "",
         collar_button: g.collar_button ?? "",
-        // §2.11 — existing rows are explicit answers: an absent collar_position
-        // reads as Standard, a stored false reads as No. Only brand-new garments
-        // (which use garmentDefaults, not this mapper) start unfilled.
-        collar_position: g.collar_position === 'up' || g.collar_position === 'down' ? g.collar_position : 'standard',
         collar_thickness: g.collar_thickness ?? "",
         cuffs_type: g.cuffs_type ?? "",
         cuffs_thickness: g.cuffs_thickness,
@@ -103,11 +99,6 @@ export function mapFormValuesToGarment(
     const garment: Partial<Garment> = {
         ...rest,
         order_id: orderId,
-        // §2.11 — 'standard' is stored as the absence of up/down (null), so the
-        // collar_position column stays up/down/null with no migration.
-        collar_position: formValues.collar_position === 'up' || formValues.collar_position === 'down'
-            ? formValues.collar_position
-            : null,
         jabzour_1: backendJabzour1 as JabzourType,
         jabzour_2: backendJabzour2,
         fabric_price_snapshot: snapshots?.fabric_price_snapshot ?? fabric_amount,

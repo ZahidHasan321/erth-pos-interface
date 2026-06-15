@@ -39,6 +39,7 @@ type ShowroomRawRow = {
   order_phase?: string | null;
   order_date?: string | null;
   delivery_date?: string | null;
+  shop_received_date?: string | null;
   home_delivery?: boolean | null;
   advance?: number | string | null;
   paid?: number | string | null;
@@ -213,6 +214,7 @@ export function transformRow(raw: ShowroomRawRow): OrderRow {
     checkoutStatus: order.checkout_status ?? undefined,
     orderDate: order.order_date ?? null,
     deliveryDate: order.delivery_date ?? null,
+    shopReceivedDate: order.shop_received_date ?? null,
     customerId: customer?.id?.toString() || "0",
     customerName,
     customerNickName,

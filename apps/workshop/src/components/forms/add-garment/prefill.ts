@@ -34,10 +34,7 @@ export function buildPrefillValues(
     base.lines = source.lines ?? 1;
     base.collar_type = source.collar_type ?? null;
     base.collar_button = source.collar_button ?? null;
-    // Existing rows are explicit answers (§2.11): a stored false reads as "No",
-    // an absent collar_position reads as "Standard". Only a brand-new (source
-    // null) garment starts unfilled.
-    base.collar_position = normalizeCollarPosition(source.collar_position);
+    // Existing toggles are explicit answers (§2.11): a stored false reads as "No".
     base.collar_thickness = source.collar_thickness ?? null;
     base.small_tabaggi = !!source.small_tabaggi;
     base.jabzour_1 = (source.jabzour_1 as string | null) ?? null;
@@ -59,12 +56,17 @@ export function buildPrefillValues(
   }
   base.measurements = m as AddGarmentFormValues["measurements"];
 
-  // Shoulder slope is categorical and lives on the measurement row. Prefill it
-  // from the customer's existing measurement when present so the tailor only
-  // confirms it; a blank-add with no measurement starts unfilled (required gate).
+  // Shoulder slope and collar position are categorical and live on the measurement
+  // row. Prefill from the customer's existing measurement when present so the tailor
+  // only confirms; a blank-add with no measurement starts unfilled (required gate).
   const rawSlope = measurement?.shoulder_slope;
   base.shoulder_slope =
     (rawSlope as AddGarmentFormValues["shoulder_slope"]) ?? undefined;
+  // collar_position present → up/down/standard (absence reads as Standard, §2.11);
+  // no measurement → undefined so the required gate forces a deliberate choice.
+  base.collar_position = measurement
+    ? normalizeCollarPosition(measurement.collar_position)
+    : undefined;
 
   return base;
 }

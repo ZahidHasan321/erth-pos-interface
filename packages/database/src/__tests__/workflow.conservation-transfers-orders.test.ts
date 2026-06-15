@@ -607,3 +607,67 @@ async function confirmSalesOrder(
       ${key}::uuid
     )`;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// LEDGER METADATA ISOLATION — per-movement context must not leak forward
+// ════════════════════════════════════════════════════════════════════════════
+// Stock movements are stamped from transaction-local GUCs (app.movement_*) that
+// the AFTER-UPDATE audit trigger reads. An RPC that sets a GUC but never clears
+// it would leave it set for the NEXT stock change in the same transaction, which
+// would silently inherit the stale value. This pins the invoice-photo case: an
+// RPC that records a photo (restock_item) must reset app.movement_image_url so a
+// later movement in the same tx carries its OWN context, not the photo.
+
+/** restock_item with an invoice photo (named args; idempotency key stays last). */
+function restockWithPhoto(tx: Tx, fabricId: number, qty: number, url: string) {
+  return tx`
+    SELECT restock_item(
+      p_item_type => 'fabric'::stock_item_type,
+      p_item_id => ${fabricId},
+      p_location => 'shop'::stock_location,
+      p_qty => ${qty},
+      p_image_url => ${url},
+      p_user_id => ${MANAGER.id}::uuid,
+      p_idempotency_key => ${randomUUID()}::uuid
+    )`;
+}
+
+/** image_url of the most-recent ledger row for a fabric + movement_type. */
+async function latestImageUrl(
+  tx: Tx,
+  fabricId: number,
+  movementType: string,
+): Promise<string | null> {
+  const r = only(
+    await tx`
+      SELECT image_url FROM stock_movements
+      WHERE item_type = 'fabric'::stock_item_type AND item_id = ${fabricId}
+        AND movement_type = ${movementType}::stock_movement_type
+      ORDER BY id DESC LIMIT 1`,
+    `latest ${movementType} movement for fabric ${fabricId}`,
+  ) as unknown as { image_url: string | null };
+  return r.image_url;
+}
+
+describe("ledger metadata isolation (movement context does not leak forward)", () => {
+  it("IMAGE-URL ISOLATION: a restock invoice photo does not piggyback onto a later movement in the same transaction", async () => {
+    await inRolledBackTx(async (tx) => {
+      const url = "https://example.test/supplier-invoice.jpg";
+
+      await restockWithPhoto(tx, FABRIC_A_ID, 5, url);
+
+      // POSITIVE CONTROL: the restock row carries its own invoice photo.
+      expect(await latestImageUrl(tx, FABRIC_A_ID, "restock")).toBe(url);
+
+      // INVARIANT (per-movement metadata isolation): a later movement that
+      // carries no photo of its own (a transfer dispatch) reflects ONLY its own
+      // context — the restock photo must NOT bleed onto the transfer_out row.
+      // If restock_item failed to reset app.movement_image_url, this row would
+      // inherit the stale URL and the assertion would fail.
+      const { transferId, itemId } = await requestFabricTransfer(tx, FABRIC_A_ID, 3);
+      await dispatchTransfer(tx, transferId, [{ id: itemId, dispatched_qty: 3 }]);
+
+      expect(await latestImageUrl(tx, FABRIC_A_ID, "transfer_out")).toBeNull();
+    });
+  });
+});

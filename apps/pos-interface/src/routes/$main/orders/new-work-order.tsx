@@ -532,6 +532,10 @@ function NewWorkOrder() {
                     fabricSelectionForm.reset({ garments: [], signature: "" });
                 }
 
+                // Customer signature (order-level) — rehydrate so a reopened
+                // draft keeps the signature on reprint.
+                fabricSelectionForm.setValue("signature", orderData.customer_signature_url ?? "");
+
                 // 3. Load Shelf Items
                 if (orderData.shelf_items && orderData.shelf_items.length > 0) {
                     const mappedShelfProducts = orderData.shelf_items.map((si: OrderShelfItem & { shelf?: Shelf | null }) => ({
@@ -1040,6 +1044,9 @@ function NewWorkOrder() {
         const orderData = OrderForm.getValues();
         const garmentsData = fabricSelectionForm.getValues().garments;
         const shelfData = shelfForm.getValues().products;
+        // collar_position is a body measurement now — read it from the measurement
+        // form ('standard'/unfilled = the neutral position, stored as null).
+        const collarPosition = measurementsForm.getValues().collar_position;
 
         // Find employee name
         const orderTakerEmployee = employees.find(
@@ -1061,6 +1068,10 @@ function NewWorkOrder() {
                 house_no: demographics.house_no ?? undefined,
             },
             fabricSelections: garmentsData,
+            measurement: {
+                collar_position:
+                    collarPosition === "up" || collarPosition === "down" ? collarPosition : null,
+            },
             shelfProducts: shelfData,
             fabrics: fabricsResponse || [],
             charges: {
@@ -1084,6 +1095,7 @@ function NewWorkOrder() {
         demographicsForm,
         OrderForm,
         fabricSelectionForm,
+        measurementsForm,
         order,
         shelfForm,
         order.id,

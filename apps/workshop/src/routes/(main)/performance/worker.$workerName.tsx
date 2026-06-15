@@ -145,22 +145,22 @@ function WorkerDetailPage() {
   );
 
   const dailyData = useMemo(
-    () => getWorkerDailyBreakdown(garments, name, stage),
-    [garments, name, stage],
+    () => getWorkerDailyBreakdown(garments, name, stage, dateRange),
+    [garments, name, stage, dateRange],
   );
 
   const durations = useMemo(
-    () => getWorkerDurations(garments, name),
-    [garments, name],
+    () => getWorkerDurations(garments, name, dateRange),
+    [garments, name, dateRange],
   );
   const daysPresent = useMemo(
-    () => getWorkerDaysPresent(garments, name),
-    [garments, name],
+    () => getWorkerDaysPresent(garments, name, dateRange),
+    [garments, name, dateRange],
   );
 
   const quality = useMemo(
-    () => getWorkerQuality(garments, name, stage),
-    [garments, name, stage],
+    () => getWorkerQuality(garments, name, stage, dateRange),
+    [garments, name, stage, dateRange],
   );
 
   const timing = useMemo(() => {

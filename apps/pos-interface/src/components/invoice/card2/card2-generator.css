@@ -574,8 +574,16 @@
 
 .card2-customer-copy__fabric-signature-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 36%);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 48%);
   gap: 2.4mm;
+  align-items: end;
+}
+
+.card2-customer-copy__signatures {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.1mm;
   align-items: end;
 }
 
@@ -612,6 +620,35 @@
   padding: 0.7mm 2.1mm;
   font-size: 7pt;
   line-height: 1.15;
+}
+
+.card2-customer-copy__customer-signature {
+  min-width: 0;
+  display: grid;
+  gap: 0.65mm;
+}
+
+.card2-customer-copy__customer-signature-label {
+  font-size: 8.3pt;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.card2-customer-copy__customer-signature-box {
+  min-height: 9.3mm;
+  border: 0.6px solid #9f8a74;
+  border-radius: 2.8mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7mm 2.1mm;
+  overflow: hidden;
+}
+
+.card2-customer-copy__customer-signature-image {
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
 }
 
 .card2-customer-copy__totals-row {
@@ -1193,12 +1230,19 @@
 
 .card2-html-sheet--compact .card2-customer-copy__fabric-signature-row,
 .card2-html-sheet--max-compact .card2-customer-copy__fabric-signature-row {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 33%);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 46%);
+  gap: 1.4mm;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__signatures,
+.card2-html-sheet--max-compact .card2-customer-copy__signatures {
   gap: 1.4mm;
 }
 
 .card2-html-sheet--compact .card2-customer-copy__employee-signature-label,
-.card2-html-sheet--max-compact .card2-customer-copy__employee-signature-label {
+.card2-html-sheet--max-compact .card2-customer-copy__employee-signature-label,
+.card2-html-sheet--compact .card2-customer-copy__customer-signature-label,
+.card2-html-sheet--max-compact .card2-customer-copy__customer-signature-label {
   font-size: 7pt;
 }
 
@@ -1208,6 +1252,13 @@
   border-radius: 2mm;
   padding: 0.35mm 1.4mm;
   font-size: 5.8pt;
+}
+
+.card2-html-sheet--compact .card2-customer-copy__customer-signature-box,
+.card2-html-sheet--max-compact .card2-customer-copy__customer-signature-box {
+  min-height: 6.8mm;
+  border-radius: 2mm;
+  padding: 0.35mm 1.4mm;
 }
 
 .card2-html-sheet--compact .card2-customer-copy__totals-row,
@@ -1369,7 +1420,8 @@
   min-height: 2.9mm;
 }
 
-.card2-html-sheet--max-compact .card2-customer-copy__employee-signature-box {
+.card2-html-sheet--max-compact .card2-customer-copy__employee-signature-box,
+.card2-html-sheet--max-compact .card2-customer-copy__customer-signature-box {
   min-height: 5.9mm;
 }
 

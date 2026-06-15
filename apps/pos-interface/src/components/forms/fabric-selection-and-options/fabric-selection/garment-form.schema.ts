@@ -33,9 +33,8 @@ export const garmentSchema = z.object({
   // Style options
   collar_type: z.string({ message: "Collar type is required" }).min(1, "Collar type is required"),
   collar_button: z.string({ message: "Collar button is required" }).min(1, "Collar button is required"),
-  // §2.11 toggles — start unfilled (undefined), required via superRefine below.
-  // collar 'standard' serializes back to null on save (no DB migration).
-  collar_position: z.enum(['up', 'down', 'standard']).nullable().optional(),
+  // collar_position is a body measurement now (entered in the measurement form
+  // next to shoulder_slope) — no longer a garment style option here.
   collar_thickness: z.string({ message: "Collar thickness is required" }).min(1, "Collar thickness is required"),
   cuffs_type: z.string({ message: "Cuffs type is required" }).min(1, "Cuffs type is required"),
   cuffs_thickness: z.string().optional().nullable(),
@@ -105,24 +104,9 @@ export const garmentSchema = z.object({
     }
   }
 
-  // §2.11 — every toggle must be answered Yes/No (and collar Up/Down/Standard),
-  // no silent default. An unfilled one blocks order confirmation.
-  for (const key of ['wallet_pocket', 'pen_holder', 'mobile_pocket', 'small_tabaggi'] as const) {
-    if (data[key] == null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Choose Yes or No",
-        path: [key],
-      });
-    }
-  }
-  if (data.collar_position == null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Pick a collar position",
-      path: ["collar_position"],
-    });
-  }
+  // §2.11 — on the shop new-work-order form the four toggles are a tick mark that
+  // defaults to No; an un-ticked toggle is an explicit No, so there is no
+  // required-choice gate here (QC keeps its blank-until-chosen requirement).
 });
 
 export type GarmentSchema = z.infer<typeof garmentSchema>;
@@ -142,17 +126,16 @@ export const garmentDefaults: GarmentSchema = {
   quantity: 1,
   collar_type: 'COL_DOWN_COLLAR',
   collar_button: 'COL_TABBAGI',
-  // §2.11 toggles start unfilled — the order-taker must make a deliberate choice.
-  collar_position: undefined,
   collar_thickness: 'DOUBLE',
   cuffs_type: 'CUF_NO_CUFF',
   cuffs_thickness: 'NO HASHWA',
   front_pocket_type: 'FRO_MUDAWWAR_FRONT_POCKET',
   front_pocket_thickness: 'DOUBLE',
-  wallet_pocket: undefined,
-  pen_holder: undefined,
-  mobile_pocket: undefined,
-  small_tabaggi: undefined,
+  // §2.11 — tick marks default to No on the shop new-work-order form.
+  wallet_pocket: false,
+  pen_holder: false,
+  mobile_pocket: false,
+  small_tabaggi: false,
   jabzour_1: 'JAB_BAIN_MURABBA',
   jabzour_2: null,
   jabzour_thickness: 'SINGLE',

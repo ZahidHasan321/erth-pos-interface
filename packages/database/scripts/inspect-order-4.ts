@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 async function main() {
   const r = await db.execute(sql`
     SELECT id, garment_id, garment_type,
-           collar_type, collar_button, collar_position, collar_thickness,
+           collar_type, collar_button, collar_thickness,
            cuffs_type, cuffs_thickness,
            front_pocket_type, front_pocket_thickness,
            jabzour_1, jabzour_2, jabzour_thickness

@@ -1,6 +1,7 @@
 import { useFormContext, Controller } from "react-hook-form";
 import { Input } from "@repo/ui/input";
 import { ShoulderSlopeSelect } from "@repo/ui/shoulder-slope";
+import { CollarPositionSelect } from "@repo/ui/collar-position";
 import { SectionCard } from "@/components/shared/PageShell";
 import { cn } from "@/lib/utils";
 import { MEASUREMENT_GROUPS } from "./constants";
@@ -38,6 +39,26 @@ export function MeasurementFields() {
         {errors.shoulder_slope && (
           <p className="text-xs text-[color:var(--status-bad)]">
             {errors.shoulder_slope.message as string}
+          </p>
+        )}
+      </div>
+      {/* Collar position — categorical, required choice (no silent default). */}
+      <div className="rounded-md border border-border bg-background/40 px-3 py-2 space-y-1.5">
+        <h4 className="text-sm font-medium text-muted-foreground">Collar position</h4>
+        <Controller
+          control={control}
+          name="collar_position"
+          render={({ field }) => (
+            <CollarPositionSelect
+              value={field.value}
+              onChange={field.onChange}
+              invalid={!!errors.collar_position}
+            />
+          )}
+        />
+        {errors.collar_position && (
+          <p className="text-xs text-[color:var(--status-bad)]">
+            {errors.collar_position.message as string}
           </p>
         )}
       </div>

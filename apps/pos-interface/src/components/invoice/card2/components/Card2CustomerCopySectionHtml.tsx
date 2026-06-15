@@ -32,6 +32,11 @@ const paymentMethodOptions: readonly CheckboxOption<Card2PaymentMethod>[] = [
 const resolveCheckedIcon = (isChecked: boolean): string =>
   isChecked ? checkboxMarkedIcon : checkboxIcon
 
+// The customer signature is an image — a freshly-drawn data URL or an uploaded
+// storage URL (reprints). Render either as an <img>.
+const isSignatureImage = (value: string): boolean =>
+  value.startsWith('data:image/') || value.startsWith('http')
+
 const hasMarkedFabricQuantity = (value: unknown): boolean => {
   if (value === null || value === undefined) {
     return false
@@ -60,6 +65,7 @@ export function Card2CustomerCopySectionHtml({
   data,
 }: Card2CustomerCopySectionHtmlProps) {
   const brovaStatus = data.orderHeader?.brovaStatus
+  const customerSignature = data.customerCopy?.customerSignature ?? ''
   const fabricSummary = data.customerCopy?.fabricSummary
   const paymentSummary = data.customerCopy?.paymentSummary
   const paymentMethods = paymentSummary?.paymentMethods ?? data.pricing?.paymentMethods ?? []
@@ -171,17 +177,41 @@ export function Card2CustomerCopySectionHtml({
               </div>
             </div>
 
-            <div className="card2-customer-copy__employee-signature">
-              <span className="card2-customer-copy__employee-signature-label">Employee Signature</span>
-              <div className="card2-customer-copy__employee-signature-box">
-                {data.customerCopy?.employeeSignature
-                  ? formatValue(data.customerCopy.employeeSignature)
-                  : null}
+            <div className="card2-customer-copy__signatures">
+              <div className="card2-customer-copy__customer-signature">
+                <span className="card2-customer-copy__customer-signature-label">Customer Signature</span>
+                <div className="card2-customer-copy__customer-signature-box">
+                  {customerSignature && isSignatureImage(customerSignature) ? (
+                    <img
+                      className="card2-customer-copy__customer-signature-image"
+                      src={customerSignature}
+                      alt="Customer signature"
+                    />
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="card2-customer-copy__employee-signature">
+                <span className="card2-customer-copy__employee-signature-label">Employee Signature</span>
+                <div className="card2-customer-copy__employee-signature-box">
+                  {data.customerCopy?.employeeSignature
+                    ? formatValue(data.customerCopy.employeeSignature)
+                    : null}
+                </div>
               </div>
             </div>
           </div>
 
           <div className="card2-customer-copy__totals-row">
+            {(paymentSummary?.delivery ?? data.pricing?.delivery) != null && (
+              <div className="card2-customer-copy__amount-field">
+                <span className="card2-customer-copy__amount-value">
+                  {formatKd(paymentSummary?.delivery ?? data.pricing?.delivery)}
+                </span>
+                <span className="card2-customer-copy__amount-label">Delivery</span>
+              </div>
+            )}
+
             <div className="card2-customer-copy__amount-field">
               <span className="card2-customer-copy__amount-value">
                 {formatKd(paymentSummary?.total ?? data.pricing?.grandTotal)}

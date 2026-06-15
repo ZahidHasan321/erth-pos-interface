@@ -43,6 +43,7 @@ export type RestockArgs = {
   supplierId?: number | null;
   unitCost?: number | null;
   notes?: string;
+  imageUrl?: string | null;
   userId?: string | null;
 };
 
@@ -59,6 +60,7 @@ export async function restockItem(args: RestockArgs): Promise<{ success: boolean
       p_supplier_id: args.supplierId ?? null,
       p_unit_cost: args.unitCost ?? null,
       p_notes: args.notes ?? null,
+      p_image_url: args.imageUrl ?? null,
       p_user_id: args.userId ?? null,
       p_idempotency_key,
     }),

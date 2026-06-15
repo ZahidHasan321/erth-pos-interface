@@ -375,23 +375,6 @@ export function StyleFields() {
             )}
           </div>
           <div className="space-y-2">
-            <Label className="text-sm text-muted-foreground">Position</Label>
-            <Controller
-              control={control}
-              name="collar_position"
-              render={({ field }) => (
-                <CollarPositionPicker
-                  value={field.value}
-                  onChange={field.onChange}
-                  failed={!!errors.collar_position}
-                />
-              )}
-            />
-            {errors.collar_position && (
-              <p className="text-xs text-[color:var(--status-bad)]">{errors.collar_position.message as string}</p>
-            )}
-          </div>
-          <div className="space-y-2">
             <Label className="text-sm text-muted-foreground">Thickness</Label>
             <Controller
               control={control}

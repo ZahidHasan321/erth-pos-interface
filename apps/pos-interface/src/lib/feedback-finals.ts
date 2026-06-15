@@ -3,14 +3,15 @@ import type { Garment } from "@repo/database";
 // The garment columns that make up a garment's "style". A subset of these drive
 // price (collar_type, cuffs_type, jabzour_1, small_tabaggi, lines, style,
 // thicknesses, front_pocket_type — see calculateGarmentStylePrice); the rest are
-// spec-only (collar_position, the accessory toggles, jabzour_2). We carry the
-// whole set so "match brova" / "custom" fully define the final's design.
+// spec-only (the accessory toggles, jabzour_2). We carry the whole set so
+// "match brova" / "custom" fully define the final's design. (collar_position is
+// a body measurement now — lives on `measurements`, handled via the measurement
+// override flow, not here.)
 export const STYLE_FIELDS = [
   "style",
   "lines",
   "collar_type",
   "collar_button",
-  "collar_position",
   "collar_thickness",
   "small_tabaggi",
   "cuffs_type",
@@ -65,7 +66,7 @@ export function applyJabzourSelect(value: string): StyleFields {
  *
  * `optionIds` are the present option rows ("collar", "collarBtn", "jabzour",
  * "frontPocket", "cuff", "smallTabaggi", "penHolder", "walletPocket",
- * "mobilePocket", "collarPosition", "lines").
+ * "mobilePocket", "lines").
  */
 export function buildBrovaStyleUpdates(args: {
   optionIds: string[];
@@ -96,8 +97,6 @@ export function buildBrovaStyleUpdates(args: {
           updates.jabzour_1 = "BUTTON";
           updates.jabzour_2 = mainNewValue;
         }
-      } else if (id === "collarPosition") {
-        updates.collar_position = mainNewValue === "__standard__" ? null : mainNewValue;
       } else if (id === "lines") {
         const parsed = Number(mainNewValue);
         if (parsed === 1 || parsed === 2) updates.lines = parsed;

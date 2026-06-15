@@ -1713,7 +1713,6 @@ export interface CreateGarmentInput {
   style_id?: number | null;
   collar_type?: string | null;
   collar_button?: string | null;
-  collar_position?: 'up' | 'down' | null;
   collar_thickness?: string | null;
   cuffs_type?: string | null;
   cuffs_thickness?: string | null;
@@ -1795,7 +1794,6 @@ export const createGarmentForOrder = async (
     style_id: input.style_id ?? null,
     collar_type: input.collar_type ?? null,
     collar_button: input.collar_button ?? null,
-    collar_position: input.collar_position ?? null,
     collar_thickness: input.collar_thickness ?? null,
     cuffs_type: input.cuffs_type ?? null,
     cuffs_thickness: input.cuffs_thickness ?? null,

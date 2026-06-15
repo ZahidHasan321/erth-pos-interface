@@ -146,6 +146,22 @@ export async function uploadFeedbackSignature(
   return uploadFile(blob, path);
 }
 
+/**
+ * Upload the order-level customer signature (as a data URL → Blob).
+ *
+ * Fixed path per order (`orders/{orderId}/signature.png`, upsert) so re-signing
+ * replaces the prior image instead of accumulating files. Returns the public
+ * URL stored in `orders.customer_signature_url`.
+ */
+export async function uploadOrderSignature(
+  dataUrl: string,
+  orderId: number,
+): Promise<UploadResult> {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return uploadFile(blob, `orders/${orderId}/signature.png`);
+}
+
 // ── Convenience helpers for inventory item images ───────────────────────────
 
 /** Upload an inventory item image. Replaces any existing image at the same path. */
@@ -167,6 +183,17 @@ export async function uploadWastePhoto(
 ): Promise<UploadResult> {
   const ext = file instanceof File ? (file.name.split(".").pop() || "jpg") : "jpg";
   const path = `waste/${itemType}/${itemId}/photo-${Date.now()}.${ext}`;
+  return uploadFile(file, path);
+}
+
+/** Upload a supplier-invoice photo for a restock. */
+export async function uploadRestockInvoice(
+  file: File | Blob,
+  itemType: "fabric" | "shelf" | "accessory",
+  itemId: number,
+): Promise<UploadResult> {
+  const ext = file instanceof File ? (file.name.split(".").pop() || "jpg") : "jpg";
+  const path = `restock/${itemType}/${itemId}/invoice-${Date.now()}.${ext}`;
   return uploadFile(file, path);
 }
 

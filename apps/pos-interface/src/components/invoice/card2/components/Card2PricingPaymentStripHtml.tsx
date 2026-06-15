@@ -56,6 +56,13 @@ export function Card2PricingPaymentStripHtml({
 
         <div className="card2-pricing-strip__edge">
           <div className="card2-pricing-strip__totals">
+            {data.pricing?.delivery != null && (
+              <div className="card2-pricing-strip__field">
+                <span className="card2-pricing-strip__label">Delivery</span>
+                <span className="card2-pricing-strip__value">{formatKd(data.pricing?.delivery)}</span>
+              </div>
+            )}
+
             <div className="card2-pricing-strip__field">
               <span className="card2-pricing-strip__label">Paid</span>
               <span className="card2-pricing-strip__value">{formatKd(data.pricing?.paid)}</span>

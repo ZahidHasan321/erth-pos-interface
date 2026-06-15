@@ -136,8 +136,23 @@ export type MeasurementType = (typeof measurementTypeEnum.enumValues)[number];
 export const jabzourTypeEnum = pgEnum("jabzour_type", ["BUTTON", "ZIPPER"]);
 export type JabzourType = (typeof jabzourTypeEnum.enumValues)[number];
 
+// Collar position — a categorical body measurement: Up / Down / Standard.
+// Lives on `measurements` next to `shoulder_slope` (moved off `garments` — it is
+// a measurement, not a style option). The enum stores only up/down; the neutral
+// "Standard" position is the *absence* of a value (null), so the form layer
+// carries a "standard" sentinel that the mappers serialize to null. Like
+// shoulder_slope it stays OUT of the numeric MEASUREMENTS_SPEC machinery. The
+// editable picker + read-out live in @repo/ui (collar-position.tsx).
 export const collarPositionEnum = pgEnum("collar_position", ["up", "down"]);
 export type CollarPosition = (typeof collarPositionEnum.enumValues)[number];
+// Form-level value set (includes the "standard" sentinel that serializes to null).
+export const COLLAR_POSITION_VALUES = ["up", "down", "standard"] as const;
+export type CollarPositionChoice = (typeof COLLAR_POSITION_VALUES)[number];
+export const COLLAR_POSITION_LABELS: Record<CollarPositionChoice, string> = {
+  up: "Up",
+  down: "Down",
+  standard: "Standard",
+};
 
 // Shoulder slope — a categorical body measurement (4 fixed shapes), entered as a
 // required dropdown. Lives on `measurements` next to the numeric dimensions, but
@@ -534,8 +549,10 @@ export const measurements = pgTable("measurements", {
     collar_width: numeric("collar_width", { precision: 5, scale: 2 }),
     collar_height: numeric("collar_height", { precision: 5, scale: 2 }),
     shoulder: numeric("shoulder", { precision: 5, scale: 2 }),
-    // Categorical body measurement (enum, not numeric) — see shoulderSlopeEnum.
+    // Categorical body measurements (enum, not numeric) — see shoulderSlopeEnum
+    // / collarPositionEnum. collar_position null = the neutral "Standard".
     shoulder_slope: shoulderSlopeEnum("shoulder_slope"),
+    collar_position: collarPositionEnum("collar_position"),
     chest_upper: numeric("chest_upper", { precision: 5, scale: 2 }),
     chest_full: numeric("chest_full", { precision: 5, scale: 2 }),
     sleeve_length: numeric("sleeve_length", { precision: 5, scale: 2 }),
@@ -634,6 +651,12 @@ export const orders = pgTable("orders", {
 
     // Meta
     notes: text("notes"),
+
+    // Customer's drawn signature, captured at the fabric-selection step and
+    // printed on the order invoice (main panel + customer copy). Stored as a
+    // storage URL (the image lives in the media bucket) so list queries that
+    // select * stay lean. Order-level: one signature per order.
+    customer_signature_url: text("customer_signature_url"),
 
     // Client-supplied UUID for idempotent order creation. Unique when present
     // so a network retry / double-submit of createOrder returns the original
@@ -880,7 +903,8 @@ export const garments = pgTable("garments", {
     // Style Specifics
     collar_type: text("collar_type"),
     collar_button: text("collar_button"),
-    collar_position: collarPositionEnum("collar_position"),
+    // collar_position moved to `measurements` (it is a body measurement, not a
+    // style option) — see collarPositionEnum.
     collar_thickness: text("collar_thickness"),
     cuffs_type: text("cuffs_type"),
     cuffs_thickness: text("cuffs_thickness"),
@@ -921,6 +945,12 @@ export const garments = pgTable("garments", {
     // collected/delivered garments within a date range without polluting
     // production performance analytics.
     collected_at: timestamp("collected_at", { withTimezone: true }),
+    // Stamped when the garment is received back at the showroom from the
+    // workshop (the transit_to_shop → shop transition on the receiving
+    // brova/final page). Re-stamped on each return trip, so it reflects when
+    // the items currently on the showroom floor arrived. Distinct from
+    // collected_at (handover to customer) and completion_time (production done).
+    shop_received_date: timestamp("shop_received_date", { withTimezone: true }),
     // 0 = created, never dispatched from shop. Bumped to 1 on first dispatchOrder
     // (shop → workshop). Subsequent returns/alterations increment from there, so
     // workshop logic (alteration thresholds, receiving tabs) still sees trip ≥ 1.

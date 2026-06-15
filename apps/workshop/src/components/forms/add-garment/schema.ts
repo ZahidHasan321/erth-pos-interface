@@ -47,8 +47,9 @@ export const addGarmentSchema = z.object({
   lines: z.number().int().min(1).max(2).nullable(),
   collar_type: z.string().nullable(),
   collar_button: z.string().nullable(),
-  // §2.11 toggles — start unselected (undefined = "not filled"), required via
-  // superRefine below. collar 'standard' serializes back to null on save.
+  // collar_position is a categorical body measurement now (persisted to the
+  // measurements row, not the garment) — sibling field like shoulder_slope.
+  // Starts unselected; required via superRefine; 'standard' serializes to null.
   collar_position: z.enum(["up", "down", "standard"]).optional(),
   collar_thickness: z.string().nullable(),
   small_tabaggi: z.boolean().optional(),

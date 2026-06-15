@@ -20,7 +20,7 @@ import {
     reopenRegister,
     addCashMovement,
 } from "@/api/cashier";
-import type { EodTransactionFilters } from "@/api/cashier";
+import type { EodTransactionFilters, CashierFilter, CashierPeriod } from "@/api/cashier";
 
 /**
  * Invalidate cashier-related + order queries.
@@ -49,10 +49,10 @@ export function useCashierOrderSearch(query: string) {
     });
 }
 
-export function useRecentCashierOrders(filter: import("@/api/cashier").CashierFilter = "all") {
+export function useRecentCashierOrders(filter: CashierFilter = "all", period: CashierPeriod = "all") {
     return useQuery({
-        queryKey: ["cashier-recent-orders", filter],
-        queryFn: () => getRecentCashierOrders(filter),
+        queryKey: ["cashier-recent-orders", filter, period],
+        queryFn: () => getRecentCashierOrders(filter, undefined, period),
         staleTime: 1000 * 60,
     });
 }

@@ -43,6 +43,7 @@ import {
 } from "@repo/ui/select";
 import { Label } from "@repo/ui/label";
 import { ShoulderSlopeSelect, ShoulderSlopeDisplay } from "@repo/ui/shoulder-slope";
+import { CollarPositionSelect, CollarPositionDisplay, type CollarPositionValue } from "@repo/ui/collar-position";
 import { toast } from "sonner";
 import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
@@ -233,13 +234,9 @@ const DIFFERENCE_REASONS = [
   { label: "Shop Error", short: "Shop", dot: "bg-muted-foreground" },
 ];
 
-// Lightweight option lists for non-image style fields (collar position, lines).
-// BaseOption shape kept so they reuse the same picker UI; `image` left empty.
-const collarPositions: BaseOption[] = [
-  { value: "up", displayText: "Up", alt: "Collar up", image: null },
-  { value: "down", displayText: "Down", alt: "Collar down", image: null },
-  { value: "__standard__", displayText: "Standard", alt: "Standard", image: null },
-];
+// Lightweight option list for the non-image `lines` style field. BaseOption
+// shape kept so it reuses the same picker UI; `image` left empty. (collar
+// position is a measurement now — see the measurement section, not here.)
 const linesOptions: BaseOption[] = [
   { value: "1", displayText: "Single Line", alt: "Single line", image: null },
   { value: "2", displayText: "Double Line", alt: "Double line", image: null },
@@ -252,7 +249,6 @@ const STYLE_OPTION_LISTS: Record<string, BaseOption[] | undefined> = {
   frontPocket: topPocketTypes,
   cuff: cuffTypes,
   jabzour: jabzourTypes,
-  collarPosition: collarPositions,
   lines: linesOptions,
 };
 
@@ -263,6 +259,9 @@ interface GarmentFeedbackState {
   // Categorical shoulder-slope correction (kept out of the numeric map above).
   // Its reason/notes reuse differenceReasons["shoulder_slope"] / measurementNotes.
   shoulderSlopeNew: ShoulderSlope | "";
+  // Categorical collar-position correction (also a body measurement). "" = no
+  // change; "standard" serializes to null. Reason reuses differenceReasons["collar_position"].
+  collarPositionNew: CollarPositionValue | "";
   differenceReasons: Record<string, string>;
   measurementNotes: Record<string, string>;
   optionNotes: Record<string, string>;
@@ -308,6 +307,7 @@ interface GarmentFeedbackState {
 const createEmptyGarmentState = (): GarmentFeedbackState => ({
   feedbackMeasurements: {},
   shoulderSlopeNew: "",
+  collarPositionNew: "",
   differenceReasons: {},
   measurementNotes: {},
   optionNotes: {},
@@ -362,6 +362,7 @@ const toDraftJson = (st: GarmentFeedbackState) => {
 const isDraftMeaningful = (st: GarmentFeedbackState): boolean =>
   Object.keys(st.feedbackMeasurements).length > 0 ||
   st.shoulderSlopeNew !== "" ||
+  st.collarPositionNew !== "" ||
   Object.keys(st.differenceReasons).length > 0 ||
   Object.keys(st.measurementNotes).length > 0 ||
   Object.keys(st.optionNotes).length > 0 ||
@@ -677,7 +678,6 @@ const OPTION_LABEL: Record<string, string> = {
   walletPocket: "Wallet Pocket",
   penHolder: "Pen Holder",
   mobilePocket: "Mobile Pocket",
-  collarPosition: "Collar Position",
   lines: "Lines",
 };
 
@@ -1102,6 +1102,7 @@ function UnifiedFeedbackInterface() {
         const feedbackMeasurements: Record<string, number | ""> = {};
         const measurementNotes: Record<string, string> = {};
         let shoulderSlopeNew: ShoulderSlope | "" = "";
+        let collarPositionNew: CollarPositionValue | "" = "";
         for (const row of parseJsonArray(fb.measurement_diffs)) {
           if (!row || typeof row !== "object") continue;
           const d = row as Record<string, unknown>;
@@ -1112,6 +1113,15 @@ function UnifiedFeedbackInterface() {
           if (field === "shoulder_slope") {
             if (typeof d["actual_value"] === "string") {
               shoulderSlopeNew = d["actual_value"] as ShoulderSlope;
+            }
+            if (d["notes"]) measurementNotes[field] = String(d["notes"]);
+            continue;
+          }
+          // collar_position is categorical too — restored as the picker choice
+          // (up/down/standard); actual_value is stored as that choice string.
+          if (field === "collar_position") {
+            if (typeof d["actual_value"] === "string") {
+              collarPositionNew = d["actual_value"] as CollarPositionValue;
             }
             if (d["notes"]) measurementNotes[field] = String(d["notes"]);
             continue;
@@ -1182,6 +1192,7 @@ function UnifiedFeedbackInterface() {
           legacyVoiceNotes,
           feedbackMeasurements,
           shoulderSlopeNew,
+          collarPositionNew,
           measurementNotes,
           differenceReasons,
           optionChecks,
@@ -1349,6 +1360,15 @@ function UnifiedFeedbackInterface() {
     ) {
       correctedFields["shoulder_slope"] = currentState.shoulderSlopeNew;
     }
+    // collar_position is categorical too — same spec-correction re-point. The
+    // picker choice ("up"/"down"/"standard") is stored here; "standard" is mapped
+    // back to null when the new measurement row is written (see handleSave).
+    if (
+      reasonPropagates(currentState.differenceReasons["collar_position"]) &&
+      currentState.collarPositionNew !== ""
+    ) {
+      correctedFields["collar_position"] = currentState.collarPositionNew;
+    }
 
     const hasPropagating = Object.keys(correctedFields).length > 0;
     const currentStaged = currentState.stagedMeasurement;
@@ -1405,7 +1425,7 @@ function UnifiedFeedbackInterface() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGarmentId, activeGarment, currentState.feedbackMeasurements, currentState.differenceReasons, currentState.shoulderSlopeNew]);
+  }, [selectedGarmentId, activeGarment, currentState.feedbackMeasurements, currentState.differenceReasons, currentState.shoulderSlopeNew, currentState.collarPositionNew]);
 
   // --- Handlers ---
 
@@ -1441,6 +1461,17 @@ function UnifiedFeedbackInterface() {
       return {
         ...prev,
         [selectedGarmentId]: { ...cur, shoulderSlopeNew: value },
+      };
+    });
+  }, [selectedGarmentId]);
+
+  const handleCollarPositionChange = useCallback((value: CollarPositionValue) => {
+    if (!selectedGarmentId) return;
+    setGarmentStates(prev => {
+      const cur = prev[selectedGarmentId] || createEmptyGarmentState();
+      return {
+        ...prev,
+        [selectedGarmentId]: { ...cur, collarPositionNew: value },
       };
     });
   }, [selectedGarmentId]);
@@ -1661,6 +1692,21 @@ function UnifiedFeedbackInterface() {
         missingReason.push("Shoulder Slope");
       }
     }
+    // collar_position: a changed position needs a reason too. Compare against the
+    // original mapped to a picker choice (null = "standard").
+    {
+      const collarOrig = (measurement?.collar_position ?? null) as "up" | "down" | null;
+      const collarOrigChoice: CollarPositionValue =
+        collarOrig === "up" || collarOrig === "down" ? collarOrig : "standard";
+      const collarNew = currentState.collarPositionNew;
+      if (
+        collarNew !== "" &&
+        collarNew !== collarOrigChoice &&
+        !currentState.differenceReasons["collar_position"]
+      ) {
+        missingReason.push("Collar Position");
+      }
+    }
     if (missingReason.length > 0) {
       toast.error(
         `Pick a reason for: ${missingReason.join(", ")} (Customer Request / Workshop Error / Shop Error)`,
@@ -1802,6 +1848,28 @@ function UnifiedFeedbackInterface() {
           }
         }
 
+        // collar_position rides the same categorical audit trail. original_value is
+        // the raw DB value (up/down/null); actual_value stores the picker choice
+        // (up/down/standard) so it round-trips into the picker on reload.
+        {
+          const collarOrig = (measurement?.collar_position ?? null) as "up" | "down" | null;
+          const collarOrigChoice: CollarPositionValue =
+            collarOrig === "up" || collarOrig === "down" ? collarOrig : "standard";
+          const collarNew = state.collarPositionNew;
+          const collarReason = state.differenceReasons["collar_position"] || null;
+          const changed = collarNew !== "" && collarNew !== collarOrigChoice;
+          if (changed || collarReason) {
+            measurementDiffs.push({
+              field: "collar_position",
+              original_value: collarOrig,
+              actual_value: collarNew !== "" ? collarNew : null,
+              difference: null,
+              reason: collarReason,
+              notes: state.measurementNotes["collar_position"] || null,
+            });
+          }
+        }
+
         // --- Measurement propagation (spec-correcting reasons) ---
         // Customer Request + Shop Error rows feed a new measurement row (the
         // recorded spec was wrong); Workshop Error rows stay logged in
@@ -1824,6 +1892,11 @@ function UnifiedFeedbackInterface() {
               reason: state.differenceReasons["shoulder_slope"] ?? null,
               hasValue: state.shoulderSlopeNew !== "",
             },
+            // collar_position participates in the propagation gate as well.
+            {
+              reason: state.differenceReasons["collar_position"] ?? null,
+              hasValue: state.collarPositionNew !== "",
+            },
           ],
         });
 
@@ -1840,9 +1913,11 @@ function UnifiedFeedbackInterface() {
           delete baseRecord["created_at"];
           delete baseRecord["updated_at"];
           baseRecord["measurement_date"] = new Date().toISOString();
-          // Apply all corrected fields from the staged measurement.
+          // Apply all corrected fields from the staged measurement. collar_position
+          // is stored as the picker choice; its "standard" maps back to null (the
+          // DB column is up/down/null).
           for (const [key, val] of Object.entries(state.stagedMeasurement.correctedFields)) {
-            baseRecord[key] = val;
+            baseRecord[key] = key === "collar_position" && val === "standard" ? null : val;
           }
           baseRecord["idempotency_key"] = state.stagedMeasurement.localId;
           // Assign the next human-readable measurement_id sequence for this customer.
@@ -2417,16 +2492,6 @@ function UnifiedFeedbackInterface() {
         mainImage: phoneIcon as string | null,
         hashwaLabel: null as string | null,
         hashwaValue: null as string | null
-      },
-      // Collar position — three-state (up / down / null=standard).
-      {
-        id: "collarPosition",
-        label: "Collar Position",
-        mainValue: g.collar_position ?? "__standard__",
-        displayText: findDisplayText(collarPositions, g.collar_position ?? "__standard__"),
-        mainImage: null,
-        hashwaLabel: null,
-        hashwaValue: null,
       },
       // Lines — single (1) or double (2). Stored as integer on DB.
       {
@@ -3050,6 +3115,52 @@ function UnifiedFeedbackInterface() {
                                             disabled={isReadOnly}
                                         >
                                             <SelectTrigger className="h-9 w-full text-sm" aria-label="Reason for shoulder slope change">
+                                                <SelectValue placeholder="·" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {DIFFERENCE_REASONS.map(r => (
+                                                    <SelectItem key={r.label} value={r.label} className="text-sm font-medium py-2">
+                                                        <span className="flex items-center gap-2">
+                                                            <span className={cn("size-1.5 rounded-full", r.dot)} />
+                                                            {r.label}
+                                                        </span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {/* Collar position — categorical correction, sits next to the
+                            shoulder slope. A spec-correcting reason re-points it on the
+                            minted measurement just like the slope. */}
+                        {!isMeasurementLoading && (
+                            <div className="mt-4 rounded-lg border border-border/60 overflow-hidden">
+                                <div className="bg-muted/40 px-3 py-1.5 border-b border-border/60 text-xs font-medium text-muted-foreground">
+                                    Collar Position
+                                </div>
+                                <div className="p-3 flex flex-wrap items-start gap-x-8 gap-y-3">
+                                    <div className="space-y-1">
+                                        <div className="text-sm font-medium text-muted-foreground">Current</div>
+                                        <CollarPositionDisplay value={(measurement?.collar_position ?? null) as string | null} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="text-sm font-medium text-primary">New</div>
+                                        <CollarPositionSelect
+                                            value={currentState.collarPositionNew || undefined}
+                                            onChange={handleCollarPositionChange}
+                                            disabled={isReadOnly}
+                                        />
+                                    </div>
+                                    <div className="space-y-1 min-w-[170px]">
+                                        <div className="text-sm font-medium text-muted-foreground">Reason</div>
+                                        <Select
+                                            value={currentState.differenceReasons["collar_position"] || ""}
+                                            onValueChange={(val) => handleDifferenceReasonChange("collar_position", val)}
+                                            disabled={isReadOnly}
+                                        >
+                                            <SelectTrigger className="h-9 w-full text-sm" aria-label="Reason for collar position change">
                                                 <SelectValue placeholder="·" />
                                             </SelectTrigger>
                                             <SelectContent>

@@ -1,7 +1,8 @@
 "use client";
 
 import { getFabrics } from "@/api/fabrics";
-import { saveWorkOrderGarments, getOrderDetails } from "@/api/orders";
+import { saveWorkOrderGarments, getOrderDetails, updateOrder } from "@/api/orders";
+import { uploadOrderSignature } from "@/lib/storage";
 import { getMeasurementsByCustomerId } from "@/api/measurements";
 import { getStyles } from "@/api/styles";
 import { getStylePricingRules } from "@/api/style-rules";
@@ -350,6 +351,22 @@ export function FabricSelectionForm({
                 return;
             }
 
+            // Persist the customer's signature (order-level) so it survives
+            // reprints. The pad always yields a fresh data URL; once uploaded we
+            // store the storage URL on the order. A failure here is non-fatal —
+            // the garments already saved — so we warn rather than block.
+            const signature = form.getValues("signature");
+            if (orderId && signature && signature.startsWith("data:image/")) {
+                try {
+                    const { url } = await uploadOrderSignature(signature, orderId);
+                    await updateOrder({ customer_signature_url: url }, orderId);
+                } catch (error) {
+                    toast.error(
+                        `Saved the order, but could not store the customer signature: ${error instanceof Error ? error.message : String(error)}`,
+                    );
+                }
+            }
+
             // Fetch the updated order details to get the new garment IDs
             if (orderId) {
                 const detailsRes = await getOrderDetails(orderId, true);
@@ -565,7 +582,8 @@ export function FabricSelectionForm({
         const fieldsToCopy = [
             "fabric_source", "fabric_id", "shop_name", "color",
             "fabric_length", "fabric_amount", "measurement_id",
-            "garment_type", "soaking", "soaking_hours", "express", "notes",
+            "garment_type", "soaking", "soaking_hours", "express",
+            "delivery_date", "notes",
         ] as const;
 
         for (let i = 1; i < garments.length; i++) {
@@ -591,7 +609,7 @@ export function FabricSelectionForm({
             "style_id", "style", "collar_type", "collar_button", "collar_thickness",
             "cuffs_type", "cuffs_thickness", "front_pocket_type",
             "front_pocket_thickness", "wallet_pocket", "pen_holder",
-            "small_tabaggi", "jabzour_1", "jabzour_2",
+            "mobile_pocket", "small_tabaggi", "jabzour_1", "jabzour_2",
             "jabzour_thickness", "lines",
         ] as const;
 

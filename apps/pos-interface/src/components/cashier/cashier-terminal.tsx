@@ -6,6 +6,7 @@ import { Input } from "@repo/ui/input";
 import { Button } from "@repo/ui/button";
 import { Card } from "@repo/ui/card";
 import { ChipToggle } from "@repo/ui/chip-toggle";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
 import { TIMEZONE } from "@/lib/utils";
@@ -14,7 +15,7 @@ import {
     useCashierOrderListSearch,
     useCashierSummary,
 } from "@/hooks/useCashier";
-import type { CashierOrderListItem, CashierSummary } from "@/api/cashier";
+import type { CashierOrderListItem, CashierSummary, CashierPeriod } from "@/api/cashier";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
 import { DonutChart } from "@/components/charts/donut-chart";
 import { OrderDetailShell } from "./order-detail-shell";
@@ -400,9 +401,12 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
     const [listSearchInput, setListSearchInput] = useState("");
     const [listSearchQuery, setListSearchQuery] = useState("");
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-    const [dashboardFilter, setDashboardFilter] = useState<DashboardFilter>("all");
+    // Default to the pending-payment queue (confirmed + still owing), not the full
+    // transaction history. Paid/All chips stay available to look paid orders up.
+    const [dashboardFilter, setDashboardFilter] = useState<DashboardFilter>("unpaid");
+    const [period, setPeriod] = useState<CashierPeriod>("all");
 
-    const { data: recentResult, isLoading: isLoadingRecent, isFetching: isFetchingRecent } = useRecentCashierOrders(dashboardFilter);
+    const { data: recentResult, isLoading: isLoadingRecent, isFetching: isFetchingRecent } = useRecentCashierOrders(dashboardFilter, period);
     const recentOrders = recentResult?.data || [];
     const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
     useEffect(() => { if (recentResult) setHasLoadedOnce(true); }, [recentResult]);
@@ -433,7 +437,7 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
         return () => clearTimeout(timer);
     }, [listSearchInput]);
 
-    useEffect(() => { setVisibleCount(PAGE_SIZE); }, [listSearchQuery]);
+    useEffect(() => { setVisibleCount(PAGE_SIZE); }, [listSearchQuery, dashboardFilter, period]);
 
     if (isInitialLoad) {
         return (
@@ -475,22 +479,35 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
                                 </button>
                             )}
                         </div>
-                        <div className="flex flex-wrap gap-1.5 mb-2 shrink-0">
-                            {([
-                                { key: "all" as const, label: "All" },
-                                { key: "today" as const, label: `Today (${Number(summary.today_count)})` },
-                                { key: "unpaid" as const, label: `Unpaid (${Number(summary.unpaid_count)})` },
-                                { key: "paid" as const, label: "Paid" },
-                                { key: "work" as const, label: `Work (${Number(summary.work_count)})` },
-                                { key: "sales" as const, label: `Sales (${Number(summary.sales_count)})` },
-                            ] as const).map((f) => (
-                                <ChipToggle
-                                    key={f.key}
-                                    active={dashboardFilter === f.key}
-                                    onClick={() => setDashboardFilter(dashboardFilter === f.key ? "all" : f.key)}>
-                                    {f.label}
-                                </ChipToggle>
-                            ))}
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2 shrink-0">
+                            <div className="flex flex-wrap gap-1.5">
+                                {([
+                                    { key: "all" as const, label: "All" },
+                                    { key: "today" as const, label: `Today (${Number(summary.today_count)})` },
+                                    { key: "unpaid" as const, label: `Unpaid (${Number(summary.unpaid_count)})` },
+                                    { key: "paid" as const, label: "Paid" },
+                                    { key: "work" as const, label: `Work (${Number(summary.work_count)})` },
+                                    { key: "sales" as const, label: `Sales (${Number(summary.sales_count)})` },
+                                ] as const).map((f) => (
+                                    <ChipToggle
+                                        key={f.key}
+                                        active={dashboardFilter === f.key}
+                                        onClick={() => setDashboardFilter(dashboardFilter === f.key ? "all" : f.key)}>
+                                        {f.label}
+                                    </ChipToggle>
+                                ))}
+                            </div>
+                            <Select value={period} onValueChange={(v) => setPeriod(v as CashierPeriod)}>
+                                <SelectTrigger className="h-8 w-[140px] text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All time</SelectItem>
+                                    <SelectItem value="month">This month</SelectItem>
+                                    <SelectItem value="last2">Last 2 months</SelectItem>
+                                    <SelectItem value="quarter">This quarter</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="flex items-center justify-between px-1 mb-1 shrink-0">
                             <p className="text-[11px] text-muted-foreground flex items-center gap-1">

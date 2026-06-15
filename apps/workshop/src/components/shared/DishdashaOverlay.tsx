@@ -767,9 +767,9 @@ export function DishdashaOverlay({
                     {g.small_tabaggi && (
                       <AccessoryPill icon={ACCESSORY_ICONS.smallTabaggi} label="SMALL TABAGGI" />
                     )}
-                    {g.collar_position === "up" ? (
+                    {m?.collar_position === "up" ? (
                       <AccessoryPill label="COLLAR UP" />
-                    ) : g.collar_position === "down" ? (
+                    ) : m?.collar_position === "down" ? (
                       <AccessoryPill label="COLLAR DOWN" />
                     ) : (
                       <AccessoryPill label="COLLAR STANDARD" />

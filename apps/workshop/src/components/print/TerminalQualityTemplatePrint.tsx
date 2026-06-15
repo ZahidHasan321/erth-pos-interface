@@ -439,9 +439,9 @@ export function TerminalQualityTemplatePrint({
                       <img src={ACCESSORY_ICONS.smallTabaggi} alt="Small tabbagi" /> SMALL TABAGGI
                     </span>
                   ) : null}
-                  {(garment as { collar_position?: string }).collar_position === "up" ? (
+                  {measurement?.collar_position === "up" ? (
                     <span>COLLAR UP</span>
-                  ) : (garment as { collar_position?: string }).collar_position === "down" ? (
+                  ) : measurement?.collar_position === "down" ? (
                     <span>COLLAR DOWN</span>
                   ) : (
                     <span>COLLAR STANDARD</span>

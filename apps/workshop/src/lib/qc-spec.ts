@@ -150,10 +150,10 @@ export const QC_OPTIONS: QcOptionSpec[] = [
   { key: "jabzour_2",              label: "Jabzour 2",               type: "text" },
   { key: "jabzour_thickness",      label: "Jabzour Thickness",       type: "text" },
   { key: "lines",                  label: "Lines",                   type: "number" },
-  // Shoulder slope is a categorical body measurement (stored on the measurement
-  // snapshot, not the garment). It rides the option machinery here because QC
-  // verifies it by equality "both ways", not numeric tolerance — the expected
-  // value is injected from the measurement in QualityCheckForm.
+  // Shoulder slope and collar position are categorical body measurements (stored
+  // on the measurement snapshot, not the garment). They ride the option machinery
+  // here because QC verifies them by equality "both ways", not numeric tolerance —
+  // the expected values are injected from the measurement in deriveExpectedQcOptions.
   { key: "shoulder_slope",         label: "Shoulder Slope",          type: "text" },
 ];
 
@@ -235,7 +235,10 @@ export function deriveExpectedQcOptions(
   const j = normalizeExpectedJabzour(expected.jabzour_1, expected.jabzour_2);
   expected.jabzour_1 = j.jabzour_1;
   expected.jabzour_2 = j.jabzour_2;
+  // shoulder_slope and collar_position are categorical body measurements — they
+  // live on the measurement snapshot, never on the garment. Inject both here.
   expected.shoulder_slope = expectedMeasurements.shoulder_slope ?? null;
+  expected.collar_position = expectedMeasurements.collar_position ?? null;
   return expected;
 }
 

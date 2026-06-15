@@ -33,6 +33,12 @@ export function mapMeasurementToFormValues(
     // Categorical — pass through as-is; absent legacy rows stay undefined so the
     // required picker flags them on edit (never coerced to a number/zero).
     shoulder_slope: measurement.shoulder_slope ?? undefined,
+    // collar_position — up/down round-trip; absence reads as the neutral
+    // "Standard" (§2.11). Only brand-new measurements (defaults) start unfilled.
+    collar_position:
+      measurement.collar_position === "up" || measurement.collar_position === "down"
+        ? measurement.collar_position
+        : "standard",
     ...measurementValues,
   } as CustomerMeasurementsSchema;
 }
@@ -62,6 +68,11 @@ export function mapFormValuesToMeasurement(
       : new Date(),
     notes: formValues.notes,
     shoulder_slope: formValues.shoulder_slope ?? null,
+    // "standard" (and unanswered) persist as the absence of up/down → null.
+    collar_position:
+      formValues.collar_position === "up" || formValues.collar_position === "down"
+        ? formValues.collar_position
+        : null,
     ...measurementValues,
   } as Partial<Measurement>;
 }

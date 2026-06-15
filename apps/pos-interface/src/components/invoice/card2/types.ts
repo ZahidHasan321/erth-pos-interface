@@ -134,6 +134,7 @@ export interface Card2Measurements {
 
 export interface Card2Pricing {
   fabricTotalPrice?: Card2AmountValue
+  delivery?: Card2AmountValue
   grandTotal?: Card2AmountValue
   paid?: Card2AmountValue
   remaining?: Card2AmountValue
@@ -155,12 +156,14 @@ export interface Card2CustomerCopyFabricSummary {
 
 export interface Card2CustomerCopyPaymentSummary {
   total?: Card2AmountValue
+  delivery?: Card2AmountValue
   paid?: Card2AmountValue
   remaining?: Card2AmountValue
   paymentMethods?: Card2PaymentMethod[]
 }
 
 export interface Card2CustomerCopy {
+  customerSignature?: Card2SignatureValue
   employeeSignature?: Card2SignatureValue
   fabricSummary?: Card2CustomerCopyFabricSummary
   paymentSummary?: Card2CustomerCopyPaymentSummary

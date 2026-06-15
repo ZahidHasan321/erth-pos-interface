@@ -189,6 +189,9 @@ function ViewWorkOrder() {
             setFabricSelections(mappedGarments);
         }
 
+        // Customer signature (order-level) — rehydrate for the read-only display.
+        fabricSelectionForm.setValue("signature", orderData.customer_signature_url ?? "");
+
         // 3. Shelf items
         if (orderData.shelf_items && orderData.shelf_items.length > 0) {
             const mappedShelfProducts = orderData.shelf_items.map(
@@ -291,7 +294,7 @@ function ViewWorkOrder() {
             paymentType: orderData.payment_type ?? null,
             specialRequest: null,
             orderTakerName: orderTaker?.name ?? null,
-            customerSignature: fabricSelectionForm.getValues("signature") || null,
+            customerSignature: orderResponse?.data?.customer_signature_url ?? null,
         });
     }, [
         OrderForm,
@@ -304,7 +307,7 @@ function ViewWorkOrder() {
         card2MeasurementResponse,
         card2MeasurementDisplayById,
         employees,
-        fabricSelectionForm,
+        orderResponse,
     ]);
 
     const handlePrintCard2 = React.useCallback(() => {
@@ -330,6 +333,8 @@ function ViewWorkOrder() {
                 house_no: customerDemographics.house_no ?? undefined,
             },
             fabricSelections,
+            // collar_position is a body measurement now — from the loaded measurement.
+            measurement: { collar_position: card2MeasurementResponse?.data?.collar_position ?? null },
             shelfProducts: shelfForm.getValues().products,
             fabrics: fabricsResponse || [],
             charges: {
@@ -349,7 +354,7 @@ function ViewWorkOrder() {
             paymentRefNo: orderData.payment_ref_no ?? undefined,
             orderTaker: orderTakerEmployee?.name,
         };
-    }, [OrderForm, employees, order.id, customerDemographics, fabricSelections, shelfForm, fabricsResponse]);
+    }, [OrderForm, employees, order.id, customerDemographics, fabricSelections, card2MeasurementResponse, shelfForm, fabricsResponse]);
 
     // ── Render ────────────────────────────────────────────────────────────────
     if (isError) {
@@ -426,6 +431,7 @@ function ViewWorkOrder() {
                                 garment_type: garment.garment_type ?? ("final" as const),
                                 express: garment.express ?? false,
                                 soaking: garment.soaking ?? false,
+                                soaking_hours: (garment.soaking_hours === 8 || garment.soaking_hours === 24) ? garment.soaking_hours : null,
                                 deliveryDate: garment.delivery_date ? new Date(garment.delivery_date) : null,
                                 notes: garment.notes || "",
                                 invoiceNumber: fatoura ? String(fatoura) : undefined,

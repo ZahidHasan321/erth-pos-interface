@@ -414,12 +414,12 @@ describe("computeMeasurementsInPlay", () => {
 
 describe("resolveFinalStyle", () => {
   it("null override → keep_own, styleFields is the final's own style", () => {
-    const f = g({ id: "f1", collar_type: "COL_QALLABI", collar_position: "up" });
+    const f = g({ id: "f1", collar_type: "COL_QALLABI", collar_button: "COL_TABBAGI" });
     const result = resolveFinalStyle({ final: f, override: null });
     expect(result.mode).toBe("keep_own");
     // styleFields should reflect the final's own collar_type
     expect(result.styleFields.collar_type).toBe("COL_QALLABI");
-    expect(result.styleFields.collar_position).toBe("up");
+    expect(result.styleFields.collar_button).toBe("COL_TABBAGI");
   });
 
   it("non-null override → override mode with the provided styleFields", () => {
@@ -441,30 +441,30 @@ describe("resolveFinalStyle", () => {
 
 describe("brovaResultingStyle", () => {
   it("returns the brova's current style fields when no updates", () => {
-    const b = brova({ id: "b1", collar_type: "COL_QALLABI", collar_position: "up" });
+    const b = brova({ id: "b1", collar_type: "COL_QALLABI", collar_button: "COL_TABBAGI" });
     const result = brovaResultingStyle({ brova: b, activeStyleUpdates: {} });
     expect(result.collar_type).toBe("COL_QALLABI");
-    expect(result.collar_position).toBe("up");
+    expect(result.collar_button).toBe("COL_TABBAGI");
   });
 
   it("activeStyleUpdates win over the current brova style", () => {
-    const b = brova({ id: "b1", collar_type: "COL_QALLABI", collar_position: "up" });
+    const b = brova({ id: "b1", collar_type: "COL_QALLABI", collar_button: "COL_TABBAGI" });
     const result = brovaResultingStyle({
       brova: b,
       activeStyleUpdates: { collar_type: "COL_DOWN_COLLAR" },
     });
     expect(result.collar_type).toBe("COL_DOWN_COLLAR");
     // unaffected field still from brova
-    expect(result.collar_position).toBe("up");
+    expect(result.collar_button).toBe("COL_TABBAGI");
   });
 
   it("updates setting a value to null override the original", () => {
-    const b = brova({ id: "b1", collar_position: "up" });
+    const b = brova({ id: "b1", collar_button: "COL_TABBAGI" });
     const result = brovaResultingStyle({
       brova: b,
-      activeStyleUpdates: { collar_position: null },
+      activeStyleUpdates: { collar_button: null },
     });
-    expect(result.collar_position).toBeNull();
+    expect(result.collar_button).toBeNull();
   });
 
   it("does not mutate the original brova fields", () => {

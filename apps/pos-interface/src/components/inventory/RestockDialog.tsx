@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowDownToLine, Loader2, Minus, Plus, Store, Hammer } from "lucide-react";
+import { ArrowDownToLine, ImagePlus, Loader2, Minus, Plus, Store, Hammer, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Textarea } from "@repo/ui/textarea";
 import { useAuth } from "@/context/auth";
 import { restockItem } from "@/api/stockMovements";
+import { uploadRestockInvoice } from "@/lib/storage";
 import { formatQty, getQtyStep, getUnitSuffix } from "@/lib/inventory";
 import { cn } from "@/lib/utils";
 import { SupplierCombobox } from "./SupplierCombobox";
@@ -30,10 +31,16 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
   const qc = useQueryClient();
   const { user } = useAuth();
   const [qty, setQty] = useState("");
-  const [location, setLocation] = useState<StockLocation>(defaultLocation);
+  // Fabric + shelf live only in shop stock — the workshop never holds them
+  // (SPEC §4). Only accessories cross both sides, so only they get the toggle.
+  const crossesSides = itemType === "accessory";
+  const [location, setLocation] = useState<StockLocation>(crossesSides ? defaultLocation : "shop");
   const [supplierId, setSupplierId] = useState<number | null>(null);
   const [unitCost, setUnitCost] = useState("");
   const [notes, setNotes] = useState("");
+  const [invoice, setInvoice] = useState<File | null>(null);
+  const [invoicePreview, setInvoicePreview] = useState<string | null>(null);
+  const invoiceRef = useRef<HTMLInputElement>(null);
 
   const step = getQtyStep(itemType, unit);
   const suffix = getUnitSuffix(itemType, unit);
@@ -41,8 +48,13 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
   const newTotal = currentStock + (Number.isFinite(parsedQty) ? parsedQty : 0);
 
   const restockMut = useMutation({
-    mutationFn: () =>
-      restockItem({
+    mutationFn: async () => {
+      let imageUrl: string | null = null;
+      if (invoice) {
+        const up = await uploadRestockInvoice(invoice, itemType, itemId);
+        imageUrl = up.url;
+      }
+      return restockItem({
         itemType,
         itemId,
         location,
@@ -50,8 +62,10 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
         supplierId,
         unitCost: unitCost ? Number(unitCost) : null,
         notes: notes.trim() || undefined,
+        imageUrl,
         userId: user?.id ?? null,
-      }),
+      });
+    },
     onSuccess: (data) => {
       toast.success(`Restocked +${formatQty(itemType, parsedQty, unit)} · ${itemName} now ${formatQty(itemType, data.new_stock, unit)}`);
       qc.invalidateQueries({ queryKey: [itemType === "fabric" ? "fabrics" : itemType === "shelf" ? "shelf" : "accessories"] });
@@ -67,6 +81,22 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
     setSupplierId(null);
     setUnitCost("");
     setNotes("");
+    clearInvoice();
+  }
+
+  function onPickInvoice(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (invoicePreview) URL.revokeObjectURL(invoicePreview);
+    setInvoice(f);
+    setInvoicePreview(URL.createObjectURL(f));
+  }
+
+  function clearInvoice() {
+    if (invoicePreview) URL.revokeObjectURL(invoicePreview);
+    setInvoice(null);
+    setInvoicePreview(null);
+    if (invoiceRef.current) invoiceRef.current.value = "";
   }
 
   function bumpQty(direction: 1 | -1) {
@@ -96,23 +126,25 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
 
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-5 space-y-6">
-            {/* Location toggle */}
-            <Section label="Location">
-              <div className="grid grid-cols-2 gap-2">
-                <LocationOption
-                  icon={Store}
-                  label="Shop"
-                  active={location === "shop"}
-                  onClick={() => setLocation("shop")}
-                />
-                <LocationOption
-                  icon={Hammer}
-                  label="Workshop"
-                  active={location === "workshop"}
-                  onClick={() => setLocation("workshop")}
-                />
-              </div>
-            </Section>
+            {/* Location toggle — accessories only (fabric/shelf are shop-only) */}
+            {crossesSides && (
+              <Section label="Location">
+                <div className="grid grid-cols-2 gap-2">
+                  <LocationOption
+                    icon={Store}
+                    label="Shop"
+                    active={location === "shop"}
+                    onClick={() => setLocation("shop")}
+                  />
+                  <LocationOption
+                    icon={Hammer}
+                    label="Workshop"
+                    active={location === "workshop"}
+                    onClick={() => setLocation("workshop")}
+                  />
+                </div>
+              </Section>
+            )}
 
             {/* Quantity stepper */}
             <Section label="Quantity received" hint={`Current at ${location}: ${formatQty(itemType, currentStock, unit)}`}>
@@ -198,6 +230,48 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
                   />
                 </div>
               </div>
+            </Section>
+
+            {/* Supplier invoice photo */}
+            <Section label="Supplier invoice" hint="Optional">
+              {invoicePreview ? (
+                <div className="relative inline-block">
+                  <img
+                    src={invoicePreview}
+                    alt="Supplier invoice preview"
+                    width={96}
+                    height={96}
+                    className="h-24 w-24 rounded-lg border object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={clearInvoice}
+                    aria-label="Remove invoice photo"
+                    className="absolute -top-2 -right-2 rounded-full bg-background border p-0.5 text-muted-foreground hover:text-foreground shadow-sm"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => invoiceRef.current?.click()}
+                  className="gap-2"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                  Add invoice photo
+                </Button>
+              )}
+              <input
+                ref={invoiceRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={onPickInvoice}
+                className="hidden"
+                aria-hidden="true"
+              />
             </Section>
           </div>
 

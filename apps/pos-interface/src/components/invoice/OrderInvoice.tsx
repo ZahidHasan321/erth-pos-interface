@@ -22,6 +22,9 @@ export interface InvoiceData {
     house_no?: string;
   };
   fabricSelections?: FabricSelectionSchema[];
+  // collar_position is a body measurement now — sourced from the order's
+  // measurement, not per-garment. Optional: when absent, no up/down annotation.
+  measurement?: { collar_position?: "up" | "down" | null } | null;
   styleOptions?: StyleOptionsSchema[];
   shelfProducts?: ShelfFormValues["products"];
   fabrics?: Fabric[];
@@ -102,6 +105,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
       customerName,
       customerPhone,
       fabricSelections = [],
+      measurement,
       shelfProducts = [],
       fabrics = [],
       charges,
@@ -170,7 +174,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
         const isKuwaiti = sel.style === "kuwaiti";
         const model = isKuwaiti ? "كلاسيك" : "ديزاين";
         const collarBase = collarMap[sel.collar_type || ""] || "عادي";
-        const collarPos = sel.collar_position === "up" ? " (أعلى)" : sel.collar_position === "down" ? " (أسفل)" : "";
+        const collarPos = measurement?.collar_position === "up" ? " (أعلى)" : measurement?.collar_position === "down" ? " (أسفل)" : "";
         const collar = `${collarBase}${collarPos}`;
         const buttons = sel.collar_button === "COL_TABBAGI" ? "تبقي" : sel.collar_button === "COL_ARAVI_ZARRAR" ? "زرار عربي" : "زرارات";
         const jabzour = jabzourMap[sel.jabzour_1 || ""] || "بدون";
@@ -195,7 +199,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
           الإجمالي: `${fmt((sel.stitching_price_snapshot || 0) + (sel.fabric_amount || 0) + (sel.style_price_snapshot || 0))} د.ك`,
         };
       });
-    }, [fabricSelections, fabrics, homeDelivery]);
+    }, [fabricSelections, measurement, fabrics, homeDelivery]);
 
     return (
       <div

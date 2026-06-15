@@ -670,7 +670,7 @@ BEGIN
       fabric_id, style_id, measurement_id, fabric_source,
       quantity, fabric_length,
       fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot,
-      collar_type, collar_button, collar_position, collar_thickness, cuffs_type, cuffs_thickness,
+      collar_type, collar_button, collar_thickness, cuffs_type, cuffs_thickness,
       front_pocket_type, front_pocket_thickness,
       wallet_pocket, pen_holder, mobile_pocket, small_tabaggi,
       jabzour_1, jabzour_2, jabzour_thickness,
@@ -693,7 +693,6 @@ BEGIN
       (v_garment->>'style_price_snapshot')::DECIMAL,
       v_garment->>'collar_type',
       v_garment->>'collar_button',
-      (v_garment->>'collar_position')::collar_position,
       v_garment->>'collar_thickness',
       v_garment->>'cuffs_type',
       v_garment->>'cuffs_thickness',
@@ -741,7 +740,6 @@ BEGIN
       style_price_snapshot     = EXCLUDED.style_price_snapshot,
       collar_type              = EXCLUDED.collar_type,
       collar_button            = EXCLUDED.collar_button,
-      collar_position          = EXCLUDED.collar_position,
       collar_thickness         = EXCLUDED.collar_thickness,
       cuffs_type               = EXCLUDED.cuffs_type,
       cuffs_thickness          = EXCLUDED.cuffs_thickness,
@@ -1103,6 +1101,12 @@ BEGIN
             PERFORM set_config('app.movement_ref_type', 'order', true);
             PERFORM set_config('app.movement_ref_id', p_order_id::text, true);
             PERFORM set_config('app.movement_user_id', COALESCE(p_cashier_id::text, ''), true);
+            -- Reset restock-only context so this return row can't piggyback a
+            -- stale supplier_id/unit_cost/image_url from an earlier movement in
+            -- the same transaction (mirrors the shelf-refund block below).
+            PERFORM set_config('app.movement_supplier_id', '', true);
+            PERFORM set_config('app.movement_unit_cost', '', true);
+            PERFORM set_config('app.movement_image_url', '', true);
             PERFORM set_config('app.movement_reason', 'garment cancelled, fabric returned', true);
             PERFORM set_config('app.movement_notes', COALESCE(p_refund_reason, ''), true);
 
@@ -1166,6 +1170,7 @@ BEGIN
           PERFORM set_config('app.movement_user_id', COALESCE(p_cashier_id::text, ''), true);
           PERFORM set_config('app.movement_supplier_id', '', true);
           PERFORM set_config('app.movement_unit_cost', '', true);
+          PERFORM set_config('app.movement_image_url', '', true);
           PERFORM set_config('app.movement_reason', 'shelf item refunded', true);
           PERFORM set_config('app.movement_notes', COALESCE(p_refund_reason, ''), true);
 
@@ -1668,7 +1673,7 @@ BEGIN
   INSERT INTO garments (
     order_id, garment_id, measurement_id, garment_type, fabric_id,
     fabric_source, color, shop_name, fabric_length, style, style_id,
-    collar_type, collar_button, collar_position, collar_thickness,
+    collar_type, collar_button, collar_thickness,
     cuffs_type, cuffs_thickness, front_pocket_type, front_pocket_thickness,
     wallet_pocket, pen_holder, mobile_pocket, small_tabaggi,
     jabzour_1, jabzour_2, jabzour_thickness, lines, soaking, express,
@@ -1680,7 +1685,7 @@ BEGIN
     order_id, v_new_garment_id, measurement_id, garment_type, v_repl_fabric_id,
     v_repl_source::fabric_source, color, shop_name, fabric_length,
     COALESCE(style, 'kuwaiti'), style_id,
-    collar_type, collar_button, collar_position, collar_thickness,
+    collar_type, collar_button, collar_thickness,
     cuffs_type, cuffs_thickness, front_pocket_type, front_pocket_thickness,
     COALESCE(wallet_pocket, false), COALESCE(pen_holder, false),
     COALESCE(mobile_pocket, false), COALESCE(small_tabaggi, false),
@@ -3968,19 +3973,19 @@ BEGIN
     IF v_transfer.direction = 'shop_to_workshop' THEN
       -- Source is shop
       IF v_transfer_item.fabric_id IS NOT NULL THEN
-        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_transfer_item.fabric_id;
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_transfer_item.fabric_id FOR UPDATE;
         IF v_current_stock < v_dispatched_qty THEN
           RAISE EXCEPTION 'Insufficient shop stock for fabric %: have %, need %', v_transfer_item.fabric_id, v_current_stock, v_dispatched_qty;
         END IF;
         UPDATE fabrics SET shop_stock = shop_stock - v_dispatched_qty WHERE id = v_transfer_item.fabric_id;
       ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
-        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_transfer_item.shelf_id;
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_transfer_item.shelf_id FOR UPDATE;
         IF v_current_stock < v_dispatched_qty THEN
           RAISE EXCEPTION 'Insufficient shop stock for shelf item %: have %, need %', v_transfer_item.shelf_id, v_current_stock, v_dispatched_qty;
         END IF;
         UPDATE shelf SET shop_stock = shop_stock - v_dispatched_qty::int WHERE id = v_transfer_item.shelf_id;
       ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
-        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_transfer_item.accessory_id;
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_transfer_item.accessory_id FOR UPDATE;
         IF v_current_stock < v_dispatched_qty THEN
           RAISE EXCEPTION 'Insufficient shop stock for accessory %: have %, need %', v_transfer_item.accessory_id, v_current_stock, v_dispatched_qty;
         END IF;
@@ -3989,19 +3994,19 @@ BEGIN
     ELSE
       -- Source is workshop (workshop_to_shop)
       IF v_transfer_item.fabric_id IS NOT NULL THEN
-        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_transfer_item.fabric_id;
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_transfer_item.fabric_id FOR UPDATE;
         IF v_current_stock < v_dispatched_qty THEN
           RAISE EXCEPTION 'Insufficient workshop stock for fabric %: have %, need %', v_transfer_item.fabric_id, v_current_stock, v_dispatched_qty;
         END IF;
         UPDATE fabrics SET workshop_stock = workshop_stock - v_dispatched_qty WHERE id = v_transfer_item.fabric_id;
       ELSIF v_transfer_item.shelf_id IS NOT NULL THEN
-        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_transfer_item.shelf_id;
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_transfer_item.shelf_id FOR UPDATE;
         IF v_current_stock < v_dispatched_qty THEN
           RAISE EXCEPTION 'Insufficient workshop stock for shelf item %: have %, need %', v_transfer_item.shelf_id, v_current_stock, v_dispatched_qty;
         END IF;
         UPDATE shelf SET workshop_stock = workshop_stock - v_dispatched_qty::int WHERE id = v_transfer_item.shelf_id;
       ELSIF v_transfer_item.accessory_id IS NOT NULL THEN
-        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_transfer_item.accessory_id;
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_transfer_item.accessory_id FOR UPDATE;
         IF v_current_stock < v_dispatched_qty THEN
           RAISE EXCEPTION 'Insufficient workshop stock for accessory %: have %, need %', v_transfer_item.accessory_id, v_current_stock, v_dispatched_qty;
         END IF;
@@ -4273,6 +4278,27 @@ CREATE TRIGGER garment_location_notification
   AFTER UPDATE OF location ON garments
   FOR EACH ROW
   EXECUTE FUNCTION notify_garment_location_change();
+
+-- 1a. Stamp the date a garment is received back at the showroom from the
+-- workshop. Fires on the transit_to_shop → shop transition, which is exactly
+-- the "mark as received" action on the receiving brova/final page. Re-stamps on
+-- every return trip so the showroom view shows when the items currently on the
+-- floor arrived. BEFORE so it writes NEW.shop_received_date in-row (no extra UPDATE).
+CREATE OR REPLACE FUNCTION stamp_shop_received_date()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.location = 'shop' AND OLD.location = 'transit_to_shop' THEN
+    NEW.shop_received_date := NOW();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS garment_shop_received_stamp ON garments;
+CREATE TRIGGER garment_shop_received_stamp
+  BEFORE UPDATE OF location ON garments
+  FOR EACH ROW
+  EXECUTE FUNCTION stamp_shop_received_date();
 
 -- 1b. Garment marked for REDO → URGENT workshop notification
 -- Fires when feedback_status flips to 'needs_redo'. Original garment is discarded;
@@ -4846,6 +4872,17 @@ BEGIN
                 'escalation_notes', p.escalation_notes,
                 'customer', p.customer_json,
                 'showroom_label', p.showroom_label,
+                -- When the items currently at the showroom arrived back from the
+                -- workshop. MAX over active shop garments = the most recent receive
+                -- (e.g. a brova on a brova_trial row, the last final on a ready row).
+                -- NULL while items are still in transit (not yet received).
+                'shop_received_date', (
+                    SELECT MAX(g.shop_received_date)
+                    FROM garments g
+                    WHERE g.order_id = p.id
+                      AND g.location::text = 'shop'
+                      AND g.piece_stage::text NOT IN ('completed', 'discarded')
+                ),
                 'garments', COALESCE((
                     SELECT jsonb_agg(jsonb_build_object(
                         'id', g.id,
@@ -5970,6 +6007,7 @@ CREATE TRIGGER accessory_stock_audit
 -- ─── RPC: restock_item ────────────────────────────────────────────────
 -- Add stock from external supplier delivery. Logs as movement_type='restock'.
 DROP FUNCTION IF EXISTS restock_item(stock_item_type, integer, stock_location, numeric, integer, numeric, text, uuid);
+DROP FUNCTION IF EXISTS restock_item(stock_item_type, integer, stock_location, numeric, integer, numeric, text, uuid, uuid);
 CREATE OR REPLACE FUNCTION restock_item(
   p_item_type stock_item_type,
   p_item_id INT,
@@ -5978,6 +6016,7 @@ CREATE OR REPLACE FUNCTION restock_item(
   p_supplier_id INT DEFAULT NULL,
   p_unit_cost NUMERIC DEFAULT NULL,
   p_notes TEXT DEFAULT NULL,
+  p_image_url TEXT DEFAULT NULL,    -- optional supplier-invoice photo
   p_user_id UUID DEFAULT NULL,
   p_idempotency_key UUID DEFAULT NULL
 )
@@ -6006,7 +6045,7 @@ BEGIN
   PERFORM set_config('app.movement_unit_cost', COALESCE(p_unit_cost::text, ''), true);
   PERFORM set_config('app.movement_reason', 'supplier delivery', true);
   PERFORM set_config('app.movement_notes', COALESCE(p_notes, ''), true);
-  PERFORM set_config('app.movement_image_url', '', true);
+  PERFORM set_config('app.movement_image_url', COALESCE(p_image_url, ''), true);
 
   IF p_item_type = 'fabric' THEN
     IF p_location = 'shop' THEN
@@ -6037,6 +6076,9 @@ BEGIN
   IF v_new_qty IS NULL THEN
     RAISE EXCEPTION 'Item % of type % not found', p_item_id, p_item_type;
   END IF;
+
+  -- Don't let the invoice photo leak onto a later movement in this transaction.
+  PERFORM set_config('app.movement_image_url', '', true);
 
   v_result := jsonb_build_object('success', true, 'new_stock', v_new_qty);
   PERFORM idem_store(p_idempotency_key, v_result);
@@ -7055,19 +7097,19 @@ BEGIN
 
     IF p_direction = 'shop_to_workshop' THEN
       IF v_fabric_id IS NOT NULL THEN
-        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id;
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id FOR UPDATE;
         IF v_current_stock < v_qty THEN
           RAISE EXCEPTION 'Insufficient shop stock for fabric %: have %, need %', v_fabric_id, v_current_stock, v_qty;
         END IF;
         UPDATE fabrics SET shop_stock = shop_stock - v_qty WHERE id = v_fabric_id;
       ELSIF v_shelf_id IS NOT NULL THEN
-        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id;
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id FOR UPDATE;
         IF v_current_stock < v_qty THEN
           RAISE EXCEPTION 'Insufficient shop stock for shelf item %: have %, need %', v_shelf_id, v_current_stock, v_qty;
         END IF;
         UPDATE shelf SET shop_stock = shop_stock - v_qty::int WHERE id = v_shelf_id;
       ELSIF v_accessory_id IS NOT NULL THEN
-        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id;
+        SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id FOR UPDATE;
         IF v_current_stock < v_qty THEN
           RAISE EXCEPTION 'Insufficient shop stock for accessory %: have %, need %', v_accessory_id, v_current_stock, v_qty;
         END IF;
@@ -7075,19 +7117,19 @@ BEGIN
       END IF;
     ELSE
       IF v_fabric_id IS NOT NULL THEN
-        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id;
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id FOR UPDATE;
         IF v_current_stock < v_qty THEN
           RAISE EXCEPTION 'Insufficient workshop stock for fabric %: have %, need %', v_fabric_id, v_current_stock, v_qty;
         END IF;
         UPDATE fabrics SET workshop_stock = workshop_stock - v_qty WHERE id = v_fabric_id;
       ELSIF v_shelf_id IS NOT NULL THEN
-        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id;
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id FOR UPDATE;
         IF v_current_stock < v_qty THEN
           RAISE EXCEPTION 'Insufficient workshop stock for shelf item %: have %, need %', v_shelf_id, v_current_stock, v_qty;
         END IF;
         UPDATE shelf SET workshop_stock = workshop_stock - v_qty::int WHERE id = v_shelf_id;
       ELSIF v_accessory_id IS NOT NULL THEN
-        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id;
+        SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id FOR UPDATE;
         IF v_current_stock < v_qty THEN
           RAISE EXCEPTION 'Insufficient workshop stock for accessory %: have %, need %', v_accessory_id, v_current_stock, v_qty;
         END IF;
@@ -7287,19 +7329,19 @@ BEGIN
 
       IF p_direction = 'shop_to_workshop' THEN
         IF v_fabric_id IS NOT NULL THEN
-          SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id;
+          SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id FOR UPDATE;
           IF v_current_stock < v_qty THEN
             RAISE EXCEPTION 'Insufficient shop stock for fabric %: have %, need %', v_fabric_id, v_current_stock, v_qty;
           END IF;
           UPDATE fabrics SET shop_stock = shop_stock - v_qty WHERE id = v_fabric_id;
         ELSIF v_shelf_id IS NOT NULL THEN
-          SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id;
+          SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id FOR UPDATE;
           IF v_current_stock < v_qty THEN
             RAISE EXCEPTION 'Insufficient shop stock for shelf item %: have %, need %', v_shelf_id, v_current_stock, v_qty;
           END IF;
           UPDATE shelf SET shop_stock = shop_stock - v_qty::int WHERE id = v_shelf_id;
         ELSIF v_accessory_id IS NOT NULL THEN
-          SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id;
+          SELECT COALESCE(shop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id FOR UPDATE;
           IF v_current_stock < v_qty THEN
             RAISE EXCEPTION 'Insufficient shop stock for accessory %: have %, need %', v_accessory_id, v_current_stock, v_qty;
           END IF;
@@ -7307,19 +7349,19 @@ BEGIN
         END IF;
       ELSE
         IF v_fabric_id IS NOT NULL THEN
-          SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id;
+          SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM fabrics WHERE id = v_fabric_id FOR UPDATE;
           IF v_current_stock < v_qty THEN
             RAISE EXCEPTION 'Insufficient workshop stock for fabric %: have %, need %', v_fabric_id, v_current_stock, v_qty;
           END IF;
           UPDATE fabrics SET workshop_stock = workshop_stock - v_qty WHERE id = v_fabric_id;
         ELSIF v_shelf_id IS NOT NULL THEN
-          SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id;
+          SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM shelf WHERE id = v_shelf_id FOR UPDATE;
           IF v_current_stock < v_qty THEN
             RAISE EXCEPTION 'Insufficient workshop stock for shelf item %: have %, need %', v_shelf_id, v_current_stock, v_qty;
           END IF;
           UPDATE shelf SET workshop_stock = workshop_stock - v_qty::int WHERE id = v_shelf_id;
         ELSIF v_accessory_id IS NOT NULL THEN
-          SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id;
+          SELECT COALESCE(workshop_stock, 0) INTO v_current_stock FROM accessories WHERE id = v_accessory_id FOR UPDATE;
           IF v_current_stock < v_qty THEN
             RAISE EXCEPTION 'Insufficient workshop stock for accessory %: have %, need %', v_accessory_id, v_current_stock, v_qty;
           END IF;

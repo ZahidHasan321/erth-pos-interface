@@ -331,8 +331,11 @@ export function StyleSection({
           // §2.11 — collar position reads Up / Down / Standard (Standard = the
           // absence of up/down). Booleans read explicit Yes / No.
           const isCollarPos = field.key === "collar_position";
-          const collarLabel = g.collar_position === "up" ? "Up"
-            : g.collar_position === "down" ? "Down" : "Standard";
+          // collar_position lives on the linked measurement (like shoulder_slope),
+          // not on the garment; null/absent reads back as the neutral "Standard".
+          const collarPos = garment.measurement?.collar_position ?? null;
+          const collarLabel = collarPos === "up" ? "Up"
+            : collarPos === "down" ? "Down" : "Standard";
           const boolIcon = isOn && field.key === "wallet_pocket" ? ACCESSORY_ICONS.wallet
             : isOn && field.key === "pen_holder" ? ACCESSORY_ICONS.pen
             : isOn && field.key === "mobile_pocket" ? ACCESSORY_ICONS.phone
@@ -1082,7 +1085,10 @@ function QcFailureDetails({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {failedOptions.map((key) => {
-              const expected = g[key];
+              // collar_position is a categorical body measurement (like
+              // shoulder_slope): its expected value lives on the linked
+              // measurement, not on the garment.
+              const expected = key === "collar_position" ? garment.measurement?.collar_position : g[key];
               const recorded = qc.options?.[key];
               const isStyleKey = QC_STYLE_KEY_OPTIONS.has(key);
               return (

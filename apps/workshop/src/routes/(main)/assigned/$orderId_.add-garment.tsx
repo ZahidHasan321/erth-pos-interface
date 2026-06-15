@@ -139,9 +139,10 @@ function AddGarmentPage() {
         customerId,
         {
           ...(values.measurements as Record<string, unknown>),
-          // Categorical body measurement — lives on the measurement row alongside
-          // the numeric dimensions (see schema shoulderSlopeEnum).
+          // Categorical body measurements — live on the measurement row alongside
+          // the numeric dimensions (see schema shoulderSlopeEnum / collarPositionEnum).
           shoulder_slope: values.shoulder_slope ?? null,
+          collar_position: serializeCollarPosition(values.collar_position) ?? null,
         },
       );
 
@@ -157,7 +158,6 @@ function AddGarmentPage() {
         style: values.style,
         collar_type: values.collar_type,
         collar_button: values.collar_button,
-        collar_position: serializeCollarPosition(values.collar_position) ?? null,
         collar_thickness: values.collar_thickness,
         cuffs_type: values.cuffs_type,
         cuffs_thickness: values.cuffs_thickness,

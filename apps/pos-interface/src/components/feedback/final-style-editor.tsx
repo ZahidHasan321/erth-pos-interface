@@ -22,12 +22,6 @@ import {
   applyJabzourSelect,
 } from "@/lib/feedback-finals";
 
-const COLLAR_POSITIONS = [
-  { value: "up", label: "Up" },
-  { value: "down", label: "Down" },
-  { value: "__standard__", label: "Std" },
-] as const;
-
 // --- Small controls -------------------------------------------------------
 
 function StyleSelect({
@@ -127,32 +121,6 @@ export const FinalStyleEditor = memo(function FinalStyleEditor({
         options={collarButtons}
         onChange={(v) => set({ collar_button: v })}
       />
-      <div className="space-y-1">
-        <Label className="text-[11px] text-muted-foreground">Collar position</Label>
-        <div className="flex gap-1">
-          {COLLAR_POSITIONS.map((p) => {
-            const current = override.collar_position ?? "__standard__";
-            const active = current === p.value;
-            return (
-              <button
-                key={p.value}
-                type="button"
-                onClick={() =>
-                  set({ collar_position: p.value === "__standard__" ? null : (p.value as "up" | "down") })
-                }
-                className={cn(
-                  "flex-1 h-8 rounded-md border text-xs font-medium transition-colors",
-                  active
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background border-border hover:bg-muted",
-                )}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
       <StyleSelect
         label="Cuffs"
         value={override.cuffs_type ?? null}

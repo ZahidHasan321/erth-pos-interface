@@ -36,13 +36,13 @@ describe("pickStyleFields / diffStyleFields", () => {
     const s = pickStyleFields(g({ collar_type: "COL_QALLABI" }));
     expect(s.collar_type).toBe("COL_QALLABI");
     expect(s.cuffs_type).toBeNull();
-    expect(s.collar_position).toBeNull();
+    expect(s.collar_button).toBeNull();
   });
 
   it("diff returns only the changed keys (including clears to null)", () => {
-    const cur = pickStyleFields(g({ collar_type: "COL_DOWN_COLLAR", collar_position: "up" }));
-    const next = pickStyleFields(g({ collar_type: "COL_QALLABI", collar_position: null }));
-    expect(diffStyleFields(cur, next)).toEqual({ collar_type: "COL_QALLABI", collar_position: null });
+    const cur = pickStyleFields(g({ collar_type: "COL_DOWN_COLLAR", collar_button: "COL_TABBAGI" }));
+    const next = pickStyleFields(g({ collar_type: "COL_QALLABI", collar_button: null }));
+    expect(diffStyleFields(cur, next)).toEqual({ collar_type: "COL_QALLABI", collar_button: null });
   });
 
   it("identical style sets diff to nothing", () => {
@@ -87,17 +87,6 @@ describe("buildBrovaStyleUpdates", () => {
     });
     expect(button.jabzour_1).toBe("BUTTON");
     expect(button.jabzour_2).toBe("JAB_BAIN_MURABBA");
-  });
-
-  it("collar position __standard__ sentinel → null", () => {
-    const u = buildBrovaStyleUpdates({
-      optionIds: ["collarPosition"],
-      optionChecks: { "collarPosition-main": false },
-      styleChanges: { collarPosition: "__standard__" },
-      hashwaChanges: {},
-      garment: base,
-    });
-    expect(u.collar_position).toBeNull();
   });
 
   it("a rejected boolean toggle flips the current value (first pass, no frozen target)", () => {

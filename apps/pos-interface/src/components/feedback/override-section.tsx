@@ -274,12 +274,6 @@ const thicknessSelectOptions = thicknessOptions.map((t) => ({
   displayText: t.label,
 }));
 
-const COLLAR_POSITIONS_OVERRIDE = [
-  { value: "up", label: "Up" },
-  { value: "down", label: "Down" },
-  { value: "__standard__", label: "Std" },
-] as const;
-
 interface FinalsCardOverrideProps {
   optionId: string;
   finals: Garment[];
@@ -410,8 +404,6 @@ function brovaFieldsForOption(optionId: string, brovaStyle: StyleFields): StyleF
       return { pen_holder: brovaStyle.pen_holder ?? null };
     case "mobilePocket":
       return { mobile_pocket: brovaStyle.mobile_pocket ?? null };
-    case "collarPosition":
-      return { collar_position: brovaStyle.collar_position ?? null };
     case "lines":
       return { lines: brovaStyle.lines ?? null };
     default:
@@ -606,37 +598,6 @@ export function FinalsCardOverride({
             />
           </div>
         );
-      case "collarPosition": {
-        const currentPos = eff.collar_position ?? "__standard__";
-        const origPos = own.collar_position ?? "__standard__";
-        return (
-          <div className="flex gap-1 flex-1 min-w-0">
-            {COLLAR_POSITIONS_OVERRIDE.map((p) => {
-              const isOriginal = p.value === origPos;
-              return (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() =>
-                    onSetFinalStyle(final.id, {
-                      collar_position: p.value === "__standard__" ? null : (p.value as "up" | "down"),
-                    })
-                  }
-                  className={cn(
-                    "flex-1 h-8 rounded-md border text-sm font-medium transition-colors",
-                    currentPos === p.value
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background border-border hover:bg-muted",
-                  )}
-                >
-                  {p.label}
-                  {isOriginal && <span className="ml-1 text-xs font-normal opacity-70">(current)</span>}
-                </button>
-              );
-            })}
-          </div>
-        );
-      }
       case "lines": {
         const linesVal = eff.lines != null ? String(eff.lines) : null;
         return (
@@ -693,9 +654,6 @@ export function FinalsCardOverride({
         break;
       case "mobilePocket":
         text = eff.mobile_pocket == null ? "-" : eff.mobile_pocket ? "Yes" : "No";
-        break;
-      case "collarPosition":
-        text = eff.collar_position ?? "Standard";
         break;
       case "lines":
         text = eff.lines === 1 ? "Single" : eff.lines === 2 ? "Double" : "-";

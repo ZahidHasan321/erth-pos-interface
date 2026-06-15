@@ -29,101 +29,6 @@ import type { CellContext } from "@tanstack/react-table";
 import type { GarmentSchema } from "../fabric-selection/garment-form.schema";
 import { calculateGarmentStylePrice } from "@/lib/utils/style-utils";
 
-/**
- * Compact Yes / No segmented control for a present-or-absent option (§2.11).
- * Unanswered renders in a "not filled" state (dashed amber, or red when the
- * field is invalid) so the order-taker must pick rather than leave a silent
- * default. `value` is `undefined`/`null` until answered.
- */
-function YesNoSegment({
-  value,
-  onChange,
-  disabled,
-  invalid,
-}: {
-  value: boolean | null | undefined;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-  invalid?: boolean;
-}) {
-  const answered = value === true || value === false;
-  return (
-    <div
-      className={cn(
-        "inline-flex rounded-md border p-0.5 text-xs",
-        disabled && "opacity-50",
-        !answered ? (invalid ? "border-red-400" : "border-dashed border-amber-400") : "border-border",
-      )}
-    >
-      {([true, false] as const).map((opt) => (
-        <button
-          key={String(opt)}
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(opt)}
-          className={cn(
-            "px-2 py-0.5 rounded-[4px] font-semibold transition-colors",
-            value === opt
-              ? opt
-                ? "bg-primary text-primary-foreground"
-                : "bg-foreground text-background"
-              : "text-muted-foreground hover:bg-muted",
-            disabled && "cursor-not-allowed",
-          )}
-        >
-          {opt ? "Yes" : "No"}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Up / Down / Standard picker for collar position (§2.11). Unanswered renders
- *  "not filled"; "standard" persists as null (no DB migration). */
-function CollarPositionSegment({
-  value,
-  onChange,
-  disabled,
-  invalid,
-}: {
-  value: string | null | undefined;
-  onChange: (v: "up" | "down" | "standard") => void;
-  disabled?: boolean;
-  invalid?: boolean;
-}) {
-  const answered = value === "up" || value === "down" || value === "standard";
-  const opts: { v: "up" | "down" | "standard"; l: string }[] = [
-    { v: "up", l: "Up" },
-    { v: "down", l: "Down" },
-    { v: "standard", l: "Std" },
-  ];
-  return (
-    <div
-      className={cn(
-        "inline-flex rounded-md border p-0.5 text-xs",
-        disabled && "opacity-50",
-        !answered ? (invalid ? "border-red-400" : "border-dashed border-amber-400") : "border-border",
-      )}
-    >
-      {opts.map((o) => (
-        <button
-          key={o.v}
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(o.v)}
-          className={cn(
-            "px-1.5 py-0.5 rounded-[4px] font-semibold transition-colors",
-            value === o.v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
-            disabled && "cursor-not-allowed",
-          )}
-        >
-          {o.l}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export const GarmentIdCell = ({
   row,
 }: CellContext<GarmentSchema, unknown>) => {
@@ -363,8 +268,13 @@ export const CollarCell = ({
       <Controller
         name={`garments.${row.index}.small_tabaggi`}
         control={control}
-        render={({ field, fieldState }) => (
-          <div className="flex flex-col items-center gap-1">
+        render={({ field }) => (
+          <label
+            className={cn(
+              "flex flex-col items-center gap-1",
+              isFormDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+            )}
+          >
             <div className="flex items-center gap-1">
               <img
                 src={smallTabaggiImage}
@@ -373,28 +283,12 @@ export const CollarCell = ({
               />
               <span className="text-xs text-muted-foreground whitespace-nowrap">small tabbagi</span>
             </div>
-            <YesNoSegment
-              value={field.value}
-              onChange={field.onChange}
+            <Checkbox
+              checked={field.value === true}
+              onCheckedChange={(checked) => field.onChange(checked === true)}
               disabled={isFormDisabled}
-              invalid={fieldState.invalid}
             />
-          </div>
-        )}
-      />
-      <Controller
-        name={`garments.${row.index}.collar_position`}
-        control={control}
-        render={({ field, fieldState }) => (
-          <div className="flex flex-col gap-1 min-w-[64px]">
-            <span className="text-xs text-muted-foreground leading-none">Position</span>
-            <CollarPositionSegment
-              value={field.value}
-              onChange={field.onChange}
-              disabled={isFormDisabled}
-              invalid={fieldState.invalid}
-            />
-          </div>
+          </label>
         )}
       />
       <Controller
@@ -720,16 +614,20 @@ export const AccessoriesCell = ({
           key={a.name}
           name={`garments.${row.index}.${a.name}`}
           control={control}
-          render={({ field, fieldState }) => (
-            <div className="flex flex-col items-center gap-1">
+          render={({ field }) => (
+            <label
+              className={cn(
+                "flex flex-col items-center gap-1.5",
+                isFormDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+              )}
+            >
               <img src={a.icon} alt={a.alt} className="min-w-10 h-10 object-contain" />
-              <YesNoSegment
-                value={field.value as boolean | null | undefined}
-                onChange={field.onChange}
+              <Checkbox
+                checked={field.value === true}
+                onCheckedChange={(checked) => field.onChange(checked === true)}
                 disabled={isFormDisabled}
-                invalid={fieldState.invalid}
               />
-            </div>
+            </label>
           )}
         />
       ))}

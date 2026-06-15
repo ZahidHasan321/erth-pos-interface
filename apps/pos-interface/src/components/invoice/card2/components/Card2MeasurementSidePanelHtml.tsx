@@ -11,7 +11,11 @@ interface SignatureField {
   value: string
 }
 
-const isImageDataUrl = (value: string): boolean => value.startsWith('data:image/')
+// The order signature is an image, stored either as a freshly-drawn data URL
+// (just signed) or as an uploaded storage URL (reprints). Render either as an
+// <img>; anything else (e.g. a typed name) falls back to text.
+const isImageDataUrl = (value: string): boolean =>
+  value.startsWith('data:image/') || value.startsWith('http')
 
 export function Card2MeasurementSidePanelHtml({
   data,

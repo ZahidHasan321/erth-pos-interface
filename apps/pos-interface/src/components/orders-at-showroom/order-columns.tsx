@@ -175,6 +175,14 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
               </span>
             )}
           </div>
+          {row.original.shopReceivedDate && (
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-bold text-muted-foreground/60 uppercase">Received</span>
+              <span className="text-xs font-bold tracking-tight text-emerald-600">
+                {formatDate(row.original.shopReceivedDate)}
+              </span>
+            </div>
+          )}
           {row.original.homeDelivery && (
             <div className="flex items-center gap-0.5 text-xs text-blue-600 font-bold">
               <Truck className="size-2.5" aria-hidden="true" />

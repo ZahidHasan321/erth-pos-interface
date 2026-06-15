@@ -33,7 +33,6 @@ export const styleOptionsSchema = z.object({
     .object({
       collar_type: z.enum(collarTypeValues).optional(),
       collar_button: z.enum(collarButtonValues).optional(),
-      collar_position: z.enum(['up', 'down']).nullable().optional(),
       collar_thickness: z.enum(thicknessValues).optional(),
       small_tabaggi: z.boolean().optional(),
     })
@@ -91,7 +90,6 @@ export const styleOptionsDefaults: StyleOptionsSchema = {
   collar: {
     collar_type: "COL_DOWN_COLLAR",
     collar_button: "COL_TABBAGI",
-    collar_position: null,
     collar_thickness: "DOUBLE",
     small_tabaggi: false,
   },

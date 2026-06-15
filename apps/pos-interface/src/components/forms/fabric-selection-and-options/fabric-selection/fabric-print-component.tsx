@@ -77,22 +77,22 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
             borderBottom: '2px solid black',
           }}>
             <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '6px 4px',
+              textAlign: 'center',
+              padding: '5px 4px',
               borderRight: '1px solid #ccc',
-              borderTop: fabricData.express ? '3px solid #dc2626' : '3px solid transparent',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
             }}>
-              <span style={{
-                fontSize: '18px',
-                fontWeight: '900',
-                color: fabricData.express ? '#dc2626' : 'transparent',
-                letterSpacing: '1px',
-                textTransform: 'uppercase',
+              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>Express</div>
+              <div style={{
+                fontWeight: 'bold',
+                fontSize: '16px',
+                color: fabricData.express ? '#dc2626' : '#111827',
               }}>
-                Express
-              </span>
+                {fabricData.express ? 'Yes' : 'No'}
+              </div>
             </div>
             <div style={{
               display: 'flex',
@@ -112,21 +112,21 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
               />
             </div>
             <div style={{
+              textAlign: 'center',
+              padding: '5px 4px',
               display: 'flex',
-              alignItems: 'center',
+              flexDirection: 'column',
               justifyContent: 'center',
-              padding: '6px 4px',
-              borderTop: fabricData.soaking ? '3px solid #2563eb' : '3px solid transparent',
+              alignItems: 'center',
             }}>
-              <span style={{
-                fontSize: '18px',
-                fontWeight: '900',
-                color: fabricData.soaking ? '#2563eb' : 'transparent',
-                letterSpacing: '1px',
-                textTransform: 'uppercase',
+              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>Soaking</div>
+              <div style={{
+                fontWeight: 'bold',
+                fontSize: '16px',
+                color: fabricData.soaking ? '#2563eb' : '#111827',
               }}>
-                {fabricData.soaking ? `Soak ${fabricData.soaking_hours ?? ''}h` : 'Soaking'}
-              </span>
+                {fabricData.soaking ? (fabricData.soaking_hours ? `${fabricData.soaking_hours}h` : 'Yes') : 'No'}
+              </div>
             </div>
           </div>
 

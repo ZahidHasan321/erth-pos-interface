@@ -81,12 +81,14 @@ async function main() {
 
   try {
     // ── restock_item ───────────────────────────────────────────────────
+    // Positional args: (type, id, location, qty, supplier, unit_cost, notes,
+    // image_url, user_id, idempotency_key). The key stays last.
     // A. Same key twice → applied once (the core corruption guard).
     const kA = randomUUID(); testKeys.push(kA);
     const firstRows = await sql<{ restock_item: { success?: boolean; new_stock?: number } }[]>`
-      SELECT restock_item('fabric', ${fabId}, 'shop', 5, NULL, NULL, NULL, NULL, ${kA}) AS restock_item`;
+      SELECT restock_item('fabric', ${fabId}, 'shop', 5, NULL, NULL, NULL, NULL, NULL, ${kA}) AS restock_item`;
     const firstResult = one(firstRows, "restock_item first call").restock_item;
-    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 5, NULL, NULL, NULL, NULL, ${kA})`;
+    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 5, NULL, NULL, NULL, NULL, NULL, ${kA})`;
     const afterA = await shopStock(fabId);
     check("restock_item: same key twice applies once", afterA === 5, `expected 5, got ${afterA}`);
 
@@ -96,7 +98,7 @@ async function main() {
     const replayRows = await sql<{
       restock_item: { success?: boolean; new_stock?: number; result_pending?: boolean; idempotent_replay?: boolean };
     }[]>`
-      SELECT restock_item('fabric', ${fabId}, 'shop', 5, NULL, NULL, NULL, NULL, ${kA}) AS restock_item`;
+      SELECT restock_item('fabric', ${fabId}, 'shop', 5, NULL, NULL, NULL, NULL, NULL, ${kA}) AS restock_item`;
     const replay = one(replayRows, "restock_item replay").restock_item;
     check(
       "restock_item: replay returns the REAL original payload (not a stub)",
@@ -111,14 +113,14 @@ async function main() {
 
     // C. Two DIFFERENT keys → both apply (distinct logical operations).
     const kC1 = randomUUID(); const kC2 = randomUUID(); testKeys.push(kC1, kC2);
-    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 3, NULL, NULL, NULL, NULL, ${kC1})`;
-    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 3, NULL, NULL, NULL, NULL, ${kC2})`;
+    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 3, NULL, NULL, NULL, NULL, NULL, ${kC1})`;
+    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 3, NULL, NULL, NULL, NULL, NULL, ${kC2})`;
     const afterC = await shopStock(fabId);
     check("restock_item: distinct keys both apply", afterC === 11, `expected 11 (5+3+3), got ${afterC}`);
 
     // D. NULL key → no dedupe (documents: key is required for safety).
-    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 2, NULL, NULL, NULL, NULL, NULL)`;
-    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 2, NULL, NULL, NULL, NULL, NULL)`;
+    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 2, NULL, NULL, NULL, NULL, NULL, NULL)`;
+    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 2, NULL, NULL, NULL, NULL, NULL, NULL)`;
     const afterD = await shopStock(fabId);
     check("restock_item: NULL key is NOT deduped (both apply)", afterD === 15, `expected 15 (11+2+2), got ${afterD}`);
 
@@ -129,14 +131,14 @@ async function main() {
     const tx = await sql.reserve();
     try {
       await tx`BEGIN`;
-      await tx`SELECT restock_item('fabric', ${fabId}, 'shop', 7, NULL, NULL, NULL, NULL, ${kE})`;
+      await tx`SELECT restock_item('fabric', ${fabId}, 'shop', 7, NULL, NULL, NULL, NULL, NULL, ${kE})`;
       await tx`ROLLBACK`;
     } finally {
       tx.release();
     }
     const afterERollback = await shopStock(fabId);
     check("restock_item: rolled-back call did not apply", afterERollback === 15, `expected 15, got ${afterERollback}`);
-    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 7, NULL, NULL, NULL, NULL, ${kE})`;
+    await sql`SELECT restock_item('fabric', ${fabId}, 'shop', 7, NULL, NULL, NULL, NULL, NULL, ${kE})`;
     const afterERetry = await shopStock(fabId);
     check("restock_item: same key retried after rollback DOES apply", afterERetry === 22,
       `expected 22 (15+7), got ${afterERetry}`);

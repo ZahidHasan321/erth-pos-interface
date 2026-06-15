@@ -12,7 +12,7 @@ const CASHIER_ORDER_QUERY = `
     workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery, campaign_id, stitching_charge, fabric_charge, style_charge, campaign:campaigns(name)),
     customer:customers(id, name, phone, country_code, account_type, relation, city, area, block, street, house_no, address_note),
     discount_approver:users!discount_approved_by(id, name),
-    garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express, soaking, soaking_hours, delivery_date, fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot, refunded_fabric, refunded_stitching, refunded_style, refunded_express, refunded_soaking, replaced_by_garment_id, collar_type, collar_button, collar_position, cuffs_type, jabzour_1, jabzour_thickness, fabric_length, fabric:fabrics(id, name)),
+    garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express, soaking, soaking_hours, delivery_date, fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot, refunded_fabric, refunded_stitching, refunded_style, refunded_express, refunded_soaking, replaced_by_garment_id, collar_type, collar_button, cuffs_type, jabzour_1, jabzour_thickness, fabric_length, measurement:measurements!measurement_id(collar_position), fabric:fabrics(id, name)),
     shelf_items:order_shelf_items(id, shelf_id, quantity, unit_price, refunded_qty, shelf:shelf(type, brand)),
     payment_transactions:payment_transactions(id, amount, transaction_type, payment_type, payment_ref_no, payment_note, refund_reason, refund_items, created_at, cashier_id, cashier:users(name))
 `;
@@ -126,8 +126,38 @@ export const getCashierSummary = async (brand?: string): Promise<{ status: 'succ
 
 export type CashierFilter = "all" | "today" | "unpaid" | "paid" | "work" | "sales";
 
-export const getRecentCashierOrders = async (filter: CashierFilter = "all", brand?: string): Promise<{ status: 'success'; data: CashierOrderListItem[] }> => {
+/** Date-range filter for the cashier list, on order_date (Kuwait tz). */
+export type CashierPeriod = "all" | "month" | "last2" | "quarter";
+
+/**
+ * UTC ISO start instant for a period, anchored to Kuwait-local "today".
+ * Returns null for "all" (no lower bound). End is always "now", so only a
+ * `gte` is needed. Windows are increasing: month (1) < last2 (2) < quarter (3).
+ *   month   = first day of the current calendar month
+ *   last2   = first day of the previous month (covers previous + current = 2 months)
+ *   quarter = first day of the current calendar quarter
+ */
+function getPeriodStartIso(period: CashierPeriod): string | null {
+    if (period === "all") return null;
+    const [y, m] = getLocalDateStr().split("-").map(Number); // Kuwait YYYY-MM-DD
+    let year = y;
+    let month = m; // 1-12
+    if (period === "last2") {
+        month = m - 1;
+        if (month < 1) { month += 12; year -= 1; }
+    } else if (period === "quarter") {
+        month = Math.floor((m - 1) / 3) * 3 + 1;
+    }
+    const mm = String(month).padStart(2, "0");
+    return new Date(`${year}-${mm}-01T00:00:00.000+03:00`).toISOString();
+}
+
+export const getRecentCashierOrders = async (filter: CashierFilter = "all", brand?: string, period: CashierPeriod = "all"): Promise<{ status: 'success'; data: CashierOrderListItem[] }> => {
     const currentBrand = brand || CASHIER_BRAND;
+    const periodStart = getPeriodStartIso(period);
+    // A period narrows by order_date in a follow-up query, so widen the pre-limit
+    // to avoid date-filtering being starved by the most-recent-N cutoff.
+    const listLimit = periodStart ? 500 : 30;
 
     const today = new Date();
     // For paid/unpaid: use server-side RPC to get exact IDs (column comparison done in SQL)
@@ -135,7 +165,7 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
         const { data: ids, error: rpcError } = await db.rpc('get_cashier_order_ids_by_payment', {
             p_brand: currentBrand,
             p_filter: filter,
-            p_limit: 30,
+            p_limit: listLimit,
         });
 
         if (rpcError || !ids || ids.length === 0) {
@@ -143,11 +173,12 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
             return { status: 'success', data: [] };
         }
 
-        const { data, error } = await db
+        let idQuery = db
             .from('orders')
             .select(CASHIER_ORDER_LIST_QUERY)
-            .in('id', ids)
-            .order('order_date', { ascending: false });
+            .in('id', ids);
+        if (periodStart) idQuery = idQuery.gte('order_date', periodStart);
+        const { data, error } = await idQuery.order('order_date', { ascending: false });
 
         if (error) {
             console.error('Error fetching paid/unpaid orders:', error.message);
@@ -163,6 +194,8 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
         .select(CASHIER_ORDER_LIST_QUERY)
         .eq('brand', currentBrand)
         .neq('checkout_status', 'draft');
+
+    if (periodStart) query = query.gte('order_date', periodStart);
 
     switch (filter) {
         case "today": {
@@ -182,7 +215,7 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
 
     const { data, error } = await query
         .order('order_date', { ascending: false })
-        .limit(30);
+        .limit(listLimit);
 
     if (error) {
         console.error('Error fetching recent orders:', error.message);

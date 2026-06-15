@@ -473,14 +473,8 @@ export function OrderSummaryAndPaymentForm({
                     </div>
                     {(effectiveOrderType === "WORK" || Number(style_charge) > 0) && (
                       <div className="flex justify-between py-0.5">
-                        <span className="text-muted-foreground">Style</span>
+                        <span className="text-muted-foreground">Add-ons</span>
                         <span className="font-medium tabular-nums">{Number(style_charge || 0).toFixed(3)} KWD</span>
-                      </div>
-                    )}
-                    {Number(delivery_charge) > 0 && (
-                      <div className="flex justify-between py-0.5">
-                        <span className="text-muted-foreground">Delivery</span>
-                        <span className="font-medium tabular-nums">{Number(delivery_charge).toFixed(3)} KWD</span>
                       </div>
                     )}
                     {Number(express_charge) > 0 && (
@@ -509,18 +503,26 @@ export function OrderSummaryAndPaymentForm({
                     )}
                     {Number(shelf_charge) > 0 && (
                       <div className="flex justify-between py-0.5">
-                        <span className="text-muted-foreground">Shelf</span>
+                        <span className="text-muted-foreground">Shelf Products</span>
                         <span className="font-medium tabular-nums">{Number(shelf_charge).toFixed(3)} KWD</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="border-t border-border pt-2 mt-2 flex justify-between items-baseline">
-                    <div>
-                      <span className="text-sm font-bold">Order Total</span>
-                      <p className="text-xs text-muted-foreground">Discounts & payment at the cashier</p>
+                  <div className="border-t border-border pt-2 mt-2 space-y-1">
+                    {Number(delivery_charge) > 0 && (
+                      <div className="flex justify-between py-0.5 text-sm">
+                        <span className="text-muted-foreground">Delivery</span>
+                        <span className="font-medium tabular-nums">{Number(delivery_charge).toFixed(3)} KWD</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-baseline">
+                      <div>
+                        <span className="text-sm font-bold">Order Total</span>
+                        <p className="text-xs text-muted-foreground">Discounts & payment at the cashier</p>
+                      </div>
+                      <span className="text-lg font-bold text-primary tabular-nums">{finalAmount.toFixed(3)} KWD</span>
                     </div>
-                    <span className="text-lg font-bold text-primary tabular-nums">{finalAmount.toFixed(3)} KWD</span>
                   </div>
                 </section>
 
@@ -1123,12 +1125,8 @@ export function OrderSummaryAndPaymentForm({
                     <div className="flex justify-between"><span>Stitching</span><span>{Number(stitching_charge || 0).toFixed(3)} KWD</span></div>
                   )}
                   {(order_type === "WORK" || Number(style_charge) > 0) && (
-                    <div className="flex justify-between"><span>Style</span><span>{Number(style_charge || 0).toFixed(3)} KWD</span></div>
+                    <div className="flex justify-between"><span>Add-ons</span><span>{Number(style_charge || 0).toFixed(3)} KWD</span></div>
                   )}
-                  <div className="flex justify-between">
-                    <span>Home Delivery</span>
-                    <span>{Number(delivery_charge || 0).toFixed(3)} KWD</span>
-                  </div>
                   {Number(express_charge) > 0 && (
                     <div className="flex justify-between">
                       <span>Express{expressGarmentCount > 1 ? ` (${expressGarmentCount})` : ""}</span>
@@ -1153,10 +1151,13 @@ export function OrderSummaryAndPaymentForm({
                       <span className="font-semibold">{Number(soaking_charge).toFixed(3)} KWD</span>
                     </div>
                   )}
-                  <div className="flex justify-between"><span>Shelf</span><span>{Number(shelf_charge || 0).toFixed(3)} KWD</span></div>
+                  <div className="flex justify-between"><span>Shelf Products</span><span>{Number(shelf_charge || 0).toFixed(3)} KWD</span></div>
                 </div>
 
                 <div className="space-y-2">
+                  {Number(delivery_charge) > 0 && (
+                    <div className="flex justify-between text-muted-foreground"><span>Delivery</span><span>{Number(delivery_charge).toFixed(3)} KWD</span></div>
+                  )}
                   <div className="flex justify-between font-semibold"><span>Total Due</span><span>{totalDue.toFixed(3)} KWD</span></div>
                   <div className="flex justify-between text-muted-foreground"><span>Discount</span><span>-{safeDiscountValue.toFixed(3)} KWD</span></div>
                   <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
