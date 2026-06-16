@@ -3,52 +3,54 @@ import { db } from "../src/client";
 import { sql } from "drizzle-orm";
 
 async function main() {
-  // 1. All orders with finals stuck at waiting_for_acceptance
-  const stuck = await db.execute(sql`
-    SELECT
-      o.id AS order_id,
-      g.id AS garment_uuid,
-      g.garment_id,
-      g.garment_type,
-      g.piece_stage,
-      g.location,
-      g.acceptance_status,
-      g.feedback_status,
-      g.in_production,
-      g.trip_number
-    FROM garments g
-    JOIN orders o ON o.id = g.order_id
-    WHERE g.piece_stage = 'waiting_for_acceptance'
-    ORDER BY o.id, g.garment_id
+  // Order-level context for 88
+  const order = await db.execute(sql`
+    SELECT o.id, o.order_type, o.checkout_status, o.brand, o.paid, o.order_total,
+           o.order_date, wo.order_phase, wo.invoice_number, wo.delivery_date
+    FROM orders o
+    LEFT JOIN work_orders wo ON wo.order_id = o.id
+    WHERE o.id = 88
   `);
-  console.log("=== Garments stuck at waiting_for_acceptance ===");
-  console.log(JSON.stringify(stuck, null, 2));
+  console.log("=== Order 88 (order + work_order) ===");
+  console.log(JSON.stringify(order, null, 2));
 
-  // 2. Brova status per order that has stuck finals
-  const stuckOrderIds = [...new Set((stuck as any[]).map((r) => r.order_id))];
-  if (stuckOrderIds.length > 0) {
-    const brovas = await db.execute(sql`
-      SELECT order_id, garment_id, piece_stage, location,
-             acceptance_status, feedback_status, trip_number
-      FROM garments
-      WHERE order_id = ANY(${sql.raw(`ARRAY[${stuckOrderIds.join(",")}]::int[]`)})
-        AND garment_type = 'brova'
-      ORDER BY order_id, garment_id
-    `);
-    console.log("\n=== Brovas in those orders ===");
-    console.log(JSON.stringify(brovas, null, 2));
-  }
-
-  // 3. Check order 12 specifically (user mentioned 12-1)
-  const order12 = await db.execute(sql`
-    SELECT id, garment_id, garment_type, piece_stage, location,
-           acceptance_status, feedback_status, trip_number, in_production
+  // All garments in order 88
+  const garments = await db.execute(sql`
+    SELECT garment_id, garment_type, piece_stage, location,
+           acceptance_status, feedback_status, in_production, trip_number,
+           soaking, soaking_completed_at, assigned_unit, assigned_person,
+           start_time, completion_time, fabric_source
     FROM garments
-    WHERE order_id = 12
+    WHERE order_id = 88
     ORDER BY garment_id
   `);
-  console.log("\n=== Order 12 garments ===");
-  console.log(JSON.stringify(order12, null, 2));
+  console.log("\n=== Order 88 garments ===");
+  console.log(JSON.stringify(garments, null, 2));
+
+  // Is 88-1 alone, or are other garments stuck at piece_stage='soaking'?
+  const stuckSoaking = await db.execute(sql`
+    SELECT garment_id, garment_type, location, in_production, trip_number,
+           soaking, soaking_completed_at, feedback_status
+    FROM garments
+    WHERE piece_stage = 'soaking'
+    ORDER BY order_id, garment_id
+  `);
+  console.log("\n=== ALL garments at piece_stage='soaking' ===");
+  console.log(JSON.stringify(stuckSoaking, null, 2));
+
+  // FIX: 88-1 is orphaned at piece_stage='soaking' (a parallel-track value no
+  // terminal queue reads). Move it to 'sewing' so it surfaces in the sewing
+  // terminal. Guarded predicate so this can only touch this one orphaned brova.
+  const fix = await db.execute(sql`
+    UPDATE garments
+    SET piece_stage = 'sewing'
+    WHERE order_id = 88
+      AND garment_id = '88-1'
+      AND piece_stage = 'soaking'
+    RETURNING garment_id, piece_stage, location, in_production, trip_number
+  `);
+  console.log("\n=== FIX applied (88-1 → sewing) ===");
+  console.log(JSON.stringify(fix, null, 2));
 
   process.exit(0);
 }

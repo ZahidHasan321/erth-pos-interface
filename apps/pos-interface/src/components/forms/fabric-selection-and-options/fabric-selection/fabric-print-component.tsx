@@ -85,14 +85,15 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
               justifyContent: 'center',
               alignItems: 'center',
             }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>Express</div>
-              <div style={{
-                fontWeight: 'bold',
-                fontSize: '16px',
-                color: fabricData.express ? '#dc2626' : '#111827',
-              }}>
-                {fabricData.express ? 'Yes' : 'No'}
-              </div>
+              {fabricData.express && (
+                <div style={{
+                  fontWeight: 'bold',
+                  fontSize: '20px',
+                  color: '#dc2626',
+                }}>
+                  Express
+                </div>
+              )}
             </div>
             <div style={{
               display: 'flex',
@@ -119,14 +120,15 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
               justifyContent: 'center',
               alignItems: 'center',
             }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px' }}>Soaking</div>
-              <div style={{
-                fontWeight: 'bold',
-                fontSize: '16px',
-                color: fabricData.soaking ? '#2563eb' : '#111827',
-              }}>
-                {fabricData.soaking ? (fabricData.soaking_hours ? `${fabricData.soaking_hours}h` : 'Yes') : 'No'}
-              </div>
+              {fabricData.soaking && (
+                <div style={{
+                  fontWeight: 'bold',
+                  fontSize: '20px',
+                  color: '#2563eb',
+                }}>
+                  {fabricData.soaking_hours ? `Soaking ${fabricData.soaking_hours}h` : 'Soaking'}
+                </div>
+              )}
             </div>
           </div>
 

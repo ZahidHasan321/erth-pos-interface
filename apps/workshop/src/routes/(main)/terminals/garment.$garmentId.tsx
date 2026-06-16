@@ -7,6 +7,7 @@ import {
   buildAlterationFilter,
   buildAltOutFilter,
   buildOptionChanges,
+  buildSectionAttachments,
   getAltOutEffectiveMeasurement,
 } from "@/lib/alteration-filter";
 import { buildQcFailContext } from "@/lib/qc-corrections";
@@ -139,6 +140,9 @@ function TerminalGarmentPage() {
   // QC-fail rework re-uses the alteration filter but option changes don't
   // apply (worker is fixing a defect, not enacting a spec change).
   const optionChanges = (isAltIn && !hasQcFail) ? buildOptionChanges(priorFeedback) : [];
+  // Per-style customer reference media (photos/voice notes), grouped to the
+  // overlay's style sections so each shows beside the style it describes.
+  const sectionAttachments = (isAltIn && !hasQcFail) ? buildSectionAttachments(priorFeedback) : undefined;
   const effectiveMeasurement = isAltOut
     ? getAltOutEffectiveMeasurement(garment)
     : garment.measurement;
@@ -262,6 +266,7 @@ function TerminalGarmentPage() {
             qcFailActuals={qcFailActuals}
             qcFailOptionActuals={qcFailOptionActuals}
             optionChanges={optionChanges}
+            sectionAttachments={sectionAttachments}
             notes={garment.notes}
           />
         )}

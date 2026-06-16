@@ -56,6 +56,11 @@ export function buildScheduleTripHistoryEntry({
  * reentryStage overrides to support QC-fail rework that re-enters at a mid-pipeline stage.
  */
 export function resolveFirstScheduleStage(reentryStage?: PieceStage | null): PieceStage {
+  // Soaking is a parallel track, never a piece_stage. Coerce a stray
+  // reentryStage='soaking' (e.g. a legacy trip_history reentry value) to cutting
+  // so it can never orphan the garment at piece_stage='soaking' — the cutting
+  // terminal already gates on soaking_completed_at for soak-pending pieces.
+  if (reentryStage === ("soaking" as PieceStage)) return "cutting" as PieceStage;
   return reentryStage ?? ("cutting" as PieceStage);
 }
 

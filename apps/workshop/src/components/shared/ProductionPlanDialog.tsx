@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/dialo
 import { Button } from "@repo/ui/button";
 import { Label } from "@repo/ui/label";
 import { DatePicker } from "@repo/ui/date-picker";
-import { Loader2, Droplets, Scissors } from "lucide-react";
+import { Loader2, Scissors } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconSparkles } from "@tabler/icons-react";
 
 import { useResources } from "@/hooks/useResources";
@@ -36,10 +36,11 @@ const NEW_STEPS: PlanStep[] = [
   { key: "quality_checker", label: "Quality Check", responsibility: "quality_check", icon: IconRosette,  historyKey: "quality_checker", accentBg: "bg-indigo-600" },
 ];
 
-const REWORK_STEPS: PlanStep[] = [
-  { key: "soaker",          label: "Soaking",       responsibility: "soaking",       icon: Droplets,     historyKey: "soaking",         accentBg: "bg-sky-600" },
-  ...NEW_STEPS,
-];
+// Rework re-enters the linear pipeline only. Soaking is a parallel track
+// (soaking flag + soak terminal, group-scoped — no per-worker assignment), not
+// a piece_stage: offering it as a re-entry stage would set piece_stage='soaking'
+// and orphan the garment (no pipeline terminal advances a soaking piece_stage).
+const REWORK_STEPS: PlanStep[] = [...NEW_STEPS];
 
 const QC_KEY = "quality_checker";
 

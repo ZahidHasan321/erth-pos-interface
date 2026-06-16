@@ -17,6 +17,7 @@ import type {
   AlterationFilter,
   AlterationStyleSection,
   OptionChange,
+  SectionAttachments,
 } from "@/lib/alteration-filter";
 import {
   ALTERATION_REASON_CELL_CLASS,
@@ -226,11 +227,45 @@ function AccessoryPill({
   );
 }
 
+function StyleSectionAttachments({ attachments }: { attachments?: SectionAttachments }) {
+  if (!attachments || (attachments.photos.length === 0 && attachments.voices.length === 0)) {
+    return null;
+  }
+  return (
+    <div className="mb-2 rounded-md border border-border bg-card p-1.5 space-y-1.5">
+      <div className="text-[10px] font-medium text-muted-foreground">
+        Customer reference
+      </div>
+      {attachments.photos.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {attachments.photos.map((src, i) => (
+            <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block">
+              <img
+                src={src}
+                alt={`Reference ${i + 1}`}
+                className="h-12 w-12 rounded-md border border-border object-cover transition-opacity hover:opacity-80"
+              />
+            </a>
+          ))}
+        </div>
+      )}
+      {attachments.voices.length > 0 && (
+        <div className="space-y-1">
+          {attachments.voices.map((src, i) => (
+            <audio key={i} controls src={src} className="h-8 w-full" />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StyleSection({
   title,
   thickness,
   defects,
   changes,
+  attachments,
   children,
 }: {
   title: string;
@@ -240,6 +275,9 @@ function StyleSection({
   /** Customer-feedback option changes in this section — sewer's to-do list:
    *  add/remove/change a style. Green=add, red=remove, amber=change. */
   changes?: OptionChange[];
+  /** Customer reference photos/voice notes the shop attached to a style in this
+   *  section at feedback time — shown next to the style they describe. */
+  attachments?: SectionAttachments;
   children: React.ReactNode;
 }) {
   return (
@@ -273,6 +311,7 @@ function StyleSection({
           </div>
         </div>
       )}
+      <StyleSectionAttachments attachments={attachments} />
       {children}
       {defects && defects.length > 0 && (
         <div className="mt-2 rounded-md border border-red-300 bg-red-50 p-1.5">
@@ -378,6 +417,9 @@ interface DishdashaOverlayProps {
   /** Customer-feedback option changes (add/remove/change/hashwa) the sewer
    *  must apply this trip. Rendered as a per-section banner. */
   optionChanges?: OptionChange[];
+  /** Customer reference photos/voice notes grouped by style section, shown
+   *  inside the section they describe (collar refs in Collar, etc.). */
+  sectionAttachments?: Map<AlterationStyleSection, SectionAttachments>;
   notes?: string | null;
 }
 
@@ -388,6 +430,7 @@ export function DishdashaOverlay({
   qcFailActuals,
   qcFailOptionActuals,
   optionChanges,
+  sectionAttachments,
   notes,
 }: DishdashaOverlayProps) {
   const g = garment as any;
@@ -399,6 +442,8 @@ export function DishdashaOverlay({
   const sectionChanges = (section: AlterationStyleSection): OptionChange[] =>
     (optionChanges ?? []).filter((c) => c.section === section);
   const metaChanges = (optionChanges ?? []).filter((c) => c.section === "meta");
+  const sectionMedia = (section: AlterationStyleSection): SectionAttachments | undefined =>
+    sectionAttachments?.get(section);
 
   // Sidebar measurement tint priority: QC correction > QC fail actual > alteration reason > default.
   // Mirrors body-template tinting so the sewer sees a consistent visual signal
@@ -620,7 +665,7 @@ export function DishdashaOverlay({
           <div className="p-2 grid grid-cols-2 gap-2 auto-rows-min">
             {/* Front Pocket */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("frontPocket")) && (
-            <StyleSection title="Front Pocket" thickness={g.front_pocket_thickness} defects={buildSectionDefects(qcFailOptionActuals, "frontPocket")} changes={sectionChanges("frontPocket")}>
+            <StyleSection title="Front Pocket" thickness={g.front_pocket_thickness} defects={buildSectionDefects(qcFailOptionActuals, "frontPocket")} changes={sectionChanges("frontPocket")} attachments={sectionMedia("frontPocket")}>
               <MeasureLayout
                 image={frontPocket?.image}
                 imageAlt={frontPocket?.label ?? "Front pocket"}
@@ -650,7 +695,7 @@ export function DishdashaOverlay({
 
             {/* Jabzour */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("jabzour")) && (
-            <StyleSection title="Jabzour" thickness={g.jabzour_thickness} defects={buildSectionDefects(qcFailOptionActuals, "jabzour")} changes={sectionChanges("jabzour")}>
+            <StyleSection title="Jabzour" thickness={g.jabzour_thickness} defects={buildSectionDefects(qcFailOptionActuals, "jabzour")} changes={sectionChanges("jabzour")} attachments={sectionMedia("jabzour")}>
               <MeasureLayout
                 image={jabzourMain?.image}
                 imageAlt={jabzourMain?.label ?? "Jabzour"}
@@ -688,7 +733,7 @@ export function DishdashaOverlay({
 
             {/* Side Pocket */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("sidePocket")) && (
-            <StyleSection title="Side Pocket" defects={buildSectionDefects(qcFailOptionActuals, "sidePocket")} changes={sectionChanges("sidePocket")}>
+            <StyleSection title="Side Pocket" defects={buildSectionDefects(qcFailOptionActuals, "sidePocket")} changes={sectionChanges("sidePocket")} attachments={sectionMedia("sidePocket")}>
               <MeasureLayout
                 image={sidePocket?.image}
                 imageAlt="Side pocket"
@@ -713,7 +758,7 @@ export function DishdashaOverlay({
 
             {/* Cuffs */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("cuffs")) && (
-            <StyleSection title="Cuffs" thickness={g.cuffs_thickness} defects={buildSectionDefects(qcFailOptionActuals, "cuffs")} changes={sectionChanges("cuffs")}>
+            <StyleSection title="Cuffs" thickness={g.cuffs_thickness} defects={buildSectionDefects(qcFailOptionActuals, "cuffs")} changes={sectionChanges("cuffs")} attachments={sectionMedia("cuffs")}>
               <div className="flex gap-2">
                 <div className="w-20 shrink-0">
                   <StyleImage
@@ -748,7 +793,7 @@ export function DishdashaOverlay({
 
             {/* Collar */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("collar")) && (
-            <StyleSection title="Collar" thickness={g.collar_thickness} defects={buildSectionDefects(qcFailOptionActuals, "collar")} changes={sectionChanges("collar")}>
+            <StyleSection title="Collar" thickness={g.collar_thickness} defects={buildSectionDefects(qcFailOptionActuals, "collar")} changes={sectionChanges("collar")} attachments={sectionMedia("collar")}>
               <MeasureLayout
                 image={collarType?.image}
                 imageAlt={collarType?.label ?? "Collar"}

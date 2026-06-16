@@ -61,6 +61,9 @@ interface OptionChecklistEntry {
   rejected?: boolean | null;
   hashwa_rejected?: boolean | null;
   hashwa_new_value?: unknown;
+  // Per-style customer attachments saved beside this option at feedback time.
+  photo_urls?: unknown;
+  voice_note_urls?: unknown;
 }
 
 function parseJson<T>(raw: unknown): T | null {
@@ -310,6 +313,46 @@ export const OPTION_CHANGE_KIND_SYMBOL: Record<OptionChangeKind, string> = {
   change: "→",
   hashwa: "→",
 };
+
+export interface SectionAttachments {
+  photos: string[];
+  voices: string[];
+}
+
+const asStringArray = (raw: unknown): string[] =>
+  Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : [];
+
+/**
+ * Group the customer's per-style feedback attachments (photos + voice notes)
+ * into the same sidebar sections DishdashaOverlay renders, so each reference
+ * shows next to the style it describes — collar media under Collar, jabzour
+ * media under Jabzour, etc. Options that don't map to a visible section
+ * (e.g. lines) are dropped; sections with no media are absent from the map.
+ */
+export function buildSectionAttachments(
+  feedback: GarmentFeedback | null | undefined,
+): Map<AlterationStyleSection, SectionAttachments> {
+  const out = new Map<AlterationStyleSection, SectionAttachments>();
+  if (!feedback) return out;
+  const options = parseJson<OptionChecklistEntry[]>(feedback.options_checklist) ?? [];
+  for (const opt of options) {
+    if (!opt?.option_name) continue;
+    const sections = OPTION_TO_SECTIONS[opt.option_name];
+    if (!sections || sections.length === 0) continue;
+    const photos = asStringArray(opt.photo_urls);
+    const voices = asStringArray(opt.voice_note_urls);
+    if (photos.length === 0 && voices.length === 0) continue;
+    for (const sec of sections) {
+      const entry = out.get(sec) ?? { photos: [], voices: [] };
+      // Dedupe — a single section can collect from several options (collar,
+      // collarBtn, smallTabaggi all map to "collar").
+      for (const p of photos) if (!entry.photos.includes(p)) entry.photos.push(p);
+      for (const v of voices) if (!entry.voices.includes(v)) entry.voices.push(v);
+      out.set(sec, entry);
+    }
+  }
+  return out;
+}
 
 // ── Alt-out (alteration-order garments brought from outside) ─────────────────
 
