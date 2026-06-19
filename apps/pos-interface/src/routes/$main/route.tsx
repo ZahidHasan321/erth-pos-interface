@@ -8,7 +8,7 @@ import {
   SidebarTrigger,
 } from "@repo/ui/sidebar";
 import { useAuth } from "@/context/auth";
-import { BRAND_NAMES } from "@/lib/constants";
+import { BRAND_NAMES, brandUsesCashier } from "@/lib/constants";
 import { setCurrentBrand } from "@/api/orders";
 import { router } from "@/router";
 import {
@@ -278,7 +278,7 @@ function RouteComponent() {
               )}
             </div>
             <div className="flex items-center gap-1">
-              <RegisterHeaderMenu />
+              {brandUsesCashier(main) && <RegisterHeaderMenu />}
               <NotificationBell />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
