@@ -30,6 +30,7 @@ import { Route as MainCustomersIndexRouteImport } from './routes/$main/customers
 import { Route as MainCashierIndexRouteImport } from './routes/$main/cashier/index'
 import { Route as MainAppointmentsIndexRouteImport } from './routes/$main/appointments/index'
 import { Route as authSakkbaLoginRouteImport } from './routes/(auth)/sakkba/login'
+import { Route as authQassLoginRouteImport } from './routes/(auth)/qass/login'
 import { Route as authErthLoginRouteImport } from './routes/(auth)/erth/login'
 import { Route as MainStoreTransfersRouteImport } from './routes/$main/store/transfers'
 import { Route as MainStoreSuppliersRouteImport } from './routes/$main/store/suppliers'
@@ -166,6 +167,11 @@ const MainAppointmentsIndexRoute = MainAppointmentsIndexRouteImport.update({
 const authSakkbaLoginRoute = authSakkbaLoginRouteImport.update({
   id: '/(auth)/sakkba/login',
   path: '/sakkba/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const authQassLoginRoute = authQassLoginRouteImport.update({
+  id: '/(auth)/qass/login',
+  path: '/qass/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const authErthLoginRoute = authErthLoginRouteImport.update({
@@ -380,6 +386,7 @@ export interface FileRoutesByFullPath {
   '/$main/store/suppliers': typeof MainStoreSuppliersRoute
   '/$main/store/transfers': typeof MainStoreTransfersRoute
   '/erth/login': typeof authErthLoginRoute
+  '/qass/login': typeof authQassLoginRoute
   '/sakkba/login': typeof authSakkbaLoginRoute
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/cashier/': typeof MainCashierIndexRoute
@@ -431,6 +438,7 @@ export interface FileRoutesByTo {
   '/$main/store/suppliers': typeof MainStoreSuppliersRoute
   '/$main/store/transfers': typeof MainStoreTransfersRoute
   '/erth/login': typeof authErthLoginRoute
+  '/qass/login': typeof authQassLoginRoute
   '/sakkba/login': typeof authSakkbaLoginRoute
   '/$main/appointments': typeof MainAppointmentsIndexRoute
   '/$main/cashier': typeof MainCashierIndexRoute
@@ -487,6 +495,7 @@ export interface FileRoutesById {
   '/$main/store/suppliers': typeof MainStoreSuppliersRoute
   '/$main/store/transfers': typeof MainStoreTransfersRoute
   '/(auth)/erth/login': typeof authErthLoginRoute
+  '/(auth)/qass/login': typeof authQassLoginRoute
   '/(auth)/sakkba/login': typeof authSakkbaLoginRoute
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/cashier/': typeof MainCashierIndexRoute
@@ -544,6 +553,7 @@ export interface FileRouteTypes {
     | '/$main/store/suppliers'
     | '/$main/store/transfers'
     | '/erth/login'
+    | '/qass/login'
     | '/sakkba/login'
     | '/$main/appointments/'
     | '/$main/cashier/'
@@ -595,6 +605,7 @@ export interface FileRouteTypes {
     | '/$main/store/suppliers'
     | '/$main/store/transfers'
     | '/erth/login'
+    | '/qass/login'
     | '/sakkba/login'
     | '/$main/appointments'
     | '/$main/cashier'
@@ -650,6 +661,7 @@ export interface FileRouteTypes {
     | '/$main/store/suppliers'
     | '/$main/store/transfers'
     | '/(auth)/erth/login'
+    | '/(auth)/qass/login'
     | '/(auth)/sakkba/login'
     | '/$main/appointments/'
     | '/$main/cashier/'
@@ -678,6 +690,7 @@ export interface RootRouteChildren {
   HomeRoute: typeof HomeRoute
   authLoginRoute: typeof authLoginRoute
   authErthLoginRoute: typeof authErthLoginRoute
+  authQassLoginRoute: typeof authQassLoginRoute
   authSakkbaLoginRoute: typeof authSakkbaLoginRoute
 }
 
@@ -828,6 +841,13 @@ declare module '@tanstack/react-router' {
       path: '/sakkba/login'
       fullPath: '/sakkba/login'
       preLoaderRoute: typeof authSakkbaLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(auth)/qass/login': {
+      id: '/(auth)/qass/login'
+      path: '/qass/login'
+      fullPath: '/qass/login'
+      preLoaderRoute: typeof authQassLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/(auth)/erth/login': {
@@ -1211,6 +1231,7 @@ const rootRouteChildren: RootRouteChildren = {
   HomeRoute: HomeRoute,
   authLoginRoute: authLoginRoute,
   authErthLoginRoute: authErthLoginRoute,
+  authQassLoginRoute: authQassLoginRoute,
   authSakkbaLoginRoute: authSakkbaLoginRoute,
 }
 export const routeTree = rootRouteImport

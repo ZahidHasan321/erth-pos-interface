@@ -1,7 +1,7 @@
 import { AppSidebar } from "@/components/app-sidebar";
 import { NotFoundPage } from "@/components/not-found-page";
 import { Button } from "@repo/ui/button";
-import { LogOut, ShieldAlert, User, Home } from "lucide-react";
+import { LogOut, ShieldAlert, User, Home, ChevronsUpDown, Check } from "lucide-react";
 import {
   SidebarInset,
   SidebarProvider,
@@ -19,8 +19,7 @@ import {
   rootRouteId,
   Link,
 } from "@tanstack/react-router";
-import ErthLogo from "../../assets/erth-light.svg";
-import SakhtbaLogo from "../../assets/Sakkba.png";
+import { BRAND_META, accessibleBrands, type BrandKey } from "@/lib/brands";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
@@ -48,7 +47,8 @@ export const Route = createFileRoute("/$main")<{
 
     if (
       params.main !== BRAND_NAMES.showroom &&
-      params.main !== BRAND_NAMES.fromHome
+      params.main !== BRAND_NAMES.fromHome &&
+      params.main !== BRAND_NAMES.qass
     ) {
       throw notFound({ routeId: rootRouteId });
     }
@@ -74,7 +74,7 @@ export const Route = createFileRoute("/$main")<{
   beforeLoad: ({ context, location, params }) => {
     if (!context.auth.isAuthenticated) {
       throw redirect({
-        to: `/${params.main}/login` as "/erth/login" | "/sakkba/login",
+        to: `/${params.main}/login` as "/erth/login" | "/sakkba/login" | "/qass/login",
         search: { redirect: location.href },
       });
     }
@@ -85,7 +85,7 @@ export const Route = createFileRoute("/$main")<{
     const user = context.auth.user;
     if (user && user.role === "staff" && Array.isArray(user.job_functions) && user.job_functions.length > 0) {
       throw redirect({
-        to: `/${params.main}/login` as "/erth/login" | "/sakkba/login",
+        to: `/${params.main}/login` as "/erth/login" | "/sakkba/login" | "/qass/login",
         search: { redirect: undefined, error: "terminal_user_on_pos" },
       });
     }
@@ -142,15 +142,19 @@ function RouteComponent() {
   const confirmLogout = useCallback(() => {
     auth.logout().then(() => {
       router.invalidate().finally(() => {
-        navigate({ to: `/${main}/login` as "/erth/login" | "/sakkba/login" });
+        navigate({ to: `/${main}/login` as "/erth/login" | "/sakkba/login" | "/qass/login" });
       });
     });
     setShowLogoutDialog(false);
   }, [auth, navigate, main]);
 
-  const brandLogo = main === BRAND_NAMES.showroom ? ErthLogo : SakhtbaLogo;
-  const brandName = main === BRAND_NAMES.showroom ? BRAND_NAMES.showroom : BRAND_NAMES.fromHome;
+  const brandLogo = BRAND_META[main as BrandKey].logo;
+  const brandName = BRAND_META[main as BrandKey].name;
   const mainSegment = `/${main}`;
+
+  // Brands this user may operate; a switcher only appears when there's a choice.
+  const switchableBrands = accessibleBrands(auth.user?.brands);
+  const canSwitchBrand = switchableBrands.length > 1;
 
   const initials = auth.user?.name
     ? auth.user.name
@@ -166,7 +170,7 @@ function RouteComponent() {
     : null;
 
   const attemptedBrandName =
-    loaderData.attemptedBrand === BRAND_NAMES.showroom ? "Erth" : "Sakkba";
+    BRAND_META[loaderData.attemptedBrand as BrandKey]?.name ?? loaderData.attemptedBrand;
 
   // Show error page if user tried to access a brand they don't have access to
   const errorPage = (
@@ -225,17 +229,53 @@ function RouteComponent() {
           <header className="flex items-center justify-between px-4 h-12 border-b bg-card shrink-0">
             <div className="flex items-center gap-3">
               <SidebarTrigger className="size-8" />
-              <div className="flex items-center gap-2 xl:hidden">
-                <img
-                  src={brandLogo}
-                  alt="Logo"
-                  className={main === BRAND_NAMES.showroom ? "h-6 w-6 object-contain" : ""}
-                  style={main !== BRAND_NAMES.showroom ? { height: 10, width: "auto", maxWidth: 24 } : undefined}
-                />
-                <span className="text-base brand-font capitalize tracking-wide">
-                  {brandName}
-                </span>
-              </div>
+              {canSwitchBrand ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-muted/50 transition-colors">
+                      <img
+                        src={brandLogo}
+                        alt=""
+                        className={main === BRAND_NAMES.showroom ? "h-6 w-6 object-contain" : ""}
+                        style={main !== BRAND_NAMES.showroom ? { height: 10, width: "auto", maxWidth: 24 } : undefined}
+                      />
+                      <span className="text-base brand-font capitalize tracking-wide">
+                        {brandName}
+                      </span>
+                      <ChevronsUpDown className="size-3.5 text-muted-foreground" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48 rounded-lg" sideOffset={4}>
+                    <DropdownMenuLabel className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
+                      Switch brand
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {switchableBrands.map((b) => (
+                      <DropdownMenuItem
+                        key={b.key}
+                        onClick={() => {
+                          if (b.key !== main) navigate({ to: "/$main", params: { main: b.key } });
+                        }}
+                      >
+                        <span className="capitalize">{b.name}</span>
+                        {b.key === main && <Check className="ml-auto size-4" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <div className="flex items-center gap-2 xl:hidden">
+                  <img
+                    src={brandLogo}
+                    alt="Logo"
+                    className={main === BRAND_NAMES.showroom ? "h-6 w-6 object-contain" : ""}
+                    style={main !== BRAND_NAMES.showroom ? { height: 10, width: "auto", maxWidth: 24 } : undefined}
+                  />
+                  <span className="text-base brand-font capitalize tracking-wide">
+                    {brandName}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <RegisterHeaderMenu />
