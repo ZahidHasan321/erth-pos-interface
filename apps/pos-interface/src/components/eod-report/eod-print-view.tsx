@@ -15,6 +15,9 @@ export interface PrintEodReportParams {
     dateFrom: string;
     dateTo: string;
     registerSession?: RegisterSessionData | null;
+    // Cashier shell: omit expected cash + variance from the drawer table
+    // (blind count, SPEC §3). The manager report leaves this false.
+    hideCashReconciliation?: boolean;
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -111,7 +114,7 @@ function TableRow({ widths, cells, isLast }: { widths: string[]; cells: string[]
 
 // ── Document ──────────────────────────────────────────────────────────────────
 
-function EodReportDocument({ summary, transactions, dateFrom, dateTo, registerSession }: PrintEodReportParams) {
+function EodReportDocument({ summary, transactions, dateFrom, dateTo, registerSession, hideCashReconciliation = false }: PrintEodReportParams) {
     const fromLabel = dateFmt.format(new Date(dateFrom + "T12:00:00+03:00"));
     const toLabel = dateFmt.format(new Date(dateTo + "T12:00:00+03:00"));
     const isSingleDay = dateFrom === dateTo;
@@ -211,37 +214,43 @@ function EodReportDocument({ summary, transactions, dateFrom, dateTo, registerSe
                 {/* Cash Drawer Reconciliation (single day only) */}
                 {showDrawer && (
                     <>
-                        <Text style={s.sectionHeading}>Cash Drawer Reconciliation</Text>
+                        <Text style={s.sectionHeading}>{hideCashReconciliation ? "Cash Drawer" : "Cash Drawer Reconciliation"}</Text>
                         <View style={s.table}>
-                            {[
+                            {([
                                 ["Opening Float", fmtK(Number(registerSession!.opening_float))],
                                 ["Cash Payments", `+ ${fmtK(cashPayments)}`],
                                 ["Cash Refunds", `− ${fmtK(cashRefunds)}`],
                                 ["Paid In", `+ ${fmtK(cashInTotal)}`],
                                 ["Paid Out", `− ${fmtK(cashOutTotal)}`],
-                                [
-                                    "Expected Cash",
-                                    fmtK(
-                                        Number(registerSession!.opening_float) +
-                                            cashPayments -
-                                            cashRefunds +
-                                            cashInTotal -
-                                            cashOutTotal
-                                    ),
-                                ],
+                                // Expected cash + variance are the reconciliation target — hidden
+                                // from the cashier shell so a blind count can't be back-solved.
+                                ...(hideCashReconciliation
+                                    ? []
+                                    : [[
+                                        "Expected Cash",
+                                        fmtK(
+                                            Number(registerSession!.opening_float) +
+                                                cashPayments -
+                                                cashRefunds +
+                                                cashInTotal -
+                                                cashOutTotal
+                                        ),
+                                    ]] as [string, string][]),
                                 [
                                     "Counted Cash",
                                     registerSession!.closing_counted_cash !== null
                                         ? fmtK(Number(registerSession!.closing_counted_cash))
                                         : "Pending close",
                                 ],
-                                [
-                                    "Variance",
-                                    registerSession!.variance !== null
-                                        ? `${Number(registerSession!.variance) > 0 ? "+" : ""}${fmt(Number(registerSession!.variance))} KWD`
-                                        : "-",
-                                ],
-                            ].map(([label, value], i, arr) => (
+                                ...(hideCashReconciliation
+                                    ? []
+                                    : [[
+                                        "Variance",
+                                        registerSession!.variance !== null
+                                            ? `${Number(registerSession!.variance) > 0 ? "+" : ""}${fmt(Number(registerSession!.variance))} KWD`
+                                            : "-",
+                                    ]] as [string, string][]),
+                            ] as [string, string][]).map(([label, value], i, arr) => (
                                 <View key={i} style={[s.kvRow, ...(i === arr.length - 1 ? [s.kvRowLast] : [])]} wrap={false}>
                                     <Text style={s.kvLabel}>{label}</Text>
                                     <Text style={s.kvValue}>{value}</Text>

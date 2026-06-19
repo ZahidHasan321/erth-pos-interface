@@ -1,5 +1,6 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { cn, getKuwaitMidnight, TIMEZONE } from "@/lib/utils";
+import { isBrovaFeedbackSubject } from "@/lib/feedback-overrides";
 import { ChevronRight, Phone, AlertTriangle, MessageSquare, Truck, ClipboardCheck, Link as LinkIcon } from "lucide-react";
 import type { OrderRow } from "./types";
 import { Button } from "@repo/ui/button";
@@ -376,12 +377,18 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
     size: 65,
     cell: ({ row }) => {
       const status = row.original.showroomStatus.label;
-      const hasShopItems = row.original.showroomStatus.hasPhysicalItems;
+      // Feedback is a brova-trial concept only (§2.5). The action shows when the
+      // order has a brova at the showroom that is still a feedback subject — never
+      // for finals (collected at the cashier) or a returned Accept-with-Fix brova
+      // (collect-only). See isBrovaFeedbackSubject.
+      const hasFeedbackBrova = row.original.garments.some((g) =>
+        isBrovaFeedbackSubject(g.garment),
+      );
       // Alteration-out garments are received and handed over at the cashier, not
       // fed back. Their row action opens the read-only alteration view instead of
       // the feedback form.
       const isAlterationOut = status === "alteration_out";
-      const showFeedback = hasShopItems && !isAlterationOut;
+      const showFeedback = hasFeedbackBrova;
       const showAlterationView = isAlterationOut;
       const showDispatch = status === "needs_action";
 
@@ -410,18 +417,14 @@ export const orderColumns = (onSelect: (row: OrderRow) => void): ColumnDef<Order
                       to="/$main/orders/order-management/feedback/$orderId"
                       params={{ orderId: String(row.original.order.id) }}
                       onClick={(e) => e.stopPropagation()}
-                      aria-label={status === "brova_trial" ? "Brova feedback" : status === "alteration_in" ? "Alteration feedback" : "Final feedback"}
+                      aria-label={status === "alteration_in" ? "Alteration feedback" : "Brova feedback"}
                     >
                       <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
                     </Link>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="text-xs font-bold">
-                  {status === "brova_trial"
-                    ? "Brova Feedback"
-                    : status === "alteration_in"
-                      ? "Alteration Feedback"
-                      : "Final Feedback"}
+                  {status === "alteration_in" ? "Alteration Feedback" : "Brova Feedback"}
                 </TooltipContent>
               </Tooltip>
             )}

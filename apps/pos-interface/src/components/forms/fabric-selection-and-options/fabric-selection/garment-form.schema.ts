@@ -98,7 +98,7 @@ export const garmentSchema = z.object({
     if (!data.jabzour_2 || data.jabzour_2.trim() === "") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Second jabzour is required when Shaab is selected",
+        message: "Second jabzour is required when Zipper is selected",
         path: ["jabzour_2"]
       });
     }

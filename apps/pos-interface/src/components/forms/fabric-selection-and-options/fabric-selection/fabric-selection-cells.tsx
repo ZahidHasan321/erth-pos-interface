@@ -547,7 +547,7 @@ export const SoakingCell = ({
                                 onCheckedChange={(c) => setHours(8, !!c)}
                                 disabled={isFormDisabled}
                             />
-                            <span>8h</span>
+                            <span>4h</span>
                         </label>
                         <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
                             <Checkbox

@@ -90,7 +90,7 @@ function LoginComponent() {
 
   React.useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove("erth", "sakkba");
+    root.classList.remove("erth", "sakkba", "qass");
     root.classList.add(userType);
     return () => { root.classList.remove(userType); };
   }, [userType]);

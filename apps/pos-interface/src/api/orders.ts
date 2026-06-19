@@ -631,7 +631,24 @@ export const getOrdersForDispatch = async (): Promise<ApiResponse<Order[]>> => {
         console.error('Error fetching orders for dispatch:', error);
         return { status: 'error', message: error.message, data: [] };
     }
-    return { status: 'success', data: flattenOrder(data) };
+
+    // §3 cashier-processing gate: hide WORK orders still pending cashier
+    // processing (work_orders.cashier_processed_at IS NULL) — they cannot be
+    // dispatched until the cashier processes them (dispatch_order also rejects
+    // them server-side). ALTERATION has no work_orders row and is never gated.
+    // Filtered client-side because a PostgREST embed filter would need an inner
+    // join on work_orders, which would wrongly drop ALTERATION rows.
+    type DispatchRow = {
+        order_type?: string | null;
+        workOrder?: { cashier_processed_at?: string | null } | null;
+    };
+    const visible = (data ?? []).filter((row) => {
+        const r = row as DispatchRow;
+        if (r.order_type !== 'WORK') return true;
+        return r.workOrder?.cashier_processed_at != null;
+    });
+
+    return { status: 'success', data: flattenOrder(visible) };
 };
 
 
@@ -681,6 +698,10 @@ export const completeWorkOrder = async (
         homeDelivery?: boolean;
         deliveryDate?: string;
         stitchingPrice?: number;
+        /** §3: ERTH defers payment, so the order stays pending cashier
+         *  processing and cannot dispatch until processed. Inline-payment
+         *  brands pass false and are processed at confirmation. */
+        deferToCashier?: boolean;
     },
     shelfItems: { id: number; quantity: number }[],
     fabricItems: { id: number; length: number }[],
@@ -862,6 +883,36 @@ export const repriceOrderStyles = async (params: {
         }
 
         console.error('repriceOrderStyles: failed to reprice order styles:', error);
+        return { status: 'error', message: error.message };
+    }
+};
+
+/**
+ * Mint a new invoice revision for a confirmed order WITHOUT moving the total
+ * (SPEC §3). Used when a brova-trial style change rewrites the printed style
+ * line items but the reprice found no price delta ("revised invoice, no price
+ * delta"). Idempotent on its key; a no-op for SALES/ALTERATION (no work order).
+ */
+export const bumpInvoiceRevision = async (params: {
+    orderId: number;
+    reason?: string | null;
+    idempotencyKey?: string | null;
+}): Promise<ApiResponse<unknown>> => {
+    for (let attempt = 1; ; attempt++) {
+        const { data, error } = await db.rpc('bump_invoice_revision', {
+            p_order_id: params.orderId,
+            p_reason: params.reason ?? null,
+            p_idempotency_key: params.idempotencyKey ?? null,
+        });
+
+        if (!error) return { status: 'success', data };
+
+        if (isTransientNetworkError(error) && attempt < WRITE_RETRY_ATTEMPTS) {
+            await sleep(WRITE_RETRY_BASE_MS * attempt);
+            continue;
+        }
+
+        console.error('bumpInvoiceRevision: failed to bump invoice revision:', error);
         return { status: 'error', message: error.message };
     }
 };

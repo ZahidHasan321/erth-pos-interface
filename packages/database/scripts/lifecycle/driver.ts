@@ -202,9 +202,15 @@ export async function completeWorkOrder(
   tx: Tx,
   orderId: number,
   specs: GarmentSpec[],
-  opts: { paid?: number; idempotencyKey?: string } = {},
+  opts: { paid?: number; idempotencyKey?: string; deferToCashier?: boolean } = {},
 ) {
   const orderTotal = 84;
+  // ERTH is the deferred-cashier brand (the brand this suite models), so the
+  // honest default is deferToCashier=true → the order is "pending cashier
+  // processing" after confirm and must be processed before dispatch (§3).
+  // Pass deferToCashier=false to model an inline-payment brand (processed at
+  // confirmation).
+  const deferToCashier = opts.deferToCashier ?? true;
   const res = only(
     await tx`
     SELECT complete_work_order(
@@ -229,6 +235,7 @@ export async function completeWorkOrder(
         deliveryDate: null,
         advance: 0,
         stitchingPrice: 10,
+        deferToCashier,
       })}::jsonb,
       '[]'::jsonb,
       ${tx.json(specs.map(() => ({ id: FABRIC_A_ID, length: 3 })))}::jsonb,
@@ -243,11 +250,14 @@ export async function completeWorkOrder(
 export async function createWorkOrder(
   tx: Tx,
   specs: GarmentSpec[],
-  opts: { paid?: number } = {},
+  opts: { paid?: number; deferToCashier?: boolean } = {},
 ): Promise<{ orderId: number; garments: GarmentRow[] }> {
   const orderId = await createOrder(tx);
   await saveWorkOrderGarments(tx, orderId, specs);
-  await completeWorkOrder(tx, orderId, specs, { paid: opts.paid ?? 0 });
+  await completeWorkOrder(tx, orderId, specs, {
+    paid: opts.paid ?? 0,
+    deferToCashier: opts.deferToCashier,
+  });
   return { orderId, garments: await getGarments(tx, orderId) };
 }
 
@@ -301,6 +311,35 @@ export async function getStyleSnapshots(
 export async function getStyleCharge(tx: Tx, orderId: number): Promise<number> {
   const [w] = await tx`SELECT style_charge FROM work_orders WHERE order_id = ${orderId}`;
   return Number((w as { style_charge: string | null } | undefined)?.style_charge) || 0;
+}
+
+/** work_orders.invoice_revision for an order (0 = the original invoice; §3). */
+export async function getInvoiceRevision(tx: Tx, orderId: number): Promise<number> {
+  const [w] = await tx`SELECT invoice_revision FROM work_orders WHERE order_id = ${orderId}`;
+  return Number((w as { invoice_revision: number | string | null } | undefined)?.invoice_revision) || 0;
+}
+
+/**
+ * bump_invoice_revision RPC (SPEC §3) — mint a revision with NO total change,
+ * for a brova-trial style change the reprice found no price delta for. Idempotent
+ * on its key; pass a FIXED key + call twice to exercise replay.
+ */
+export async function bumpInvoiceRevision(
+  tx: Tx,
+  orderId: number,
+  params: { reason?: string | null; idempotencyKey?: string } = {},
+) {
+  const res = only(
+    await tx`
+      SELECT bump_invoice_revision(
+        ${orderId},
+        ${params.reason ?? null},
+        ${params.idempotencyKey ?? randomUUID()}::uuid
+      ) AS r
+    `,
+    "bump_invoice_revision",
+  );
+  return res.r;
 }
 
 /**
@@ -433,11 +472,70 @@ export async function collectGarments(
 // ─── Dispatch / receive (app-layer mirrors) ─────────────────────────────────
 
 /**
+ * cashier_confirm_orders_no_payment RPC (triggers.sql) — the cashier clears a
+ * WORK order's §3 processing gate WITHOUT taking payment. Acts as the cashier.
+ * Idempotent and WORK-only (no-op on SALES/ALTERATION or already-processed
+ * orders), so it is safe to call before any dispatch.
+ */
+export async function cashierProcess(tx: Tx, orderId: number) {
+  await actAs(tx, CASHIER.id);
+  const res = only(
+    await tx`
+    SELECT cashier_confirm_orders_no_payment(
+      ${tx.array([orderId])}::int[],
+      ${CASHIER.id}::uuid,
+      ${randomUUID()}::uuid
+    ) AS r
+  `,
+    "cashier_confirm_orders_no_payment",
+  );
+  return res.r;
+}
+
+/**
+ * record_bulk_payment RPC (triggers.sql) — atomic, idempotent payment across
+ * several WORK orders. Acts as the cashier. `payments` is the per-order amount
+ * list; pass a FIXED key + call twice to exercise the batch replay path.
+ */
+export async function recordBulkPayment(
+  tx: Tx,
+  payments: { orderId: number; amount: number; paymentType?: string }[],
+  opts: { idempotencyKey?: string } = {},
+) {
+  await actAs(tx, CASHIER.id);
+  const res = only(
+    await tx`
+    SELECT record_bulk_payment(
+      ${tx.json(payments)}::jsonb,
+      ${CASHIER.id}::uuid,
+      ${opts.idempotencyKey ?? randomUUID()}::uuid
+    ) AS r
+  `,
+    "record_bulk_payment",
+  );
+  return res.r;
+}
+
+/**
  * dispatch_order RPC (triggers.sql:1307) — now the REAL deployed code, not
  * a mirror. apps/pos-interface/src/api/orders.ts dispatchOrder calls the
  * same function, so app and test exercise identical logic (no drift).
+ *
+ * A WORK order must be cashier-processed before dispatch (§3 gate). By default
+ * this helper clears that gate first (confirm-without-payment) so the lifecycle
+ * tests model the real "cashier processed → dispatched" flow without each site
+ * repeating it. Pass { skipCashierProcess: true } to exercise the raw gate
+ * (e.g. assert dispatch is rejected while still pending).
  */
-export async function dispatchOrder(tx: Tx, orderId: number, garmentIds?: string[]) {
+export async function dispatchOrder(
+  tx: Tx,
+  orderId: number,
+  garmentIds?: string[],
+  opts: { skipCashierProcess?: boolean } = {},
+) {
+  if (!opts.skipCashierProcess) {
+    await cashierProcess(tx, orderId);
+  }
   await tx`
     SELECT dispatch_order(
       ${orderId},

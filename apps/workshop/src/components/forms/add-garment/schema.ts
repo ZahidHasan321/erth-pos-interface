@@ -91,7 +91,7 @@ export const addGarmentSchema = z.object({
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["jabzour_2"],
-        message: "Jabzour 2 is required when Shaab is selected",
+        message: "Jabzour 2 is required when Zipper is selected",
       });
     }
     // §2.11 — every toggle must be answered, no silent default.

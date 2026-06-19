@@ -23,7 +23,7 @@ import {
   TableContainer,
 } from "@/components/shared/table";
 import { BrandBadge } from "@/components/shared/StageBadge";
-import { TIMEZONE } from "@/lib/utils";
+import { displaySoakHours, TIMEZONE } from "@/lib/utils";
 import { toast } from "sonner";
 import type { WorkshopGarment } from "@repo/database";
 
@@ -346,7 +346,7 @@ function SoakSection({
                       </span>
                       {g.soaking_hours != null && (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--status-info)] bg-[var(--status-info-bg)] px-2 py-0.5 rounded-md w-fit">
-                          <Droplets className="w-3 h-3" /> Soak {g.soaking_hours}h
+                          <Droplets className="w-3 h-3" /> Soak {displaySoakHours(g.soaking_hours)}h
                         </span>
                       )}
                     </div>
@@ -395,7 +395,7 @@ function SoakSection({
                     <TableCell className="px-3 py-3">
                       <StartedBadge
                         startedAt={g.soaking_started_at}
-                        hours={g.soaking_hours}
+                        hours={displaySoakHours(g.soaking_hours)}
                         now={now ?? Date.now()}
                       />
                     </TableCell>
@@ -431,9 +431,10 @@ function SoakSection({
 function readinessRank(g: WorkshopGarment, now: number): number {
   if (!g.soaking_started_at) return 3;
   if (g.soaking_hours == null) return 3;
+  const targetHrs = displaySoakHours(g.soaking_hours)!;
   const elapsedHrs = (now - new Date(g.soaking_started_at as Date).getTime()) / 3_600_000;
-  if (elapsedHrs >= g.soaking_hours + 0.5) return 0;
-  if (elapsedHrs >= g.soaking_hours) return 1;
+  if (elapsedHrs >= targetHrs + 0.5) return 0;
+  if (elapsedHrs >= targetHrs) return 1;
   return 2;
 }
 

@@ -50,7 +50,12 @@ function ReceivingInterface() {
         mutationFn: async ({ garments, orderId }: { garments: Garment[]; orderId: number }) => {
             const promises = garments.map((garment) =>
                 updateGarment(garment.id, {
-                    piece_stage: (garment.garment_type === "brova"
+                    // Only a not-yet-accepted brova lands at the trial. An already
+                    // accepted brova (Accept-with-Fix returning from its fix) is
+                    // collect-only — it goes straight to ready_for_pickup, no
+                    // re-trial (§2.5). Finals are always collect-only too.
+                    piece_stage: (garment.garment_type === "brova" &&
+                        garment.acceptance_status !== true
                         ? "awaiting_trial"
                         : "ready_for_pickup") as PieceStage,
                     location: "shop",

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, LockKeyhole, ArrowDownUp, XCircle, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, LockKeyhole, ArrowDownUp, AlertTriangle } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
@@ -89,13 +89,9 @@ function OpenRegisterScreen() {
 function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
     const { user } = useAuth();
     const reopenMutation = useReopenRegisterMutation();
-    const variance = Number(session.variance) || 0;
-    const isOver = variance > 0;
-    const isShort = variance < 0;
-    const isExact = variance === 0;
 
-    // Prior closes = every close before the latest one. Surfaces shortages that
-    // would otherwise be erased by a reopen + clean reclose.
+    // Prior closes = every close before the latest one. Surfaces repeat closes
+    // that would otherwise be erased by a reopen + clean reclose.
     const events = session.close_events ?? [];
     const priorCloses = events.slice(0, -1);
 
@@ -107,12 +103,8 @@ function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
     return (
         <div className="h-full flex items-center justify-center p-6">
             <Card className="w-full max-w-md p-8 space-y-5 text-center">
-                <div className={`mx-auto w-14 h-14 rounded-full flex items-center justify-center ${isExact ? "bg-emerald-50" : isShort ? "bg-red-50" : "bg-amber-50"}`}>
-                    {isExact
-                        ? <CheckCircle2 className="h-7 w-7 text-emerald-600" />
-                        : isShort
-                          ? <XCircle className="h-7 w-7 text-red-600" />
-                          : <AlertTriangle className="h-7 w-7 text-amber-600" />}
+                <div className="mx-auto w-14 h-14 rounded-full bg-muted flex items-center justify-center">
+                    <LockKeyhole className="h-7 w-7 text-muted-foreground" />
                 </div>
 
                 <div>
@@ -129,19 +121,8 @@ function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
                         <span className="font-semibold tabular-nums">{fmtK(session.opening_float)}</span>
                     </div>
                     <div className="flex justify-between">
-                        <span className="text-muted-foreground">Expected Cash</span>
-                        <span className="font-semibold tabular-nums">{fmtK(session.expected_cash ?? 0)}</span>
-                    </div>
-                    <div className="flex justify-between">
                         <span className="text-muted-foreground">Counted Cash</span>
                         <span className="font-semibold tabular-nums">{fmtK(session.closing_counted_cash ?? 0)}</span>
-                    </div>
-                    <div className="border-t border-border pt-2 flex justify-between">
-                        <span className="font-medium">Variance</span>
-                        <span className={`font-bold tabular-nums ${isExact ? "text-emerald-600" : isShort ? "text-red-600" : "text-amber-600"}`}>
-                            {isOver ? "+" : ""}{fmtK(variance)}
-                            {isExact ? " (exact)" : isShort ? " (short)" : " (over)"}
-                        </span>
                     </div>
                 </div>
 
@@ -155,26 +136,17 @@ function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
                             Prior close{priorCloses.length > 1 ? "s" : ""} ({priorCloses.length})
                         </p>
                         <ul className="space-y-2 text-xs text-amber-900">
-                            {priorCloses.map((ev) => {
-                                const v = Number(ev.variance) || 0;
-                                const label = v === 0 ? "exact" : v < 0 ? "short" : "over";
-                                return (
-                                    <li key={ev.id} className="border-t border-amber-200/60 pt-2 first:border-t-0 first:pt-0">
-                                        <div className="flex justify-between tabular-nums">
-                                            <span>{timeFmt.format(new Date(ev.closed_at))} · {ev.closed_by_name}</span>
-                                            <span className="font-semibold">
-                                                {v > 0 ? "+" : ""}{fmtK(v)} ({label})
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between text-amber-700/80 tabular-nums">
-                                            <span>counted {fmtK(ev.counted_cash)} / expected {fmtK(ev.expected_cash)}</span>
-                                        </div>
-                                        {ev.notes && (
-                                            <p className="italic mt-0.5">"{ev.notes}"</p>
-                                        )}
-                                    </li>
-                                );
-                            })}
+                            {priorCloses.map((ev) => (
+                                <li key={ev.id} className="border-t border-amber-200/60 pt-2 first:border-t-0 first:pt-0">
+                                    <div className="flex justify-between tabular-nums">
+                                        <span>{timeFmt.format(new Date(ev.closed_at))} · {ev.closed_by_name}</span>
+                                        <span className="font-semibold">counted {fmtK(ev.counted_cash)}</span>
+                                    </div>
+                                    {ev.notes && (
+                                        <p className="italic mt-0.5">"{ev.notes}"</p>
+                                    )}
+                                </li>
+                            ))}
                         </ul>
                     </div>
                 )}

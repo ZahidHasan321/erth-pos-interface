@@ -33,7 +33,7 @@ import { Textarea } from "@repo/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@repo/ui/radio-group";
 import { Alert, AlertDescription, AlertTitle } from "@repo/ui/alert";
 import { Combobox } from "@repo/ui/combobox";
-import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
+import { cn, displaySoakHours, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { getEmployees } from "@/api/employees";
 import { OrderInvoice, SalesInvoice, type InvoiceData } from "@/components/invoice";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
@@ -178,6 +178,9 @@ export function OrderSummaryAndPaymentForm({
   const handlePrint = useReactToPrint({
     contentRef: invoiceRef,
     documentTitle: `Invoice-${invoiceData?.orderId || "Draft"}`,
+    // Tight A4 margins so a full order (up to 10 garments + shelf items)
+    // prints on a single page.
+    pageStyle: "@page { size: A4; margin: 8mm; }",
   });
 
   // Delivery logic
@@ -410,7 +413,7 @@ export function OrderSummaryAndPaymentForm({
                           )}
                           {g.soaking && (
                             <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-600">
-                              Soak{g.soaking_hours ? ` ${g.soaking_hours}h` : ""}
+                              Soak{g.soaking_hours ? ` ${displaySoakHours(g.soaking_hours)}h` : ""}
                             </span>
                           )}
                           {g.delivery_date && (
@@ -485,7 +488,7 @@ export function OrderSummaryAndPaymentForm({
                     )}
                     {soaking8hCount > 0 && (
                       <div className="flex justify-between py-0.5">
-                        <span className="text-muted-foreground">Soaking 8h ({soaking8hCount})</span>
+                        <span className="text-muted-foreground">Soaking 4h ({soaking8hCount})</span>
                         <span className="font-medium tabular-nums">{(soaking8hCount * (getPrice("SOAKING_8H_CHARGE") || 0)).toFixed(3)} KWD</span>
                       </div>
                     )}
@@ -1135,7 +1138,7 @@ export function OrderSummaryAndPaymentForm({
                   )}
                   {soaking8hCount > 0 && (
                     <div className="flex justify-between">
-                      <span>Soaking 8h ({soaking8hCount})</span>
+                      <span>Soaking 4h ({soaking8hCount})</span>
                       <span>{(soaking8hCount * (getPrice("SOAKING_8H_CHARGE") || 0)).toFixed(3)} KWD</span>
                     </div>
                   )}

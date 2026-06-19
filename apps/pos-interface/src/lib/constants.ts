@@ -1,6 +1,7 @@
 export const BRAND_NAMES = {
   showroom: "erth",
   fromHome: "sakkba",
+  qass: "qass",
 } as const;
 
 /**

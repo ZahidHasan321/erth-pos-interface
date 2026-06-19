@@ -13,6 +13,8 @@ import {
     usePaymentTransactions,
 } from "@/hooks/useCashier";
 import { PaymentHistory } from "@/components/cashier/payment-history";
+import type { InvoiceData, AlterationInvoiceData } from "@/components/invoice";
+import { formatAlterationChanges } from "@/lib/alteration-changes";
 import { PaymentMode } from "@/components/cashier/payment-mode";
 import { HandoverMode } from "@/components/cashier/handover-mode";
 import { RefundMode } from "@/components/cashier/refund-mode";
@@ -55,7 +57,7 @@ export function OrderDetailShell({ orderId, onBack, canTakeMoney = true }: { ord
     const isOrderCompleted = order?.order_phase === "completed";
     const cancelledWithPayments = isCancelled && totalPaid > 0;
     const isSalesOrder = order?.order_type === "SALES";
-    const isHomeDelivery = !!order?.home_delivery;
+    const isAlteration = order?.order_type === "ALTERATION";
     const serverDeliveryCharge = Number(order?.delivery_charge) || 0;
 
     const remainingBalance = orderTotal - totalPaid;
@@ -63,6 +65,12 @@ export function OrderDetailShell({ orderId, onBack, canTakeMoney = true }: { ord
 
     const garments = Array.isArray(order?.garments) ? order.garments : [];
     const shelfItems = Array.isArray(order?.shelf_items) ? order.shelf_items : [];
+
+    // ALTERATION orders have no work_orders row; home delivery is recorded on
+    // each garment instead of order-level. Treat the order as home-delivery if
+    // any of its pieces is, so handover offers the Deliver action.
+    const isHomeDelivery = !!order?.home_delivery
+        || (isAlteration && (garments as GarmentWithFabric[]).some((g) => g.home_delivery));
 
     const advance = useMemo(() => {
         if (!order) return 0;
@@ -74,6 +82,100 @@ export function OrderDetailShell({ orderId, onBack, canTakeMoney = true }: { ord
         const shelf = Number(order?.shelf_charge) || 0;
         return parseFloat(((stitching * 0.5) + fabric + style + serverDeliveryCharge + express + soaking + shelf).toFixed(3));
     }, [order, serverDeliveryCharge]);
+
+    // The proper signed invoice (SPEC §3) reprinted from the payment history —
+    // the same OrderInvoice/SalesInvoice document used at order-taking, at the
+    // order's current revision. Static here; PaymentHistory overrides paid +
+    // payment method per printed transaction.
+    const invoiceData = useMemo<InvoiceData>(() => {
+        if (!order) return { paid: 0 };
+        const gs = garments as GarmentWithFabric[];
+        // The collar Up/Down note is a single order-level annotation on the
+        // invoice; only show it when all garments agree, else omit it (printing
+        // one garment's collar on every row would be wrong info).
+        const collars = gs.map((g) => g.measurement?.collar_position ?? null);
+        const uniformCollar = collars.every((c) => c === collars[0]) ? collars[0] ?? null : null;
+        const fabrics = Array.from(
+            new Map(
+                gs.filter((g) => g.fabric_id != null && g.fabric)
+                    .map((g) => [g.fabric_id, { id: g.fabric_id, name: g.fabric!.name }])
+            ).values()
+        );
+        return {
+            orderId: order.id,
+            fatoura: order.invoice_number ?? undefined,
+            invoiceRevision: order.invoice_revision ?? 0,
+            orderDate: order.order_date ? String(order.order_date) : undefined,
+            homeDelivery: isHomeDelivery,
+            customerName: order.customer?.name ?? undefined,
+            customerPhone: order.customer?.phone ?? undefined,
+            measurement: { collar_position: uniformCollar },
+            fabricSelections: gs.map((g) => ({
+                style: g.style,
+                collar_type: g.collar_type,
+                jabzour_1: g.jabzour_1,
+                cuffs_type: g.cuffs_type,
+                jabzour_thickness: g.jabzour_thickness,
+                lines: g.lines ?? 1,
+                fabric_id: g.fabric_id,
+                fabric_length: Number(g.fabric_length) || 0,
+                garment_type: g.garment_type,
+                express: g.express,
+                soaking: g.soaking,
+                soaking_hours: g.soaking_hours,
+                stitching_price_snapshot: Number(g.stitching_price_snapshot) || 0,
+                fabric_amount: Number(g.fabric_price_snapshot) || 0,
+                style_price_snapshot: Number(g.style_price_snapshot) || 0,
+            })) as InvoiceData["fabricSelections"],
+            fabrics: fabrics as InvoiceData["fabrics"],
+            shelfProducts: (shelfItems as ShelfItemWithShelf[]).map((i) => ({
+                product_type: i.shelf?.type ?? `Item #${i.shelf_id}`,
+                brand: i.shelf?.brand ?? "",
+                quantity: i.quantity,
+                unit_price: i.unit_price,
+            })) as InvoiceData["shelfProducts"],
+            charges: {
+                fabric: Number(order.fabric_charge) || 0,
+                stitching: Number(order.stitching_charge) || 0,
+                style: Number(order.style_charge) || 0,
+                delivery: serverDeliveryCharge,
+                shelf: Number(order.shelf_charge) || 0,
+                express: Number(order.express_charge) || 0,
+                soaking: Number(order.soaking_charge) || 0,
+            },
+            discountValue,
+            paid: totalPaid,
+            customerSignatureUrl: order.customer_signature_url ?? undefined,
+        };
+    }, [order, garments, shelfItems, isHomeDelivery, serverDeliveryCharge, discountValue, totalPaid]);
+
+    // ALTERATION invoice (SPEC §2.14 / §3): the recorded per-garment changes +
+    // the manually-entered total. OrderInvoice can't represent this (no
+    // fabric/style charges, separate invoice sequence), so it gets its own doc.
+    const alterationInvoiceData = useMemo<AlterationInvoiceData | undefined>(() => {
+        if (!order || !isAlteration) return undefined;
+        return {
+            orderId: order.id,
+            invoiceNumber: order.alteration_order?.invoice_number ?? null,
+            orderDate: order.order_date ? String(order.order_date) : undefined,
+            receivedDate: order.alteration_order?.received_date ? String(order.alteration_order.received_date) : null,
+            comments: order.alteration_order?.comments ?? null,
+            customerName: order.customer?.name ?? undefined,
+            customerPhone: order.customer?.phone ?? undefined,
+            garments: (garments as GarmentWithFabric[]).map((g, i) => ({
+                index: i + 1,
+                source: g.original_garment_id ? "internal" : "external",
+                changes: formatAlterationChanges(
+                    g.alteration_measurements as Record<string, unknown> | null,
+                    g.alteration_styles as Record<string, unknown> | null,
+                ),
+                notes: g.notes ?? null,
+            })),
+            total: orderTotal,
+            discountValue,
+            paid: totalPaid,
+        };
+    }, [order, isAlteration, garments, orderTotal, discountValue, totalPaid]);
 
     // Eligible-for-handover garments (shop + ready stages)
     const eligibleGarments = useMemo(() => isSalesOrder
@@ -221,31 +323,9 @@ export function OrderDetailShell({ orderId, onBack, canTakeMoney = true }: { ord
                     <div className="px-4 pb-6">
                         <PaymentHistory
                             transactions={transactions}
-                            orderId={order.id}
-                            invoiceNumber={order.invoice_number ?? undefined}
-                            invoiceRevision={order.invoice_revision ?? 0}
-                            orderType={order.order_type as "WORK" | "SALES"}
-                            homeDelivery={isHomeDelivery}
-                            customerName={order.customer?.name ?? undefined}
-                            customerPhone={order.customer?.phone ?? undefined}
-                            orderTotal={orderTotal}
-                            totalPaid={totalPaid}
-                            discountValue={discountValue}
-                            garments={(garments as GarmentWithFabric[]).map((g) => ({
-                                garment_type: g.garment_type, style: g.style,
-                                collar_type: g.collar_type, collar_button: g.collar_button, collar_position: g.measurement?.collar_position ?? null, cuffs_type: g.cuffs_type,
-                                jabzour_1: g.jabzour_1, jabzour_thickness: g.jabzour_thickness,
-                                fabric_length: Number(g.fabric_length) || 0,
-                                fabric_name: g.fabric?.name, express: g.express,
-                                soaking: g.soaking, soaking_hours: g.soaking_hours,
-                                fabric_price_snapshot: Number(g.fabric_price_snapshot) || 0,
-                                stitching_price_snapshot: Number(g.stitching_price_snapshot) || 0,
-                                style_price_snapshot: Number(g.style_price_snapshot) || 0,
-                            })) as Parameters<typeof PaymentHistory>[0]["garments"]}
-                            shelfItems={(shelfItems as ShelfItemWithShelf[]).map((i) => ({
-                                name: i.shelf?.type || `Item #${i.shelf_id}`,
-                                brand: i.shelf?.brand, quantity: i.quantity, unit_price: i.unit_price,
-                            })) as Parameters<typeof PaymentHistory>[0]["shelfItems"]}
+                            orderType={order.order_type as "WORK" | "SALES" | "ALTERATION"}
+                            invoiceData={invoiceData}
+                            alterationData={isAlteration ? alterationInvoiceData : undefined}
                         />
                     </div>
                 </SheetContent>
@@ -296,7 +376,7 @@ function CustomerHeaderInline({ order, isCancelled }: { order: Order; isCancelle
             </div>
             <span className="font-bold text-base tabular-nums shrink-0">#{order.id}</span>
             <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md border border-border shrink-0">
-                {order.order_type === "WORK" ? "Work" : "Sales"}
+                {order.order_type === "WORK" ? "Work" : order.order_type === "ALTERATION" ? "Alteration" : "Sales"}
             </span>
             {isCancelled && (
                 <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-destructive/10 text-destructive shrink-0">

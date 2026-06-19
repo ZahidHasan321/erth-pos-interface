@@ -2,6 +2,7 @@ import type React from "react";
 import templateSvg from "@/assets/print/template.svg";
 import erthLogo from "@/assets/erth-dark.svg";
 import sakkbaLogo from "@/assets/sakkba.svg";
+import qassLogo from "@/assets/qass-dark.svg";
 import { ACCESSORY_ICONS, STYLE_IMAGE_MAP } from "@/lib/style-images";
 import { parseMeasurementParts } from "@repo/database";
 import type { Measurement, WorkshopGarment } from "@repo/database";
@@ -15,6 +16,7 @@ import { hasBasmaMeasurements } from "@/lib/qc-spec";
 const BRAND_LOGOS: Record<string, string> = {
   ERTH: erthLogo,
   SAKKBA: sakkbaLogo,
+  QASS: qassLogo,
 };
 import {
   qualityCheckTemplateFields,

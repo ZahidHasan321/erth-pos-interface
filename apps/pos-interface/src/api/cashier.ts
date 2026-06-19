@@ -1,7 +1,7 @@
 import type { ApiResponse } from "../types/api";
 import type { Order } from "@repo/database";
 import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
-import { getLocalDateStr, getLocalTzOffsetMinutes, getKuwaitMidnight } from "@/lib/utils";
+import { getLocalDateStr, getLocalTzOffsetMinutes } from "@/lib/utils";
 
 /** Cashier is ERTH-only — no SAKKBA or QASS orders */
 const CASHIER_BRAND = "ERTH" as const;
@@ -10,9 +10,10 @@ const CASHIER_BRAND = "ERTH" as const;
 const CASHIER_ORDER_QUERY = `
     *,
     workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery, campaign_id, stitching_charge, fabric_charge, style_charge, campaign:campaigns(name)),
+    alterationOrder:alteration_orders!order_id(invoice_number, received_date, comments, order_phase, alteration_total),
     customer:customers(id, name, phone, country_code, account_type, relation, city, area, block, street, house_no, address_note),
     discount_approver:users!discount_approved_by(id, name),
-    garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express, soaking, soaking_hours, delivery_date, fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot, refunded_fabric, refunded_stitching, refunded_style, refunded_express, refunded_soaking, replaced_by_garment_id, collar_type, collar_button, cuffs_type, jabzour_1, jabzour_thickness, fabric_length, measurement:measurements!measurement_id(collar_position), fabric:fabrics(id, name)),
+    garments:garments(id, garment_id, piece_stage, location, garment_type, trip_number, feedback_status, acceptance_status, fabric_id, style, express, soaking, soaking_hours, delivery_date, fabric_price_snapshot, stitching_price_snapshot, style_price_snapshot, refunded_fabric, refunded_stitching, refunded_style, refunded_express, refunded_soaking, replaced_by_garment_id, collar_type, collar_button, cuffs_type, jabzour_1, jabzour_thickness, fabric_length, lines, home_delivery, bufi_ext, original_garment_id, notes, alteration_measurements, alteration_styles, measurement:measurements!measurement_id(collar_position), fabric:fabrics(id, name)),
     shelf_items:order_shelf_items(id, shelf_id, quantity, unit_price, refunded_qty, shelf:shelf(type, brand)),
     payment_transactions:payment_transactions(id, amount, transaction_type, payment_type, payment_ref_no, payment_note, refund_reason, refund_items, created_at, cashier_id, cashier:users(name))
 `;
@@ -25,13 +26,19 @@ const CASHIER_ORDER_QUERY_INNER = CASHIER_ORDER_QUERY.replace(
 
 function flattenCashierOrder(data: Record<string, unknown> | null): Order | null {
     if (!data) return null;
-    const { workOrder, customer, taker, ...core } = data;
+    const { workOrder, alterationOrder, customer, taker, ...core } = data;
     const workData = Array.isArray(workOrder) ? workOrder[0] : workOrder;
+    // ALTERATION orders have no work_orders row; their invoice_number / order_phase
+    // / received_date / comments live on alteration_orders. Spread it so the
+    // cashier sees them the same way it sees work-order fields.
+    const altData = Array.isArray(alterationOrder) ? alterationOrder[0] : alterationOrder;
     const customerData = Array.isArray(customer) ? customer[0] : customer;
     const takerData = Array.isArray(taker) ? taker[0] : taker;
     return {
         ...core,
         ...workData,
+        ...(altData ?? {}),
+        alteration_order: altData,
         customer: customerData,
         taker: takerData,
     };
@@ -41,6 +48,7 @@ function flattenCashierOrder(data: Record<string, unknown> | null): Order | null
 const CASHIER_ORDER_LIST_QUERY = `
     id, order_type, checkout_status, order_total, paid, order_date, brand, discount_value,
     workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery),
+    alterationOrder:alteration_orders!order_id(invoice_number, order_phase),
     customer:customers(name, phone),
     garments:garments(piece_stage, location)
 `;
@@ -66,6 +74,7 @@ export interface CashierOrderListItem {
 function flattenOrderListItem(data: Record<string, unknown>): CashierOrderListItem {
     type NestedRow = Record<string, unknown>;
     const workData = (Array.isArray(data.workOrder) ? data.workOrder[0] : data.workOrder) as NestedRow | null | undefined;
+    const altData = (Array.isArray(data.alterationOrder) ? data.alterationOrder[0] : data.alterationOrder) as NestedRow | null | undefined;
     const customerData = (Array.isArray(data.customer) ? data.customer[0] : data.customer) as NestedRow | null | undefined;
     const garments = (Array.isArray(data.garments) ? data.garments : []) as NestedRow[];
     const readyStages = ["ready_for_pickup", "brova_trialed", "awaiting_trial"];
@@ -76,9 +85,9 @@ function flattenOrderListItem(data: Record<string, unknown>): CashierOrderListIt
         order_total: Number(data.order_total) || 0,
         paid: Number(data.paid) || 0,
         order_date: data.order_date as string,
-        invoice_number: workData?.invoice_number as number | undefined,
+        invoice_number: (workData?.invoice_number ?? altData?.invoice_number) as number | undefined,
         invoice_revision: (workData?.invoice_revision as number | undefined) ?? 0,
-        order_phase: workData?.order_phase as string | undefined,
+        order_phase: (workData?.order_phase ?? altData?.order_phase) as string | undefined,
         delivery_date: workData?.delivery_date as string | undefined,
         home_delivery: workData?.home_delivery as boolean | undefined,
         customer_name: customerData?.name as string | undefined,
@@ -88,68 +97,80 @@ function flattenOrderListItem(data: Record<string, unknown>): CashierOrderListIt
     };
 }
 
+/**
+ * Cashier "All Orders" stats, scoped to the selected period (see getCashierSummary).
+ * Billed / collected / outstanding are order-attributed (all reference orders
+ * placed in the period) so they form a coherent collection triangle:
+ * outstanding = billed − collected. Payment-status buckets are mutually
+ * exclusive (unpaid + partial + paid = order_count); owing = unpaid + partial.
+ */
 export interface CashierSummary {
-    all_billed: number;
-    all_collected: number;
-    all_outstanding: number;
-    today_count: number;
-    today_billed: number;
-    today_paid: number;
-    /** Actual cash received today (from payment_transactions) */
-    today_collected: number;
-    today_refunded: number;
-    month_billed: number;
-    month_paid: number;
-    month_outstanding: number;
-    /** Actual cash received this month (from payment_transactions) */
-    month_collected: number;
-    month_refunded: number;
+    billed: number;
+    collected: number;
+    outstanding: number;
+    order_count: number;
+    paid_count: number;
+    partial_count: number;
+    unpaid_count: number;
+    owing_count: number;
+    /** Amount still owed across partially-paid orders. */
+    partial_outstanding: number;
+    /** Amount still owed across not-yet-paid orders. */
+    unpaid_outstanding: number;
     work_count: number;
     sales_count: number;
-    unpaid_count: number;
     work_billed: number;
     sales_billed: number;
-    month_work_billed: number;
-    month_sales_billed: number;
 }
 
-export const getCashierSummary = async (brand?: string): Promise<{ status: 'success'; data: CashierSummary }> => {
+export const EMPTY_CASHIER_SUMMARY: CashierSummary = {
+    billed: 0, collected: 0, outstanding: 0, order_count: 0,
+    paid_count: 0, partial_count: 0, unpaid_count: 0, owing_count: 0,
+    partial_outstanding: 0, unpaid_outstanding: 0,
+    work_count: 0, sales_count: 0, work_billed: 0, sales_billed: 0,
+};
+
+export const getCashierSummary = async (period: CashierPeriod = "all", brand?: string): Promise<{ status: 'success'; data: CashierSummary }> => {
     const currentBrand = brand || CASHIER_BRAND;
-    // Pass local date to handle timezone correctly (Supabase runs in UTC)
-    const { data, error } = await db.rpc('get_cashier_summary', { p_brand: currentBrand, p_today: getLocalDateStr(), p_tz_offset_minutes: getLocalTzOffsetMinutes() });
+    const { data, error } = await db.rpc('get_cashier_summary', { p_brand: currentBrand, p_start_iso: getPeriodStartIso(period) });
     if (error) {
         console.error('Error fetching cashier summary:', error.message);
-        return { status: 'success', data: { all_billed: 0, all_collected: 0, all_outstanding: 0, today_count: 0, today_billed: 0, today_paid: 0, today_collected: 0, today_refunded: 0, month_billed: 0, month_paid: 0, month_outstanding: 0, month_collected: 0, month_refunded: 0, work_count: 0, sales_count: 0, unpaid_count: 0, work_billed: 0, sales_billed: 0, month_work_billed: 0, month_sales_billed: 0 } };
+        return { status: 'success', data: EMPTY_CASHIER_SUMMARY };
     }
     return { status: 'success', data: data as CashierSummary };
 };
 
-export type CashierFilter = "all" | "today" | "unpaid" | "paid" | "work" | "sales";
+export type CashierFilter = "all" | "unpaid" | "partial" | "paid" | "owing" | "work" | "sales";
 
 /** Date-range filter for the cashier list, on order_date (Kuwait tz). */
-export type CashierPeriod = "all" | "month" | "last2" | "quarter";
+export type CashierPeriod = "all" | "today" | "month" | "last2" | "quarter";
 
 /**
  * UTC ISO start instant for a period, anchored to Kuwait-local "today".
  * Returns null for "all" (no lower bound). End is always "now", so only a
- * `gte` is needed. Windows are increasing: month (1) < last2 (2) < quarter (3).
+ * `gte` is needed. Windows are increasing: today < month (1) < last2 (2) < quarter (3).
+ *   today   = start of the current day
  *   month   = first day of the current calendar month
  *   last2   = first day of the previous month (covers previous + current = 2 months)
  *   quarter = first day of the current calendar quarter
  */
 function getPeriodStartIso(period: CashierPeriod): string | null {
     if (period === "all") return null;
-    const [y, m] = getLocalDateStr().split("-").map(Number); // Kuwait YYYY-MM-DD
+    const [y, m, d] = getLocalDateStr().split("-").map(Number); // Kuwait YYYY-MM-DD
     let year = y;
     let month = m; // 1-12
-    if (period === "last2") {
+    let day = 1;
+    if (period === "today") {
+        day = d;
+    } else if (period === "last2") {
         month = m - 1;
         if (month < 1) { month += 12; year -= 1; }
     } else if (period === "quarter") {
         month = Math.floor((m - 1) / 3) * 3 + 1;
     }
     const mm = String(month).padStart(2, "0");
-    return new Date(`${year}-${mm}-01T00:00:00.000+03:00`).toISOString();
+    const dd = String(day).padStart(2, "0");
+    return new Date(`${year}-${mm}-${dd}T00:00:00.000+03:00`).toISOString();
 }
 
 export const getRecentCashierOrders = async (filter: CashierFilter = "all", brand?: string, period: CashierPeriod = "all"): Promise<{ status: 'success'; data: CashierOrderListItem[] }> => {
@@ -159,9 +180,9 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
     // to avoid date-filtering being starved by the most-recent-N cutoff.
     const listLimit = periodStart ? 500 : 30;
 
-    const today = new Date();
-    // For paid/unpaid: use server-side RPC to get exact IDs (column comparison done in SQL)
-    if (filter === "paid" || filter === "unpaid") {
+    // For payment-status filters (paid/unpaid/partial/owing): use a server-side
+    // RPC to get exact IDs, since PostgREST can't compare paid vs order_total.
+    if (filter === "paid" || filter === "unpaid" || filter === "partial" || filter === "owing") {
         const { data: ids, error: rpcError } = await db.rpc('get_cashier_order_ids_by_payment', {
             p_brand: currentBrand,
             p_filter: filter,
@@ -169,7 +190,7 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
         });
 
         if (rpcError || !ids || ids.length === 0) {
-            if (rpcError) console.error('Error fetching paid/unpaid order IDs:', rpcError.message);
+            if (rpcError) console.error('Error fetching payment-status order IDs:', rpcError.message);
             return { status: 'success', data: [] };
         }
 
@@ -198,13 +219,6 @@ export const getRecentCashierOrders = async (filter: CashierFilter = "all", bran
     if (periodStart) query = query.gte('order_date', periodStart);
 
     switch (filter) {
-        case "today": {
-            // order_date stores UTC. Convert Kuwait day boundaries to UTC for correct filtering.
-            const startOfDay = getKuwaitMidnight(new Date(today));
-            const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
-            query = query.gte('order_date', startOfDay.toISOString()).lte('order_date', endOfDay.toISOString());
-            break;
-        }
         case "work":
             query = query.eq('order_type', 'WORK');
             break;
@@ -402,6 +416,84 @@ export const recordPaymentTransaction = async (params: {
         p_idempotency_key: params.idempotencyKey || null,
     });
 
+    if (error) {
+        return { status: 'error' as const, message: error.message };
+    }
+    return { status: 'success' as const, data };
+};
+
+// ── §3 cashier-processing gate: Pending queue + bulk processing ───────────────
+
+export interface CashierPendingOrder {
+    order_id: number;
+    invoice_number: number | null;
+    customer_name: string | null;
+    customer_phone: string | null;
+    order_date: string | null;
+    delivery_date: string | null;
+    order_total: number;
+    paid: number;
+    advance: number;
+    garment_count: number;
+}
+
+/** Pending WORK orders awaiting cashier processing (confirmed, gate still open). */
+export const getCashierPendingOrders = async (): Promise<ApiResponse<CashierPendingOrder[]>> => {
+    const { data, error } = await db.rpc('get_cashier_pending_orders', {
+        p_brand: CASHIER_BRAND,
+        p_limit: 200,
+    });
+    if (error) {
+        return { status: 'error', message: error.message, data: [] };
+    }
+    return { status: 'success', data: (data ?? []) as CashierPendingOrder[] };
+};
+
+/** Confirm one or more pending WORK orders WITHOUT taking payment (clears the
+ *  §3 gate; no register needed). Idempotent on its key. */
+export const cashierConfirmNoPayment = async (params: {
+    orderIds: number[];
+    cashierId?: string;
+    idempotencyKey?: string;
+}) => {
+    const { data, error } = await withWriteRetry(
+        () => db.rpc('cashier_confirm_orders_no_payment', {
+            p_order_ids: params.orderIds,
+            p_cashier_id: params.cashierId || null,
+            p_idempotency_key: params.idempotencyKey || null,
+        }),
+        (r) => isTransientNetworkError(r.error),
+    );
+    if (error) {
+        return { status: 'error' as const, message: error.message };
+    }
+    return { status: 'success' as const, data };
+};
+
+export interface BulkPaymentItem {
+    orderId: number;
+    amount: number;
+    paymentType: string;
+    paymentRefNo?: string;
+    paymentNote?: string;
+}
+
+/** Atomic bulk payment across several WORK orders (§3). All-or-nothing: any
+ *  rejection aborts the whole batch. Idempotent on its key, so a retry of a
+ *  lost-response call never double-charges. */
+export const recordBulkPayment = async (params: {
+    payments: BulkPaymentItem[];
+    cashierId?: string;
+    idempotencyKey?: string;
+}) => {
+    const { data, error } = await withWriteRetry(
+        () => db.rpc('record_bulk_payment', {
+            p_payments: params.payments,
+            p_cashier_id: params.cashierId || null,
+            p_idempotency_key: params.idempotencyKey || null,
+        }),
+        (r) => isTransientNetworkError(r.error),
+    );
     if (error) {
         return { status: 'error' as const, message: error.message };
     }

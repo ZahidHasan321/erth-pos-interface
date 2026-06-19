@@ -7,6 +7,15 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Display-only mapping for soaking hours. The stored tier value (8 / 24) is the
+ * pricing discriminator and key (SOAKING_8H_CHARGE) and must not change, but the
+ * short soak now runs 4 hours in the shop, so it is shown to users as 4h.
+ */
+export function displaySoakHours(hours: number | null | undefined): number | null | undefined {
+  return hours === 8 ? 4 : hours;
+}
+
 const TZ = TIMEZONE;
 export { TIMEZONE };
 

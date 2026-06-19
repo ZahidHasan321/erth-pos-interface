@@ -1,14 +1,19 @@
 import * as React from "react";
-import ErthLogo from "@/assets/erth-light.svg";
+import { getInvoiceBrand } from "./brand";
+import { collarAr, jabzourAr, cuffAr, hashwaAr, linesAr, modelAr } from "@/lib/style-labels";
 import type { FabricSelectionSchema } from "@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema";
 import { type StyleOptionsSchema } from "@/components/forms/fabric-selection-and-options/style-options/style-options-form.schema";
 import type { ShelfFormValues } from "@/components/forms/shelf/shelf-form.schema";
 import type { Fabric, Style } from "@repo/database";
-import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
+import { displaySoakHours, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 export interface InvoiceData {
   orderId?: string | number;
   fatoura?: number;
+  // Invoice revision (SPEC §3). 0 = the original invoice (printed with no
+  // suffix); a price change (refund / brova-trial style reprice) mints
+  // revision N (≥1), printed as `<fatoura>-R<N>`. Absent → original.
+  invoiceRevision?: number;
   orderDate?: string;
   homeDelivery?: boolean;
   checkoutStatus?: string;
@@ -47,6 +52,9 @@ export interface InvoiceData {
   otherPaymentType?: string;
   paymentRefNo?: string;
   orderTaker?: string;
+  // Customer signature captured during fabric selection. A freshly-drawn data
+  // URL (new order) or an uploaded storage URL (reprints). Absent for SALES.
+  customerSignatureUrl?: string;
 }
 
 export interface OrderInvoiceProps {
@@ -100,6 +108,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
     const {
       orderId,
       fatoura,
+      invoiceRevision,
       orderDate,
       homeDelivery,
       customerName,
@@ -114,7 +123,15 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
       paymentType,
       otherPaymentType,
       paymentRefNo,
+      customerSignatureUrl,
     } = data;
+
+    // Original invoice (revision 0) prints with no suffix; a revision (≥1) as
+    // `<fatoura>-R<N>` (SPEC §3).
+    const fatouraDisplay =
+      fatoura != null
+        ? `${fatoura}${invoiceRevision && invoiceRevision > 0 ? `-R${invoiceRevision}` : ""}`
+        : null;
 
     const totalDue = charges
       ? Object.values(charges).reduce((acc, v) => acc + (v || 0), 0)
@@ -143,132 +160,101 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
     /* ---------- Build Table Rows ---------- */
     type Row = Record<ArabicKey, React.ReactNode>;
 
-    const collarMap: Record<string, string> = {
-      COL_QALLABI: "قلابي",
-      COL_JAPANESE: "ياباني",
-      COL_DOWN_COLLAR: "عادي",
-    };
-    const jabzourMap: Record<string, string> = {
-      JAB_BAIN_MURABBA: "بين مربع",
-      JAB_MAGFI_MURABBA: "مغفي مربع",
-      JAB_BAIN_MUSALLAS: "بين مثلث",
-      JAB_MAGFI_MUSALLAS: "مغفي مثلث",
-      JAB_SHAAB: "شعاب",
-    };
-    const cuffMap: Record<string, string> = {
-      CUF_DOUBLE_GUMSHA: "دبل كمشة",
-      CUF_MURABBA_KABAK: "مربع كبك",
-      CUF_MUSALLAS_KABBAK: "مثلث كبك",
-      CUF_MUDAWAR_KABBAK: "مدور كبك",
-      CUF_NO_CUFF: "بدون",
-    };
-    const thicknessMap: Record<string, string> = {
-      SINGLE: "خط واحد",
-      DOUBLE: "خطين",
-      TRIPLE: "ثلاثي",
-      "NO HASHWA": "بدون",
-    };
-
     const rows: Row[] = React.useMemo(() => {
       return (fabricSelections || []).map((sel, idx) => {
-        const isKuwaiti = sel.style === "kuwaiti";
-        const model = isKuwaiti ? "كلاسيك" : "ديزاين";
-        const collarBase = collarMap[sel.collar_type || ""] || "عادي";
+        const model = modelAr[sel.style || ""] || modelAr.kuwaiti;
+        const collarBase = collarAr[sel.collar_type || ""] || "عادي";
         const collarPos = measurement?.collar_position === "up" ? " (أعلى)" : measurement?.collar_position === "down" ? " (أسفل)" : "";
         const collar = `${collarBase}${collarPos}`;
-        const buttons = sel.collar_button === "COL_TABBAGI" ? "تبقي" : sel.collar_button === "COL_ARAVI_ZARRAR" ? "زرار عربي" : "زرارات";
-        const jabzour = jabzourMap[sel.jabzour_1 || ""] || "بدون";
-        const cuff = cuffMap[sel.cuffs_type || ""] || "عادي";
-        const thickness = thicknessMap[sel.jabzour_thickness || ""] || "خط واحد";
+        const jabzour = jabzourAr[sel.jabzour_1 || ""] || "بدون";
+        const cuff = cuffAr[sel.cuffs_type || ""] || "بدون بزمة";
+        const hashwa = hashwaAr[sel.jabzour_thickness || ""] || "بدون حشوة";
+        const sideLines = linesAr[sel.lines === 2 ? 2 : 1];
         const fabricName = getFabricName(String(sel.fabric_id || ""), fabrics);
 
         return {
           "#": idx + 1,
           الموديل: model,
           الغولة: collar,
-          الحشوات: cuff,
+          الحشوات: hashwa,
           الجبزور: jabzour,
-          بزمات: buttons,
-          "الخط الجانبي": thickness,
+          بزمات: cuff,
+          "الخط الجانبي": sideLines,
           "عدد الأمتار": fmt(sel.fabric_length || 0),
           القماش: fabricName,
           بروفه: sel.garment_type === "brova" ? "نعم" : "لا",
           استعجال: sel.express ? "نعم" : "لا",
-          نقع: sel.soaking ? (sel.soaking_hours ? `${sel.soaking_hours} س` : "نعم") : "لا",
+          نقع: sel.soaking ? (sel.soaking_hours ? `${displaySoakHours(sel.soaking_hours)} س` : "نعم") : "لا",
           "خدمة التوصيل": homeDelivery ? "منزلي" : "استلام",
           الإجمالي: `${fmt((sel.stitching_price_snapshot || 0) + (sel.fabric_amount || 0) + (sel.style_price_snapshot || 0))} د.ك`,
         };
       });
     }, [fabricSelections, measurement, fabrics, homeDelivery]);
 
+    const brand = getInvoiceBrand();
+
     return (
       <div
         ref={ref}
-        className="bg-white text-black p-6 max-w-5xl mx-auto text-sm print:bg-white print:text-black"
+        className="bg-white text-black p-3 max-w-5xl mx-auto text-sm leading-tight print:bg-white print:text-black"
         style={{ direction: "rtl", fontFamily: "'Cairo', 'IBM Plex Sans Arabic', sans-serif" }}
       >
-        {/* Header */}
-        <div className="mb-4 pb-3 border-b border-gray-700">
-          <div className="text-center mb-3">
+        {/* Header — horizontal: logo + brand on one side, invoice meta on the
+            other, so 10 garments + shelf items still fit on a single page. */}
+        <div className="mb-2 pb-1.5 border-b border-gray-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <img
-              src={ErthLogo}
-              alt="ERTH Clothing"
-              className="h-16 mx-auto mb-2"
+              src={brand.logo}
+              alt={`${brand.name} Clothing`}
+              className="h-9"
             />
-            <h1 className="text-2xl font-bold text-gray-800">ERTH Clothing</h1>
+            <div>
+              <h1 className="text-base font-bold text-gray-800 leading-none">{brand.name} Clothing</h1>
+              <h2 className="text-sm font-bold text-gray-800 leading-tight">فاتورة شراء</h2>
+            </div>
           </div>
-          <div className="flex justify-between items-start">
-            <div className="text-right">
-              {fatoura && (
-                <p className="text-xs text-gray-600">
-                  <span className="font-semibold">رقم الفاتورة: {fatoura}</span>
-                </p>
-              )}
-              {orderId && (
-                <p className="text-xs text-gray-600">
-                  <span className="font-semibold">رقم الطلب: {orderId}</span>
-                </p>
-              )}
-              {formattedDate && (
-                <p className="text-xs text-gray-600">
-                  التاريخ: {formattedDate}
-                </p>
-              )}
-            </div>
-            <div className="text-left">
-              <h2 className="text-xl font-bold text-gray-800">فاتورة شراء</h2>
-            </div>
+          <div className="text-left">
+            {fatouraDisplay && (
+              <p className="text-[10px] text-gray-600 leading-tight">
+                <span className="font-semibold">رقم الفاتورة: {fatouraDisplay}</span>
+              </p>
+            )}
+            {orderId && (
+              <p className="text-[10px] text-gray-600 leading-tight">
+                <span className="font-semibold">رقم الطلب: {orderId}</span>
+              </p>
+            )}
+            {formattedDate && (
+              <p className="text-[10px] text-gray-600 leading-tight">
+                التاريخ: {formattedDate}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Customer Information */}
-        <div className="mb-3">
-          <h3 className="text-sm font-semibold text-gray-800 mb-2 pb-1 border-b border-gray-700">
-            معلومات العميل
-          </h3>
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            {customerName && (
-              <div className="py-1 px-2 text-right border-l border-gray-300">
-                <span className="text-gray-600">الاسم: </span>
-                <span className="font-semibold">{customerName}</span>
-              </div>
-            )}
-            {customerPhone && (
-              <div className="py-1 px-2 text-right">
-                <span className="text-gray-600">الهاتف: </span>
-                <span className="font-semibold">{customerPhone}</span>
-              </div>
-            )}
-          </div>
+        <div className="mb-1.5 grid grid-cols-2 gap-2 text-[10px]">
+          {customerName && (
+            <div className="py-0.5 px-2 text-right border-l border-gray-300">
+              <span className="text-gray-600">الاسم: </span>
+              <span className="font-semibold">{customerName}</span>
+            </div>
+          )}
+          {customerPhone && (
+            <div className="py-0.5 px-2 text-right">
+              <span className="text-gray-600">الهاتف: </span>
+              <span className="font-semibold">{customerPhone}</span>
+            </div>
+          )}
         </div>
 
         {/* Table */}
         {rows.length > 0 && (
-          <div className="mb-3">
-            <h3 className="text-sm font-semibold text-gray-800 mb-2 pb-1 border-b border-gray-700">
+          <div className="mb-1.5">
+            <h3 className="text-[11px] font-semibold text-gray-800 mb-1 pb-0.5 border-b border-gray-700">
               بنود الطلب
             </h3>
-            <table className="w-full text-xs border border-gray-700 border-collapse">
+            <table className="w-full text-[10px] leading-tight border border-gray-700 border-collapse">
               <thead className="bg-gray-100">
                 <tr>
                   {(
@@ -291,7 +277,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
                   ).map((k) => (
                     <th
                       key={k}
-                      className="py-1 px-2 text-right border border-gray-700"
+                      className="py-0.5 px-1.5 text-right border border-gray-700"
                     >
                       {ARABIC_HEADERS[k]}
                     </th>
@@ -306,6 +292,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
                         "#",
                         "الإجمالي",
                         "خدمة التوصيل",
+                        "نقع",
                         "استعجال",
                         "بروفه",
                         "القماش",
@@ -320,7 +307,7 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
                     ).map((k) => (
                       <td
                         key={k}
-                        className="py-1 px-2 text-right border border-gray-700"
+                        className="py-0.5 px-1.5 text-right border border-gray-700"
                       >
                         {row[k]}
                       </td>
@@ -334,30 +321,30 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
 
         {/* Shelf Products Table */}
         {shelfProducts && shelfProducts.length > 0 && (
-          <div className="mb-3">
-            <h3 className="text-sm font-semibold text-gray-800 mb-2 pb-1 border-b border-gray-700">
+          <div className="mb-1.5">
+            <h3 className="text-[11px] font-semibold text-gray-800 mb-1 pb-0.5 border-b border-gray-700">
               المنتجات الجاهزة
             </h3>
-            <table className="w-full text-xs border border-gray-700 border-collapse">
+            <table className="w-full text-[10px] leading-tight border border-gray-700 border-collapse">
               <thead className="bg-gray-100">
                 <tr>
-                  <th className="py-1 px-2 text-center border border-gray-700 w-12">#</th>
-                  <th className="py-1 px-2 text-right border border-gray-700">المنتج</th>
-                  <th className="py-1 px-2 text-center border border-gray-700 w-20">الكمية</th>
-                  <th className="py-1 px-2 text-right border border-gray-700 w-24">سعر الوحدة</th>
-                  <th className="py-1 px-2 text-right border border-gray-700 w-24">الإجمالي</th>
+                  <th className="py-0.5 px-1.5 text-center border border-gray-700 w-12">#</th>
+                  <th className="py-0.5 px-1.5 text-right border border-gray-700">المنتج</th>
+                  <th className="py-0.5 px-1.5 text-center border border-gray-700 w-20">الكمية</th>
+                  <th className="py-0.5 px-1.5 text-right border border-gray-700 w-24">سعر الوحدة</th>
+                  <th className="py-0.5 px-1.5 text-right border border-gray-700 w-24">الإجمالي</th>
                 </tr>
               </thead>
               <tbody>
                 {shelfProducts.map((p, idx) => (
                   <tr key={idx} className="even:bg-gray-50">
-                    <td className="py-1 px-2 text-center border border-gray-700">{idx + 1}</td>
-                    <td className="py-1 px-2 text-right border border-gray-700">
+                    <td className="py-0.5 px-1.5 text-center border border-gray-700">{idx + 1}</td>
+                    <td className="py-0.5 px-1.5 text-right border border-gray-700">
                       {p.product_type} - {p.brand}
                     </td>
-                    <td className="py-1 px-2 text-center border border-gray-700">{p.quantity}</td>
-                    <td className="py-1 px-2 text-right border border-gray-700">{fmt(p.unit_price)} د.ك</td>
-                    <td className="py-1 px-2 text-right border border-gray-700">{fmt(p.quantity * p.unit_price)} د.ك</td>
+                    <td className="py-0.5 px-1.5 text-center border border-gray-700">{p.quantity}</td>
+                    <td className="py-0.5 px-1.5 text-right border border-gray-700">{fmt(p.unit_price)} د.ك</td>
+                    <td className="py-0.5 px-1.5 text-right border border-gray-700">{fmt(p.quantity * p.unit_price)} د.ك</td>
                   </tr>
                 ))}
               </tbody>
@@ -366,24 +353,24 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
         )}
 
         {/* Totals */}
-        <div className="mb-3">
-          <h3 className="text-sm font-semibold text-gray-800 mb-2 pb-1 border-b border-gray-700">
+        <div className="mb-1.5">
+          <h3 className="text-[11px] font-semibold text-gray-800 mb-1 pb-0.5 border-b border-gray-700">
             إجمالي الرسوم
           </h3>
-          <div className="bg-gray-50 p-3 border border-gray-700 space-y-1 text-xs">
-            <div className="flex justify-between py-1 border-b border-gray-700">
+          <div className="bg-gray-50 p-2 border border-gray-700 space-y-0.5 text-[10px]">
+            <div className="flex justify-between py-0.5 border-b border-gray-700">
               <span className="font-semibold">{fmt(totalDue)} د.ك</span>
               <span className="font-semibold">الإجمالي</span>
             </div>
             {discountValue > 0 && (
               <>
-                <div className="flex justify-between py-1">
+                <div className="flex justify-between py-0.5">
                   <span className="font-semibold">
                     - {fmt(discountValue)} د.ك
                   </span>
                   <span className="text-gray-700">الخصم</span>
                 </div>
-                <div className="flex justify-between py-1">
+                <div className="flex justify-between py-0.5">
                   <span className="font-semibold">
                     {fmt(totalDue - discountValue)} د.ك
                   </span>
@@ -391,24 +378,24 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
                 </div>
               </>
             )}
-            <div className="flex justify-between py-1">
+            <div className="flex justify-between py-0.5">
               <span className="font-semibold">{fmt(paid)} د.ك</span>
               <span className="text-gray-700">المدفوع</span>
             </div>
-            <div className="flex justify-between pt-2 border-t border-gray-700">
+            <div className="flex justify-between pt-1 border-t border-gray-700">
               <span className="font-bold">
                 {fmt(balance < 0 ? 0 : balance)} د.ك
               </span>
               <span className="font-bold">المتبقي</span>
             </div>
             {paymentType && (
-              <div className="mt-2 pt-2 border-t border-gray-700 grid grid-cols-2 gap-2 text-xs">
-                <div className="py-1 px-2 text-right border-l border-gray-300">
+              <div className="mt-1 pt-1 border-t border-gray-700 grid grid-cols-2 gap-2 text-[10px]">
+                <div className="py-0.5 px-2 text-right border-l border-gray-300">
                   <span className="text-gray-600">طريقة الدفع: </span>
                   <span className="font-semibold">{getPaymentLabel()}</span>
                 </div>
                 {paymentRefNo && (
-                  <div className="py-1 px-2 text-right">
+                  <div className="py-0.5 px-2 text-right">
                     <span className="text-gray-600">رقم المرجع: </span>
                     <span className="font-semibold">{paymentRefNo}</span>
                   </div>
@@ -418,12 +405,28 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
           </div>
         </div>
 
-        {/* Terms */}
-        <div className="mt-4 pt-3 border-t border-gray-700">
-          <h4 className="text-xs font-semibold text-gray-800 mb-2 text-center">
+        {/* Customer Signature */}
+        {customerSignatureUrl && (
+          <div className="mb-1.5">
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[10px] font-semibold text-gray-800">توقيع العميل</span>
+              <div className="h-12 w-36 border border-gray-700 rounded flex items-center justify-center overflow-hidden bg-white">
+                <img
+                  src={customerSignatureUrl}
+                  alt="توقيع العميل"
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Terms — two columns so the seven clauses stay compact on one page. */}
+        <div className="mt-2 pt-1.5 border-t border-gray-700">
+          <h4 className="text-[10px] font-semibold text-gray-800 mb-1 text-center">
             الملاحظات والشروط
           </h4>
-          <ul className="text-right text-gray-700 text-xs leading-relaxed space-y-1">
+          <ul className="grid grid-cols-2 gap-x-4 text-right text-gray-700 text-[10px] leading-snug space-y-0.5">
             <li>• سيتم التواصل معك لتحديد موعد البروفة.</li>
             <li>• التأخير عن البروفة يؤخر موعد التسليم.</li>
             <li>• أي تعديل بعد اعتماد البروفة يُحسب برسوم.</li>
@@ -435,8 +438,8 @@ export const OrderInvoice = React.forwardRef<HTMLDivElement, OrderInvoiceProps>(
             </li>
             <li>• خدمة الاستعجال متوفرة برسوم إضافية عند الطلب.</li>
           </ul>
-          <p className="text-center text-xs text-gray-600 mt-3 font-semibold">
-            شكراً لاختياركم ERTH Clothing
+          <p className="text-center text-[10px] text-gray-600 mt-1.5 font-semibold">
+            شكراً لاختياركم {brand.name} Clothing
           </p>
         </div>
       </div>

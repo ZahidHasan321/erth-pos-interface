@@ -697,6 +697,16 @@ export const workOrders = pgTable("work_orders", {
     order_phase: orderPhaseEnum("order_phase").default("new"),
     call_status: text("call_status"),
 
+    // Cashier processing gate (§3). A confirmed WORK order is "pending cashier
+    // processing" while this is NULL and cannot be dispatched to the workshop.
+    // Set ONCE (idempotent, never cleared) when a cashier confirms-without-
+    // payment or records the first payment. The marker — not `paid` — is the
+    // dispatch gate, so a confirmed-without-payment order (paid = 0) is
+    // dispatchable. SALES/ALTERATION have no work_orders row, so they are
+    // never gated.
+    cashier_processed_at: timestamp("cashier_processed_at"),
+    cashier_processed_by: uuid("cashier_processed_by").references(() => users.id),
+
     // Financials
     stitching_price: numeric("stitching_price", { precision: 10, scale: 3 }),
     fabric_charge: numeric("fabric_charge", { precision: 10, scale: 3 }),

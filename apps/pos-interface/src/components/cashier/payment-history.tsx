@@ -12,8 +12,8 @@ import {
     TableRow,
 } from "@repo/ui/table";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
-import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
-import { PaymentReceipt, type PaymentReceiptData, type ReceiptGarment, type ReceiptShelfItem } from "./payment-receipt";
+import { displaySoakHours, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
+import { OrderInvoice, SalesInvoice, AlterationInvoice, type InvoiceData, type AlterationInvoiceData } from "@/components/invoice";
 
 interface RefundItemRecord {
     garment_id?: string;
@@ -42,54 +42,45 @@ interface TransactionRecord {
 
 interface PaymentHistoryProps {
     transactions: TransactionRecord[];
-    orderId: number;
-    invoiceNumber?: number;
-    invoiceRevision?: number;
-    orderType?: "WORK" | "SALES";
-    homeDelivery?: boolean;
-    customerName?: string;
-    customerPhone?: string;
-    orderTotal: number;
-    totalPaid: number;
-    discountValue?: number;
-    garments?: ReceiptGarment[];
-    shelfItems?: ReceiptShelfItem[];
+    orderType?: "WORK" | "SALES" | "ALTERATION";
+    // The full order invoice (line items, charges, signature, current revision).
+    // Per print we override `paid` (running total as of the printed transaction)
+    // and that transaction's payment method/ref.
+    invoiceData: InvoiceData;
+    // ALTERATION orders print a dedicated invoice (the recorded per-garment
+    // changes + manual total) instead of OrderInvoice, which assumes
+    // fabric/style charges an alteration doesn't have.
+    alterationData?: AlterationInvoiceData;
 }
 
-export function PaymentHistory({
-    transactions,
-    orderId,
-    invoiceNumber,
-    invoiceRevision,
-    orderType,
-    homeDelivery,
-    customerName,
-    customerPhone,
-    orderTotal,
-    discountValue,
-    garments,
-    shelfItems,
-}: PaymentHistoryProps) {
+export function PaymentHistory({ transactions, orderType, invoiceData, alterationData }: PaymentHistoryProps) {
     const receiptRef = useRef<HTMLDivElement>(null);
-    const [receiptData, setReceiptData] = useState<PaymentReceiptData | null>(null);
+    const [printData, setPrintData] = useState<InvoiceData | null>(null);
+    const [printAlteration, setPrintAlteration] = useState<AlterationInvoiceData | null>(null);
     const [expandedTx, setExpandedTx] = useState<number | null>(null);
     const [pendingPrint, setPendingPrint] = useState(false);
 
     const handlePrint = useReactToPrint({
         contentRef: receiptRef,
+        // Tight A4 margins so a full order (up to 10 garments + shelf items)
+        // prints on a single page.
+        pageStyle: "@page { size: A4; margin: 8mm; }",
     });
 
-    // Print after the receipt data renders
+    // Print after the invoice data renders
     useEffect(() => {
-        if (pendingPrint && receiptData) {
+        if (pendingPrint && (printData || printAlteration)) {
             const timer = setTimeout(() => {
                 handlePrint();
                 setPendingPrint(false);
             }, 100);
             return () => clearTimeout(timer);
         }
-    }, [pendingPrint, receiptData, handlePrint]);
+    }, [pendingPrint, printData, printAlteration, handlePrint]);
 
+    // Reprint the proper signed order invoice (SPEC §3) at the current revision.
+    // `paid` is the running total as of the printed transaction, so an older row
+    // reflects the balance as it stood then; method/ref are that transaction's.
     const printTransaction = useCallback((tx: TransactionRecord) => {
         // Same-millisecond ties: tiebreak by id so two transactions stamped at the
         // same instant don't both count toward the earlier one's prior-paid total.
@@ -103,29 +94,25 @@ export function PaymentHistory({
             })
             .reduce((sum: number, t) => sum + (t.amount || 0), 0);
 
-        const invoiceDisplay = invoiceNumber ? `${invoiceNumber}${invoiceRevision ? `-R${invoiceRevision}` : ""}` : undefined;
-        setReceiptData({
-            orderId,
-            invoiceDisplay,
-            orderType,
-            homeDelivery,
-            customerName,
-            customerPhone,
-            transactionAmount: tx.amount,
-            transactionType: tx.transaction_type,
-            paymentType: tx.payment_type ?? "",
-            paymentRefNo: tx.payment_ref_no ?? undefined,
-            orderTotal,
-            totalPaid: paid,
-            remainingBalance: orderTotal - paid,
-            discountValue,
-            cashierName: tx.cashier?.name,
-            timestamp: tx.created_at,
-            garments,
-            shelfItems,
-        });
+        if (orderType === "ALTERATION" && alterationData) {
+            setPrintData(null);
+            setPrintAlteration({
+                ...alterationData,
+                paid,
+                paymentType: tx.payment_type ?? undefined,
+                paymentRefNo: tx.payment_ref_no ?? undefined,
+            });
+        } else {
+            setPrintAlteration(null);
+            setPrintData({
+                ...invoiceData,
+                paid,
+                paymentType: tx.payment_type ?? invoiceData.paymentType,
+                paymentRefNo: tx.payment_ref_no ?? undefined,
+            });
+        }
         setPendingPrint(true);
-    }, [transactions, invoiceNumber, invoiceRevision, orderType, homeDelivery, orderId, customerName, customerPhone, orderTotal, discountValue, garments, shelfItems]);
+    }, [transactions, invoiceData, alterationData, orderType]);
 
     const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 
@@ -236,7 +223,7 @@ export function PaymentHistory({
                                                                     item.stitching && "Stitching",
                                                                     item.style && "Style",
                                                                     item.express && "Express",
-                                                                    item.soaking && (item.soaking_hours ? `Soaking ${item.soaking_hours}h` : "Soaking"),
+                                                                    item.soaking && (item.soaking_hours ? `Soaking ${displaySoakHours(item.soaking_hours)}h` : "Soaking"),
                                                                 ].filter(Boolean);
                                                                 return (
                                                                     <div key={i} className="flex items-center gap-1.5 text-xs text-red-700">
@@ -271,12 +258,14 @@ export function PaymentHistory({
                 </Table>
             </div>
 
-            {/* Hidden receipt for printing */}
+            {/* Hidden invoice for printing — the proper signed invoice (SPEC §3) */}
             <div className="hidden">
                 <div ref={receiptRef}>
-                    {receiptData && (
-                        <PaymentReceipt data={receiptData} />
-                    )}
+                    {printAlteration
+                        ? <AlterationInvoice data={printAlteration} />
+                        : printData && (orderType === "SALES"
+                            ? <SalesInvoice data={printData} />
+                            : <OrderInvoice data={printData} />)}
                 </div>
             </div>
         </>

@@ -370,3 +370,30 @@ export function brovaEditable(g: Garment): boolean {
     g.piece_stage !== "discarded"
   );
 }
+
+/**
+ * True when a garment is a feedback subject — i.e. it should appear on the brova
+ * trial feedback page and surface a feedback action at the showroom (§2.5).
+ *
+ * Feedback is a brova-trial concept ONLY. Finals are never fed back; they are
+ * collected at the cashier (§3), so they are excluded here regardless of stage.
+ *
+ * The one extra exclusion is the **returned Accept-with-Fix brova** (collect-only,
+ * no re-trial): the customer already accepted at the trial, so once its fix comes
+ * back it is handed over, not trialed again. `acceptance_status` persists across
+ * the dispatch round-trip while the trial verdict (`feedback_status`) is cleared
+ * to null on return — so an accepted brova carrying no live verdict is one that
+ * has been through its fix and come back. A freshly-recorded Accept-with-Fix
+ * (still at the shop, pre-dispatch) keeps a non-null `feedback_status`, so it
+ * stays editable until production starts. A Reject-Repair brova returns with
+ * `acceptance_status: false`, so it stays a feedback subject (re-trialed).
+ */
+export function isBrovaFeedbackSubject(g: Garment): boolean {
+  return (
+    g.garment_type === "brova" &&
+    g.location === "shop" &&
+    g.piece_stage !== "waiting_for_acceptance" &&
+    g.piece_stage !== "completed" &&
+    !(g.acceptance_status === true && g.feedback_status == null)
+  );
+}

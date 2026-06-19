@@ -7,7 +7,7 @@ import {
     Link,
     Outlet,
 } from "@tanstack/react-router";
-import { Banknote, History, FileText, LogOut } from "lucide-react";
+import { Inbox, ListOrdered, History, FileText, LogOut } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { useAuth } from "@/context/auth";
 import { getBrand, setCurrentBrand } from "@/api/orders";
@@ -60,7 +60,8 @@ export const Route = createFileRoute("/cashier")({
 });
 
 const TABS = [
-    { to: "/cashier", label: "Cashier", icon: Banknote, exact: false, matchPrefix: "/cashier" },
+    { to: "/cashier", label: "Pending", icon: Inbox, exact: false, matchPrefix: "/cashier" },
+    { to: "/cashier/orders", label: "All Orders", icon: ListOrdered, exact: false, matchPrefix: "/cashier/orders" },
     { to: "/cashier/history", label: "Order History", icon: History, exact: false, matchPrefix: "/cashier/history" },
     { to: "/cashier/eod", label: "End of Day", icon: FileText, exact: false, matchPrefix: "/cashier/eod" },
 ] as const;
@@ -74,7 +75,7 @@ function CashierLayout() {
     const brandKey = getBrand().toLowerCase();
     useEffect(() => {
         const root = document.documentElement;
-        root.classList.remove("erth", "sakkba");
+        root.classList.remove("erth", "sakkba", "qass");
         root.classList.add(brandKey);
         return () => { root.classList.remove(brandKey); };
     }, [brandKey]);

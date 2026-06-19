@@ -2,6 +2,7 @@ import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import ErthLogoDark from "../assets/erth-dark.svg";
 import SakkbaLogo from "../assets/Sakkba.png";
+import QassLogo from "../assets/qass-dark.svg";
 import { BRAND_NAMES } from "@/lib/constants";
 import { useAuth } from "@/context/auth";
 
@@ -10,7 +11,7 @@ export const Route = createFileRoute("/home")({
   head: () => ({ meta: [{ title: "Select Workspace" }] }),
 });
 
-type BrandKey = "erth" | "sakkba";
+type BrandKey = "erth" | "sakkba" | "qass";
 
 const BRANDS: Record<BrandKey, {
   bg: string;
@@ -20,6 +21,9 @@ const BRANDS: Record<BrandKey, {
   watermark: string;
   watermarkWidth: number;
   watermarkInvert: boolean;
+  watermarkTop: number | "auto";
+  watermarkBottom: number | "auto";
+  watermarkOpacity: number;
 }> = {
   erth: {
     bg: "#1c3828",
@@ -29,6 +33,9 @@ const BRANDS: Record<BrandKey, {
     watermark: ErthLogoDark,
     watermarkWidth: 340,
     watermarkInvert: false,
+    watermarkTop: -40,
+    watermarkBottom: "auto",
+    watermarkOpacity: 0.22,
   },
   sakkba: {
     bg: "#1a2547",
@@ -38,6 +45,21 @@ const BRANDS: Record<BrandKey, {
     watermark: SakkbaLogo,
     watermarkWidth: 520,
     watermarkInvert: true,
+    watermarkTop: "auto",
+    watermarkBottom: -20,
+    watermarkOpacity: 0.2,
+  },
+  qass: {
+    bg: "#361206",
+    fg: "#f3e7d9",
+    fgMuted: "rgba(243,231,217,0.62)",
+    hairline: "rgba(243,231,217,0.18)",
+    watermark: QassLogo,
+    watermarkWidth: 360,
+    watermarkInvert: true,
+    watermarkTop: 52,
+    watermarkBottom: "auto",
+    watermarkOpacity: 0.16,
   },
 };
 
@@ -105,12 +127,12 @@ function BrandCard({
           aria-hidden="true"
           style={{
             position: "absolute",
-            top: brand === "erth" ? -40 : "auto",
-            bottom: brand === "sakkba" ? -20 : "auto",
+            top: t.watermarkTop,
+            bottom: t.watermarkBottom,
             right: -28,
             width: t.watermarkWidth,
             height: "auto",
-            opacity: brand === "erth" ? 0.22 : 0.2,
+            opacity: t.watermarkOpacity,
             filter: t.watermarkInvert ? WHITE_TINT : undefined,
             userSelect: "none",
             pointerEvents: "none",
@@ -315,6 +337,18 @@ function SelectionPage() {
               description="Home-based orders, deliveries and on-site fittings."
               brand="sakkba"
               disabled={!canAccess(BRAND_NAMES.fromHome)}
+            />
+            <BrandCard
+              to="/$main"
+              params={{ main: BRAND_NAMES.qass }}
+              logo={QassLogo}
+              logoFilter={WHITE_TINT}
+              logoSize={22}
+              name="Qass"
+              department="Showroom"
+              description="Bespoke dishdasha orders, fittings and alterations for Qass."
+              brand="qass"
+              disabled={!canAccess(BRAND_NAMES.qass)}
             />
           </div>
         </div>

@@ -50,7 +50,7 @@ export const STYLE_IMAGE_MAP: Record<string, { image: string; label: string }> =
   JAB_BAIN_MUSALLAS: { image: bainMusallas, label: "Bain Musallas" },
   JAB_MAGFI_MURABBA: { image: magfiMurabba, label: "Magfi Murabba" },
   JAB_MAGFI_MUSALLAS: { image: magfiMusallas, label: "Magfi Musallas" },
-  JAB_SHAAB: { image: shaab, label: "Shaab" },
+  JAB_SHAAB: { image: shaab, label: "Zipper" },
 
   // Front pocket
   FRO_MUDAWWAR_MAGFI_FRONT_POCKET: { image: mudawwarMagfi, label: "Mudawwar Magfi" },
@@ -62,7 +62,7 @@ export const STYLE_IMAGE_MAP: Record<string, { image: string; label: string }> =
   SID_MUDAWWAR_SIDE_POCKET: { image: mudawwarSide, label: "Mudawwar" },
 
   // Cuffs
-  CUF_DOUBLE_GUMSHA: { image: doubleGumsha, label: "Double Gumsha" },
+  CUF_DOUBLE_GUMSHA: { image: doubleGumsha, label: "French Cuff" },
   CUF_MURABBA_KABAK: { image: murabbaKabak, label: "Murabba Kabak" },
   CUF_MUSALLAS_KABBAK: { image: musallasKabbak, label: "Musallas Kabbak" },
   CUF_MUDAWAR_KABBAK: { image: mudawarKabbak, label: "Mudawar Kabbak" },

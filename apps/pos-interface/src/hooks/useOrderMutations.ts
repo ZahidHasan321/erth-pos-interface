@@ -230,6 +230,9 @@ export function useOrderMutations(options: UseOrderMutationsOptions = {}) {
                 homeDelivery?: boolean;
                 deliveryDate?: string;
                 stitchingPrice?: number;
+                /** §3: ERTH defers payment → order stays pending cashier
+                 *  processing until processed (gate before dispatch). */
+                deferToCashier?: boolean;
             };
             shelfItems: { id: number; quantity: number }[];
             fabricItems: { id: number; length: number }[];

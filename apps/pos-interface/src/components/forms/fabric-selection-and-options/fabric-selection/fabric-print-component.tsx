@@ -6,7 +6,7 @@ import { BRAND_NAMES } from '@/lib/constants';
 import { useParams } from '@tanstack/react-router';
 import erthLogo from '@/assets/erth-light.svg';
 import sakkbaLogo from '@/assets/Sakkba.png';
-import { parseUtcTimestamp, TIMEZONE } from '@/lib/utils';
+import { displaySoakHours, parseUtcTimestamp, TIMEZONE } from '@/lib/utils';
 
 interface FabricLabelProps {
   fabricData: {
@@ -126,7 +126,7 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
                   fontSize: '20px',
                   color: '#2563eb',
                 }}>
-                  {fabricData.soaking_hours ? `Soaking ${fabricData.soaking_hours}h` : 'Soaking'}
+                  {fabricData.soaking_hours ? `Soaking ${displaySoakHours(fabricData.soaking_hours)}h` : 'Soaking'}
                 </div>
               )}
             </div>

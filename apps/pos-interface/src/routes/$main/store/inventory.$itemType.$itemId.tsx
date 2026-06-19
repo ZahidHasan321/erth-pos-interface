@@ -359,11 +359,15 @@ function ItemDetailContent({ item, main, onBack }: ContentProps) {
                 <AlertTriangle className="h-3.5 w-3.5 mr-1.5" /> Damage / waste
               </Button>
             )}
-            <Button size="sm" variant="outline" asChild>
-              <Link to="/$main/store/transfers" params={{ main }}>
-                <Send className="h-3.5 w-3.5 mr-1.5" /> Transfers
-              </Link>
-            </Button>
+            {/* Only accessories cross to the workshop — fabric/shelf are shop-only
+                (SPEC §4), so the transfers shortcut is accessories-only. */}
+            {itemType === "accessory" && (
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/$main/store/transfers" params={{ main }}>
+                  <Send className="h-3.5 w-3.5 mr-1.5" /> Transfers
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       </div>

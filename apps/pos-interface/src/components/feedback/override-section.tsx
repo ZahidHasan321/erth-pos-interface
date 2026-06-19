@@ -282,9 +282,6 @@ interface FinalsCardOverrideProps {
   brovaStyle: StyleFields;
   readOnly: boolean;
   onSetFinalStyle: (finalId: string, patch: StyleFields) => void;
-  // "aside"   → rendered in a side pane (no top divider; the pane already separates it).
-  // "stacked" → rendered under the feedback in the same column (keeps a top divider).
-  layout?: "stacked" | "aside";
 }
 
 type CardSelectOption = { value: string; displayText: string; image?: string | null };
@@ -419,7 +416,6 @@ export function FinalsCardOverride({
   brovaStyle,
   readOnly,
   onSetFinalStyle,
-  layout = "stacked",
 }: FinalsCardOverrideProps) {
   if (finals.length === 0) return null;
 
@@ -670,16 +666,9 @@ export function FinalsCardOverride({
   const cellMin = wideControl ? "16rem" : "13rem";
 
   return (
-    <div
-      className={cn(
-        layout === "stacked" && "pt-3 border-t border-border/40",
-        // aside: stacked separator on mobile, vertical divider once the panes sit side by side
-        layout === "aside" &&
-          "pt-3 border-t border-border/40 md:pt-0 md:border-t-0 md:border-l md:border-border/60 md:pl-4",
-      )}
-    >
+    <div className="rounded-md border border-violet-500/25 bg-violet-500/5 p-2.5">
       <div className="flex items-center justify-between gap-2 mb-2 min-h-5">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Finals</span>
+        <span className="text-xs font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wide">Finals</span>
         {!readOnly && (
           <div className="flex items-center gap-3 shrink-0">
             {finals.some(isOverridden) && (

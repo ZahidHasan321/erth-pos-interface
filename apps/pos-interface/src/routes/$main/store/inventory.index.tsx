@@ -173,12 +173,16 @@ function InventoryPage() {
               Need to restock
               <span className="tabular-nums font-medium text-amber-700">({needRestock.length})</span>
             </button>
-            <Button size="sm" variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-100 shrink-0" asChild>
-              <Link to="/$main/store/transfers" params={{ main }}>
-                Request transfer
-                <ArrowRight className="h-3.5 w-3.5 ml-1" />
-              </Link>
-            </Button>
+            {/* A transfer only replenishes accessories — fabric/shelf are shop-only
+                (SPEC §4), so don't offer it when nothing low is transferable. */}
+            {needRestock.some((r) => r.itemType === "accessory") && (
+              <Button size="sm" variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-100 shrink-0" asChild>
+                <Link to="/$main/store/transfers" params={{ main }}>
+                  Request transfer
+                  <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                </Link>
+              </Button>
+            )}
           </div>
           {restockOpen && (
             <ul className="divide-y divide-amber-100 border-t border-amber-200 max-h-60 overflow-y-auto">

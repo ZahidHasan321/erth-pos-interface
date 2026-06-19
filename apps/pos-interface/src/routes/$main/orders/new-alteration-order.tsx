@@ -64,6 +64,7 @@ function NewAlterationOrder() {
     const [comments, setComments] = React.useState("");
     const [homeDelivery, setHomeDelivery] = React.useState(false);
     const [orderTotalRaw, setOrderTotalRaw] = React.useState("");
+    const garmentSectionRef = React.useRef<HTMLElement>(null);
 
     const { data: existingOrderRes } = useQuery({
         queryKey: ["alteration-order", orderId],
@@ -142,6 +143,16 @@ function NewAlterationOrder() {
         if (garments.length === 1) return;
         setGarments((cur) => cur.filter((_, i) => i !== idx));
         setActiveTab((t) => Math.max(0, Math.min(t, garments.length - 2)));
+    };
+
+    // Summary-row "Edit": switch to the garment and bring its form into view.
+    const goToGarment = (idx: number) => {
+        setActiveTab(idx);
+        const section = garmentSectionRef.current;
+        if (section) {
+            section.scrollIntoView({ behavior: "smooth", block: "start" });
+            section.focus({ preventScroll: true });
+        }
     };
 
     const orderTotal = React.useMemo(() => {
@@ -301,7 +312,11 @@ function NewAlterationOrder() {
                 </section>
                 </fieldset>
 
-                <section className="rounded-xl border border-slate-300/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
+                <section
+                    ref={garmentSectionRef}
+                    tabIndex={-1}
+                    className="scroll-mt-4 rounded-xl border border-slate-300/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm focus:outline-none"
+                >
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                         <h2 className="text-sm font-semibold text-slate-800">Garments</h2>
                         {!isViewMode && (
@@ -379,7 +394,7 @@ function NewAlterationOrder() {
                                         key={g.key}
                                         index={idx}
                                         garment={g}
-                                        onClick={() => setActiveTab(idx)}
+                                        onClick={() => goToGarment(idx)}
                                     />
                                 ))}
                             </ul>

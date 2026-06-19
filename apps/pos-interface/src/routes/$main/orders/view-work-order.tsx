@@ -353,8 +353,9 @@ function ViewWorkOrder() {
             paymentType: orderData.payment_type ?? undefined,
             paymentRefNo: orderData.payment_ref_no ?? undefined,
             orderTaker: orderTakerEmployee?.name,
+            customerSignatureUrl: orderResponse?.data?.customer_signature_url ?? undefined,
         };
-    }, [OrderForm, employees, order.id, customerDemographics, fabricSelections, card2MeasurementResponse, shelfForm, fabricsResponse]);
+    }, [OrderForm, employees, order.id, customerDemographics, fabricSelections, card2MeasurementResponse, shelfForm, fabricsResponse, orderResponse]);
 
     // ── Render ────────────────────────────────────────────────────────────────
     if (isError) {

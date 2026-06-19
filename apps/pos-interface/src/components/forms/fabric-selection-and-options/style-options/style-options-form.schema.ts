@@ -72,7 +72,7 @@ export const styleOptionsSchema = z.object({
     return true;
   },
   {
-    message: "Jabzour 2 is required when Shaab is selected",
+    message: "Jabzour 2 is required when Zipper is selected",
     path: ["jabzour", "jabzour_2"],
   }
 );

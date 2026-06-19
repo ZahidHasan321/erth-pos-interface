@@ -1,25 +1,27 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { CashierListBody } from "@/components/cashier/cashier-terminal";
-import { brandUsesCashier } from "@/lib/constants";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { PendingQueueBody } from "@/components/cashier/pending-queue";
 
+// §3 Pending queue — the cashier landing inside the shop shell. Brand gating
+// lives on the parent layout route (route.tsx).
 export const Route = createFileRoute("/$main/cashier/")({
-    beforeLoad: ({ params }) => {
-        if (!brandUsesCashier(params.main)) {
-            throw redirect({ to: "/$main", params: { main: params.main } });
-        }
-    },
-    component: CashierListPage,
+    component: CashierPendingPage,
     head: () => ({
         meta: [{ title: "Cashier" }],
     }),
 });
 
-function CashierListPage() {
+function CashierPendingPage() {
     const navigate = useNavigate();
     const { main } = Route.useParams();
     return (
-        <CashierListBody
-            onSelectOrder={(id) => navigate({ to: "/$main/cashier/$orderId", params: { main, orderId: id } })}
+        <PendingQueueBody
+            onProceedToPayment={(ids) =>
+                navigate({
+                    to: "/$main/cashier/process",
+                    params: { main },
+                    search: { ids: ids.join(",") },
+                })
+            }
         />
     );
 }

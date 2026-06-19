@@ -7,6 +7,7 @@ import {
   Ruler,
   Camera,
   Package,
+  ClipboardCheck,
   Save,
   Check,
   X,
@@ -51,7 +52,7 @@ import { RadioGroup, RadioGroupItem } from "@repo/ui/radio-group";
 import { SignaturePad } from "@/components/forms/signature-pad";
 
 // API and Types
-import { getOrderById, repriceOrderStyles } from "@/api/orders";
+import { getOrderById, repriceOrderStyles, bumpInvoiceRevision } from "@/api/orders";
 import { getMeasurementById, getMeasurementsByCustomer, createMeasurement } from "@/api/measurements";
 import { updateGarment, createRedoReplacement, redoPromoteFinalToBrova } from "@/api/garments";
 import { getFabrics } from "@/api/fabrics";
@@ -83,6 +84,7 @@ import {
   brovaResultingStyle,
   orderFinalsInProduction,
   brovaEditable,
+  isBrovaFeedbackSubject,
 } from "@/lib/feedback-overrides";
 import { MeasurementOverrideSection, FinalsCardOverride, GarmentTagLabel } from "@/components/feedback/override-section";
 import { MeasurementSheet } from "@/components/feedback/measurement-sheet";
@@ -110,6 +112,27 @@ import {
   thicknessOptions,
   type BaseOption
 } from "@/components/forms/fabric-selection-and-options/constants";
+
+// Stable idempotency key from a seed string (cyrb53 ×2 → 128-bit hex → UUID
+// shape). The brova-trial invoice-revision bump (§3) is an additive counter, so
+// unlike the reprice (which self-guards by comparing absolute totals) it can
+// double-bump if a re-submit re-runs it after a mid-sequence failure. Seeding the
+// key on the stable (order, garment, trip) of the feedback event makes the
+// re-submit re-use the key and short-circuit in idem_claim instead.
+function stableUuidFromSeed(seed: string): string {
+  const cyrb = (s: string, a: number, b: number): string => {
+    for (let i = 0; i < s.length; i++) {
+      const ch = s.charCodeAt(i);
+      a = Math.imul(a ^ ch, 2654435761);
+      b = Math.imul(b ^ ch, 1597334677);
+    }
+    a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909);
+    b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909);
+    return (b >>> 0).toString(16).padStart(8, "0") + (a >>> 0).toString(16).padStart(8, "0");
+  };
+  const hex = (cyrb(seed, 0x9e3779b9, 0x85ebca6b) + cyrb(seed, 0xc2b2ae35, 0x27d4eb2f)).slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
 
 // Route Definition
 export const Route = createFileRoute(
@@ -473,7 +496,7 @@ function formatTime(sec: number): string {
 // Module-level registry so only one voice note plays at a time
 let currentlyPlayingAudio: HTMLAudioElement | null = null;
 
-function VoiceNotePlayer({ url, label, onRemove }: { url: string; label: string; onRemove: () => void }) {
+function VoiceNotePlayer({ url, label, onRemove, readOnly }: { url: string; label: string; onRemove: () => void; readOnly?: boolean }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -628,15 +651,17 @@ function VoiceNotePlayer({ url, label, onRemove }: { url: string; label: string;
           />
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label={`Remove ${label}`}
-        title={`Remove ${label}`}
-        className="shrink-0 text-muted-foreground hover:text-destructive p-1"
-      >
-        <X className="size-4" />
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove ${label}`}
+          title={`Remove ${label}`}
+          className="shrink-0 text-muted-foreground hover:text-destructive p-1"
+        >
+          <X className="size-4" />
+        </button>
+      )}
     </div>
   );
 }
@@ -1036,17 +1061,17 @@ function UnifiedFeedbackInterface() {
     [activeOrder, selectedGarmentId]
   );
 
-  // Derive activeTab from garment type
+  // Derive activeTab from garment type. Since eligibleGarments are brovas only
+  // (§2.5 — finals are never fed back), activeTab is effectively always "brova";
+  // the "final" branches below are vestigial and never render.
   const activeTab = activeGarment?.garment_type === "brova" ? "brova" : "final";
 
-  // Eligible garments: at shop and in a stage that expects feedback
+  // Eligible garments: brovas at the shop that are still feedback subjects (§2.5).
+  // Finals are never fed back (collected at the cashier, §3); a returned
+  // Accept-with-Fix brova is collect-only. See isBrovaFeedbackSubject.
   const eligibleGarments = useMemo(() => {
     if (!activeOrder?.garments) return [];
-    return activeOrder.garments.filter(g =>
-      g.location === 'shop' &&
-      g.piece_stage !== 'waiting_for_acceptance' &&
-      g.piece_stage !== 'completed'
-    );
+    return activeOrder.garments.filter(isBrovaFeedbackSubject);
   }, [activeOrder?.garments]);
 
   // 1. Garment Selection Effect — auto-select first eligible garment
@@ -1958,9 +1983,15 @@ function UnifiedFeedbackInterface() {
           return a;
         };
 
+        // Did this submit change any garment's PRINTED STYLE spec (vs. a pure
+        // measurement repoint)? Drives the no-price-move invoice-revision bump
+        // below (§3). Measurement-only corrections never set this.
+        let styleSpecChanged = false;
+
         // 1. Active garment's own option-flow style edits (brova or final).
         if (Object.keys(activeStyleUpdates).length > 0) {
           await updateGarment(activeGarment.id, activeStyleUpdates as Partial<Garment>);
+          styleSpecChanged = true;
         }
 
         // 2. Per-garment override writes: measurement repoint + style overrides.
@@ -1973,7 +2004,9 @@ function UnifiedFeedbackInterface() {
             patch.measurement_id = resolvedMeasId;
           }
           if (ov.styleOverride != null) {
-            Object.assign(patch, diffStyleFields(pickStyleFields(garment), ov.styleOverride));
+            const styleDiff = diffStyleFields(pickStyleFields(garment), ov.styleOverride);
+            if (Object.keys(styleDiff).length > 0) styleSpecChanged = true;
+            Object.assign(patch, styleDiff);
           }
           if (Object.keys(patch).length > 0) {
             await updateGarment(gid, patch);
@@ -2020,6 +2053,25 @@ function UnifiedFeedbackInterface() {
           } else {
             toast.success(
               `Order total updated to KWD ${repricePreview.newOrderTotal.toFixed(3)} (${repricePreview.delta >= 0 ? "+" : ""}${repricePreview.delta.toFixed(3)}).`,
+            );
+          }
+        } else if (state.feedbackAction !== "needs_redo" && styleSpecChanged) {
+          // Style spec changed but the reprice found no price delta (flat
+          // qallabi/designer styles, net-zero edits). Re-issue the signed invoice
+          // with NO price change (SPEC §3): "revised invoice, no price delta". The
+          // key is stable on (order, garment, trip) so a re-submit short-circuits
+          // instead of double-bumping. Non-fatal, like the reprice above.
+          const res = await bumpInvoiceRevision({
+            orderId: activeOrder.id,
+            reason: `Brova-trial style change, no price delta (${state.feedbackAction})`,
+            idempotencyKey: stableUuidFromSeed(
+              `style-bump:${activeOrder.id}:${activeGarment.id}:${activeGarment.trip_number || 1}`,
+            ),
+          });
+          if (res.status === "error") {
+            toast.warning(
+              `Spec saved, but the invoice was not re-issued: ${res.message}. Re-submit to retry.`,
+              { duration: 8000 },
             );
           }
         }
@@ -2439,7 +2491,7 @@ function UnifiedFeedbackInterface() {
         label: "Jabzour",
         mainValue: displayJabzour1 || g.jabzour_1,
         displayText: isShaab
-          ? `Shaab (Zipper)${displayJabzour2 ? ` · ${findDisplayText(jabzourTypes, displayJabzour2) || displayJabzour2}` : ""}`
+          ? `Zipper${displayJabzour2 ? ` · ${findDisplayText(jabzourTypes, displayJabzour2) || displayJabzour2}` : ""}`
           : `${findDisplayText(jabzourTypes, displayJabzour1) || displayJabzour1} (Button)`,
         mainImage: isShaab
           ? findOptionImage(jabzourTypes, "JAB_SHAAB")
@@ -2756,6 +2808,28 @@ function UnifiedFeedbackInterface() {
         </div>
         <h3 className="text-lg font-medium text-foreground">Order not found</h3>
         <p className="text-muted-foreground text-sm mt-2">This order could not be loaded.</p>
+        <Button variant="outline" size="sm" className="mt-4" onClick={() => router.history.back()}>
+          <ArrowLeft className="size-3.5 mr-2" />
+          Go Back
+        </Button>
+      </div>
+    );
+  }
+
+  // No brova to give feedback on. Feedback is a brova-trial concept only — finals
+  // are collected at the cashier (§3), and a returned Accept-with-Fix brova is
+  // collect-only. Nothing to trial here.
+  if (eligibleGarments.length === 0) {
+    return (
+      <div className="p-4 md:p-5 max-w-6xl mx-auto flex flex-col items-center justify-center py-10 text-center">
+        <div className="size-14 bg-muted/30 rounded-full flex items-center justify-center mb-4 border border-dashed border-border shadow-inner">
+          <ClipboardCheck className="w-10 h-10 text-muted-foreground/40" />
+        </div>
+        <h3 className="text-lg font-medium text-foreground">No brova to give feedback on</h3>
+        <p className="text-muted-foreground text-sm mt-2 max-w-md">
+          {activeOrder.customer?.name || "This order"} has no brova at the showroom awaiting a
+          trial. Finished garments are handed over and collected at the cashier.
+        </p>
         <Button variant="outline" size="sm" className="mt-4" onClick={() => router.history.back()}>
           <ArrowLeft className="size-3.5 mr-2" />
           Go Back
@@ -3259,7 +3333,6 @@ function UnifiedFeedbackInterface() {
                                         brovaStyle={brovaStyle}
                                         readOnly={isReadOnly}
                                         onSetFinalStyle={setFinalStyleField}
-                                        layout={isBool ? "stacked" : "aside"}
                                     />
                                 ) : null;
 
@@ -3269,7 +3342,17 @@ function UnifiedFeedbackInterface() {
                                         className="rounded-md border border-border bg-card p-3 space-y-2.5 shadow-sm transition-[transform,box-shadow] duration-150 hover:scale-[1.01] hover:shadow-md"
                                     >
                                         <div className={isBool ? "space-y-2.5" : "flex flex-col md:flex-row gap-2.5 md:gap-4 md:items-start"}>
-                                        <div className={isBool ? "space-y-2.5" : "space-y-2.5 md:w-[22rem] lg:w-[26rem] md:shrink-0"}>
+                                        <div
+                                            className={cn(
+                                                "space-y-2.5",
+                                                !isBool && "md:w-[22rem] lg:w-[26rem] md:shrink-0",
+                                                // Tint the brova pane when finals sit beside it, so the two sides read apart at a glance.
+                                                finalsBlock && "rounded-md border border-sky-500/20 bg-sky-500/5 p-2.5",
+                                            )}
+                                        >
+                                        {finalsBlock && (
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">This brova</p>
+                                        )}
                                         <div className="flex items-stretch gap-3">
                                             {/* Current option image */}
                                             {opt.mainImage ? (
@@ -3292,8 +3375,9 @@ function UnifiedFeedbackInterface() {
                                             <div className="shrink-0 flex items-start gap-1.5">
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-main`, true)}
+                                                    disabled={isReadOnly}
                                                     className={cn(
-                                                        "flex items-center justify-center gap-1 px-3 h-8 rounded-md border text-sm font-medium transition-colors",
+                                                        "flex items-center justify-center gap-1 px-3 h-8 rounded-md border text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none",
                                                         isConfirmed
                                                             ? "bg-emerald-600 border-emerald-600 text-white"
                                                             : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
@@ -3304,8 +3388,9 @@ function UnifiedFeedbackInterface() {
                                                 </button>
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-main`, false)}
+                                                    disabled={isReadOnly}
                                                     className={cn(
-                                                        "flex items-center justify-center gap-1 px-3 h-8 rounded-md border text-sm font-medium transition-colors whitespace-nowrap",
+                                                        "flex items-center justify-center gap-1 px-3 h-8 rounded-md border text-sm font-medium transition-colors whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none",
                                                         // Booleans: green when reject = ADD, red when reject = REMOVE.
                                                         isRejected
                                                             ? (isBoolOpt(opt.id) && !getBoolCurrent(opt.id)
@@ -3341,7 +3426,7 @@ function UnifiedFeedbackInterface() {
                                                 )}
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-sm text-muted-foreground shrink-0">New →</span>
-                                                    <Select value={newStyleValue} onValueChange={(v) => handleStyleChange(opt.id, v)}>
+                                                    <Select value={newStyleValue} onValueChange={(v) => handleStyleChange(opt.id, v)} disabled={isReadOnly}>
                                                         <SelectTrigger className="h-10 flex-1 bg-background border-border">
                                                             {newStyleValue ? (
                                                                 <div className="flex items-center gap-2">
@@ -3377,7 +3462,7 @@ function UnifiedFeedbackInterface() {
                                                     return (
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-sm text-muted-foreground shrink-0">Under Zipper →</span>
-                                                            <Select value={secondaryValue} onValueChange={(v) => handleStyleChange("jabzour_2", v)}>
+                                                            <Select value={secondaryValue} onValueChange={(v) => handleStyleChange("jabzour_2", v)} disabled={isReadOnly}>
                                                                 <SelectTrigger className="h-10 flex-1 bg-background border-border">
                                                                     {secondaryValue ? (
                                                                         <div className="flex items-center gap-2">
@@ -3437,8 +3522,9 @@ function UnifiedFeedbackInterface() {
                                                 </span>
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-hashwa`, true)}
+                                                    disabled={isReadOnly}
                                                     className={cn(
-                                                        "flex items-center gap-1 px-3 h-7 rounded-md border text-sm font-medium transition-colors",
+                                                        "flex items-center gap-1 px-3 h-7 rounded-md border text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none",
                                                         hashwaConfirmed
                                                             ? "bg-emerald-600 border-emerald-600 text-white"
                                                             : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
@@ -3448,8 +3534,9 @@ function UnifiedFeedbackInterface() {
                                                 </button>
                                                 <button
                                                     onClick={() => handleCheck(`${opt.id}-hashwa`, false)}
+                                                    disabled={isReadOnly}
                                                     className={cn(
-                                                        "flex items-center gap-1 px-3 h-7 rounded-md border text-sm font-medium transition-colors",
+                                                        "flex items-center gap-1 px-3 h-7 rounded-md border text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none",
                                                         hashwaRejected
                                                             ? "bg-destructive border-destructive text-white"
                                                             : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
@@ -3458,7 +3545,7 @@ function UnifiedFeedbackInterface() {
                                                     <X className="w-4 h-4" /> No
                                                 </button>
                                                 {hashwaRejected && (
-                                                    <Select value={newHashwaValue} onValueChange={(v) => handleHashwaChange(opt.id, v)}>
+                                                    <Select value={newHashwaValue} onValueChange={(v) => handleHashwaChange(opt.id, v)} disabled={isReadOnly}>
                                                         <SelectTrigger className="h-8 text-sm flex-1 bg-background border-border">
                                                             <SelectValue placeholder="New thickness..." />
                                                         </SelectTrigger>
@@ -3489,6 +3576,7 @@ function UnifiedFeedbackInterface() {
                                                 inputKey={opt.id}
                                                 value={currentState.optionNotes[opt.id] || ""}
                                                 onCommit={handleOptionNoteChange}
+                                                disabled={isReadOnly}
                                             />
                                         </div>
 
@@ -3500,6 +3588,7 @@ function UnifiedFeedbackInterface() {
                                                     variant="outline"
                                                     size="sm"
                                                     className="h-7 px-2 text-xs font-medium"
+                                                    disabled={isReadOnly}
                                                     onClick={() => document.getElementById(`photo-input-${opt.id}`)?.click()}
                                                 >
                                                     <Camera className="w-3 h-3 mr-1" /> Photo
@@ -3508,7 +3597,7 @@ function UnifiedFeedbackInterface() {
                                                     variant={recordingOptionId === opt.id ? "destructive" : "outline"}
                                                     size="sm"
                                                     className="h-7 px-2 text-xs font-medium"
-                                                    disabled={recordingOptionId !== null && recordingOptionId !== opt.id}
+                                                    disabled={isReadOnly || (recordingOptionId !== null && recordingOptionId !== opt.id)}
                                                     onClick={() => (recordingOptionId === opt.id ? stopRecording() : startRecording(opt.id))}
                                                 >
                                                     {recordingOptionId === opt.id ? (
@@ -3538,12 +3627,14 @@ function UnifiedFeedbackInterface() {
                                                     {(currentState.optionPhotos[opt.id] ?? []).map((p, i) => (
                                                         <div key={i} className="relative group size-14 rounded-md overflow-hidden border border-border">
                                                             <img src={p.url} alt={`${opt.label} attachment ${i + 1}`} className="w-full h-full object-cover" />
-                                                            <button
-                                                                onClick={() => handleRemoveOptionPhoto(opt.id, i)}
-                                                                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                                            >
-                                                                <X className="size-3.5 text-white" />
-                                                            </button>
+                                                            {!isReadOnly && (
+                                                                <button
+                                                                    onClick={() => handleRemoveOptionPhoto(opt.id, i)}
+                                                                    className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                >
+                                                                    <X className="size-3.5 text-white" />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -3557,6 +3648,7 @@ function UnifiedFeedbackInterface() {
                                                             url={url}
                                                             label={`${opt.label} voice ${i + 1}`}
                                                             onRemove={() => removeOptionVoiceNote(opt.id, i)}
+                                                            readOnly={isReadOnly}
                                                         />
                                                     ))}
                                                 </div>

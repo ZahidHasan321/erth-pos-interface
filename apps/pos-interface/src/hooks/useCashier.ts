@@ -19,6 +19,9 @@ import {
     closeRegister,
     reopenRegister,
     addCashMovement,
+    getCashierPendingOrders,
+    cashierConfirmNoPayment,
+    recordBulkPayment,
 } from "@/api/cashier";
 import type { EodTransactionFilters, CashierFilter, CashierPeriod } from "@/api/cashier";
 
@@ -33,8 +36,10 @@ function invalidateCashierQueries(queryClient: QueryClient, orderId?: number) {
     queryClient.invalidateQueries({ queryKey: ["cashier-order"], refetchType: "active" });
     queryClient.invalidateQueries({ queryKey: ["cashier-summary"], refetchType: "active" });
     queryClient.invalidateQueries({ queryKey: ["cashier-recent-orders"], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["cashier-pending-orders"], refetchType: "active" });
     // Mark order lists as stale but only refetch if currently visible
     queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "active" });
+    queryClient.invalidateQueries({ queryKey: ["dispatchOrders"], refetchType: "active" });
     queryClient.invalidateQueries({ queryKey: ["showroom-orders"], refetchType: "active" });
     queryClient.invalidateQueries({ queryKey: ["order-history"], refetchType: "active" });
     queryClient.invalidateQueries({ queryKey: ["register-session"], refetchType: "active" });
@@ -57,10 +62,10 @@ export function useRecentCashierOrders(filter: CashierFilter = "all", period: Ca
     });
 }
 
-export function useCashierSummary() {
+export function useCashierSummary(period: CashierPeriod = "all") {
     return useQuery({
-        queryKey: ["cashier-summary"],
-        queryFn: () => getCashierSummary(),
+        queryKey: ["cashier-summary", period],
+        queryFn: () => getCashierSummary(period),
         staleTime: 1000 * 60,
     });
 }
@@ -71,6 +76,48 @@ export function useCashierOrderListSearch(query: string) {
         queryFn: () => searchCashierOrderList(query),
         enabled: query.trim().length >= 1,
         staleTime: 1000 * 30,
+    });
+}
+
+// ── §3 Pending queue + bulk processing ────────────────────────────────────────
+
+export function useCashierPendingOrders() {
+    return useQuery({
+        queryKey: ["cashier-pending-orders"],
+        queryFn: () => getCashierPendingOrders(),
+        staleTime: 1000 * 30,
+    });
+}
+
+export function useCashierConfirmNoPaymentMutation() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: cashierConfirmNoPayment,
+        onSuccess: (response) => {
+            if (response.status === "error") {
+                toast.error(`Could not confirm orders: ${response.message}`);
+                return;
+            }
+            toast.success("Orders confirmed");
+            invalidateCashierQueries(queryClient);
+        },
+        onError: (error) => toast.error(`Confirm error: ${error.message}`),
+    });
+}
+
+export function useBulkPaymentMutation() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: recordBulkPayment,
+        onSuccess: (response) => {
+            if (response.status === "error") {
+                toast.error(`Bulk payment failed: ${response.message}`);
+                return;
+            }
+            toast.success("Payments recorded");
+            invalidateCashierQueries(queryClient);
+        },
+        onError: (error) => toast.error(`Bulk payment error: ${error.message}`),
     });
 }
 

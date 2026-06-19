@@ -47,7 +47,7 @@ function getPresetDates(preset: DatePreset): { from: Date; to: Date } {
     }
 }
 
-export function EodReportView() {
+export function EodReportView({ hideCashReconciliation = false }: { hideCashReconciliation?: boolean } = {}) {
     const [preset, setPreset] = useState<DatePreset>("today");
     const [dateFrom, setDateFrom] = useState<Date>(() => {
         const now = new Date();
@@ -100,6 +100,7 @@ export function EodReportView() {
                 dateFrom: dateFromStr,
                 dateTo: dateToStr,
                 registerSession: sessionRes.data,
+                hideCashReconciliation,
             };
             if (action === "view") await printMod.viewEodReport(params);
             else await printMod.printEodReport(params);
@@ -108,7 +109,7 @@ export function EodReportView() {
         } finally {
             setPrintLoading(false);
         }
-    }, [summary, dateFromStr, dateToStr, isMultiDay]);
+    }, [summary, dateFromStr, dateToStr, isMultiDay, hideCashReconciliation]);
 
     return (
         <div className="p-4 sm:p-6 max-w-[1600px] mx-auto pb-10 space-y-6">
@@ -199,7 +200,7 @@ export function EodReportView() {
                     <EodKpiCards data={summary} />
 
                     {!isMultiDay && (
-                        <EodCashDrawer date={dateFromStr} report={summary} />
+                        <EodCashDrawer date={dateFromStr} report={summary} hideReconciliation={hideCashReconciliation} />
                     )}
 
                     <EodSalesSummary data={summary} />

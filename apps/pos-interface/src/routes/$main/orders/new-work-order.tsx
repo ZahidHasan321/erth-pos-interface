@@ -896,7 +896,14 @@ function NewWorkOrder() {
                 discountPercentage: cashierHandlesPayment ? undefined : (data.discount_percentage ?? undefined),
                 referralCode: cashierHandlesPayment ? undefined : (data.referral_code ?? undefined),
                 orderTotal: data.order_total ?? 0,
-                advance: cashierHandlesPayment ? undefined : (data.advance ?? undefined),
+                // Persist the agreed advance for ALL brands (including ERTH).
+                // It is informational — it drives the cashier's "Advance" preset
+                // (§3) and is NOT a payment (payment is `paid`, still 0 for ERTH).
+                advance: data.advance ?? undefined,
+                // §3 cashier-processing gate. ERTH defers to the cashier, so the
+                // order stays "pending" and must be cashier-processed before
+                // dispatch. Inline-payment brands are processed at confirmation.
+                deferToCashier: cashierHandlesPayment,
                 fabricCharge: data.fabric_charge ?? 0,
                 stitchingCharge: data.stitching_charge ?? 0,
                 styleCharge: data.style_charge ?? 0,
@@ -1090,6 +1097,7 @@ function NewWorkOrder() {
             paymentType: orderData.payment_type ?? undefined,
             paymentRefNo: orderData.payment_ref_no ?? undefined,
             orderTaker: orderTakerEmployee?.name,
+            customerSignatureUrl: fabricSelectionForm.getValues().signature || undefined,
         };
     }, [
         demographicsForm,

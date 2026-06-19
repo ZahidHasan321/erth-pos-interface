@@ -44,7 +44,7 @@ function ErthLoginPage() {
 
   // Apply erth theme so CSS vars resolve correctly
   React.useEffect(() => {
-    document.documentElement.classList.remove("erth", "sakkba");
+    document.documentElement.classList.remove("erth", "sakkba", "qass");
     document.documentElement.classList.add("erth");
     return () => document.documentElement.classList.remove("erth");
   }, []);

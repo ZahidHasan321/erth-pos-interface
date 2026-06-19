@@ -21,7 +21,13 @@
  * data is untouched and scenarios are isolated.
  */
 import { describe, it, expect, afterAll } from "vitest";
-import { sql, inRolledBackTx, only, type Tx } from "../../scripts/lifecycle/db";
+import {
+  sql,
+  inRolledBackTx,
+  tryInSavepoint,
+  only,
+  type Tx,
+} from "../../scripts/lifecycle/db";
 import * as wf from "../../scripts/lifecycle/driver";
 import { isAlteration, getAlterationNumber } from "../utils";
 import { deriveReworkEnabledKeys } from "../../../../apps/workshop/src/lib/production-logic";
@@ -104,6 +110,162 @@ describe("order creation + cashier split (CLAUDE.md §Order Lifecycle 1–2)", (
       const o = await wf.getOrder(tx, orderId);
       expect(o.checkout_status).toBe("confirmed");
       expect(Number(o.paid)).toBe(84);
+    });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+
+/** True when the WORK order's §3 cashier-processing gate is cleared. */
+async function isProcessed(tx: Tx, orderId: number): Promise<boolean> {
+  const [w] = await tx`
+    SELECT cashier_processed_at FROM work_orders WHERE order_id = ${orderId}
+  `;
+  return (w as { cashier_processed_at: unknown } | undefined)?.cashier_processed_at != null;
+}
+
+describe("SPEC §3: WORK cashier-processing gate", () => {
+  it("SPEC: a confirmed WORK order is pending (cashier_processed_at NULL) until a cashier acts", async () => {
+    await inRolledBackTx(async (tx) => {
+      const { orderId } = await wf.createWorkOrder(tx, [{ garment_type: "final" }]);
+      expect(await isProcessed(tx, orderId)).toBe(false);
+    });
+  });
+
+  it("SPEC: dispatch is REJECTED while the order is still pending (no garment moves)", async () => {
+    await inRolledBackTx(async (tx) => {
+      const { orderId, garments } = await wf.createWorkOrder(tx, [
+        { garment_type: "final" },
+      ]);
+      // Raw dispatch (no cashier step) must be rejected by the gate.
+      const err = await tryInSavepoint(tx, (sp) =>
+        wf.dispatchOrder(sp, orderId, undefined, { skipCashierProcess: true }),
+      );
+      expect(err).not.toBeNull();
+      // Nothing moved: garments still at trip 0 / shop, order_phase still 'new'.
+      const gs = await wf.getGarments(tx, orderId);
+      expect(gs.every((g) => g.trip_number === 0 && g.location === "shop")).toBe(true);
+      expect((await wf.getOrder(tx, orderId)).order_phase).toBe("new");
+    });
+  });
+
+  it("SPEC: confirm-without-payment clears the gate (paid stays 0) and unlocks dispatch", async () => {
+    await inRolledBackTx(async (tx) => {
+      const { orderId, garments } = await wf.createWorkOrder(tx, [
+        { garment_type: "final" },
+      ]);
+      await wf.cashierProcess(tx, orderId);
+      expect(await isProcessed(tx, orderId)).toBe(true);
+      // The marker — not payment — is the gate: paid is still 0.
+      expect(Number((await wf.getOrder(tx, orderId)).paid)).toBe(0);
+
+      // Dispatch now succeeds (already processed; skip the helper's auto-step).
+      await wf.dispatchOrder(tx, orderId, undefined, { skipCashierProcess: true });
+      const gs = await wf.getGarments(tx, orderId);
+      expect(gs.every((g) => g.trip_number === 1 && g.location === "transit_to_workshop")).toBe(true);
+      expect((await wf.getOrder(tx, orderId)).order_phase).toBe("in_progress");
+      void garments;
+    });
+  });
+
+  it("SPEC: the first payment also clears the gate (paid via record_payment_transaction)", async () => {
+    await inRolledBackTx(async (tx) => {
+      const { orderId } = await wf.createWorkOrder(tx, [{ garment_type: "final" }]);
+      expect(await isProcessed(tx, orderId)).toBe(false);
+      await wf.recordPayment(tx, orderId, 40); // partial advance
+      expect(await isProcessed(tx, orderId)).toBe(true);
+      expect(Number((await wf.getOrder(tx, orderId)).paid)).toBe(40);
+      // Gate satisfied → dispatch allowed.
+      await wf.dispatchOrder(tx, orderId, undefined, { skipCashierProcess: true });
+      expect((await wf.getOrder(tx, orderId)).order_phase).toBe("in_progress");
+    });
+  });
+
+  it("SPEC: ALTERATION dispatch is NOT gated by cashier processing", async () => {
+    await inRolledBackTx(async (tx) => {
+      const { orderId, garments } = await wf.createAlterationOrder(tx, [
+        { garment_type: "alteration" },
+      ]);
+      // No cashier step; the gate must not block a non-WORK order.
+      await wf.dispatchOrder(tx, orderId, undefined, { skipCashierProcess: true });
+      const gs = await wf.getGarments(tx, orderId);
+      expect(gs.every((g) => g.trip_number === 1 && g.location === "transit_to_workshop")).toBe(true);
+      void garments;
+    });
+  });
+});
+
+describe("SPEC §3: bulk cashier payment (atomic + idempotent)", () => {
+  it("SPEC: bulk payment charges each order its own amount and clears each gate", async () => {
+    await inRolledBackTx(async (tx) => {
+      const a = (await wf.createWorkOrder(tx, [{ garment_type: "final" }])).orderId;
+      const b = (await wf.createWorkOrder(tx, [{ garment_type: "final" }])).orderId;
+      const c = (await wf.createWorkOrder(tx, [{ garment_type: "final" }])).orderId;
+
+      const res = await wf.recordBulkPayment(tx, [
+        { orderId: a, amount: 40 }, // partial advance
+        { orderId: b, amount: 84 }, // full
+        { orderId: c, amount: 10 },
+      ]);
+      expect(Number(res.count)).toBe(3);
+      expect(Number(res.total_charged)).toBe(134);
+
+      expect(Number((await wf.getOrder(tx, a)).paid)).toBe(40);
+      expect(Number((await wf.getOrder(tx, b)).paid)).toBe(84);
+      expect(Number((await wf.getOrder(tx, c)).paid)).toBe(10);
+      expect(await isProcessed(tx, a)).toBe(true);
+      expect(await isProcessed(tx, b)).toBe(true);
+      expect(await isProcessed(tx, c)).toBe(true);
+    });
+  });
+
+  it("SPEC: a replayed bulk batch (same key) charges ONCE — no double credit", async () => {
+    await inRolledBackTx(async (tx) => {
+      const a = (await wf.createWorkOrder(tx, [{ garment_type: "final" }])).orderId;
+      const b = (await wf.createWorkOrder(tx, [{ garment_type: "final" }])).orderId;
+      const key = "11111111-1111-1111-1111-111111111111";
+
+      await wf.recordBulkPayment(tx, [
+        { orderId: a, amount: 40 },
+        { orderId: b, amount: 84 },
+      ], { idempotencyKey: key });
+      // Lost-response replay with the SAME batch key.
+      await wf.recordBulkPayment(tx, [
+        { orderId: a, amount: 40 },
+        { orderId: b, amount: 84 },
+      ], { idempotencyKey: key });
+
+      // Paid moved once, not twice.
+      expect(Number((await wf.getOrder(tx, a)).paid)).toBe(40);
+      expect(Number((await wf.getOrder(tx, b)).paid)).toBe(84);
+      // Exactly one payment transaction per order.
+      const [countA] = await tx`
+        SELECT COUNT(*)::int AS n FROM payment_transactions WHERE order_id = ${a}
+      `;
+      expect((countA as { n: number }).n).toBe(1);
+    });
+  });
+
+  it("SPEC: bulk payment is ALL-OR-NOTHING — one bad order aborts the whole batch (no cash leak)", async () => {
+    await inRolledBackTx(async (tx) => {
+      const a = (await wf.createWorkOrder(tx, [{ garment_type: "final" }])).orderId;
+      const bogus = 999_999; // non-existent order → record_payment_transaction raises
+
+      const err = await tryInSavepoint(tx, (sp) =>
+        wf.recordBulkPayment(sp, [
+          { orderId: a, amount: 40 },
+          { orderId: bogus, amount: 10 },
+        ]),
+      );
+      expect(err).not.toBeNull();
+
+      // The good order's payment was rolled back with the batch: nothing leaked.
+      expect(Number((await wf.getOrder(tx, a)).paid)).toBe(0);
+      expect(await isProcessed(tx, a)).toBe(false);
+      const [count] = await tx`
+        SELECT COUNT(*)::int AS n FROM payment_transactions WHERE order_id = ${a}
+      `;
+      expect((count as { n: number }).n).toBe(0);
     });
   });
 });

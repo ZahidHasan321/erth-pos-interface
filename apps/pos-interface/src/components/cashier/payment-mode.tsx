@@ -439,8 +439,8 @@ function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments:
                             return (
                             <li key={g.id} className={`flex items-center gap-2 text-sm py-1.5 px-2 rounded-md ${isDiscarded ? "bg-red-50/60 border border-red-200" : "bg-muted/40"}`}>
                                 <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-6">#{i + 1}</span>
-                                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${g.garment_type === "brova" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"} ${isDiscarded ? "opacity-50" : ""}`}>
-                                    {g.garment_type === "brova" ? "Brova" : "Final"}
+                                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${g.garment_type === "brova" ? "bg-amber-100 text-amber-700" : g.garment_type === "alteration" ? "bg-slate-100 text-slate-700" : "bg-sky-100 text-sky-700"} ${isDiscarded ? "opacity-50" : ""}`}>
+                                    {g.garment_type === "brova" ? "Brova" : g.garment_type === "alteration" ? "Alteration" : "Final"}
                                 </span>
                                 <span className={`font-medium truncate ${isDiscarded ? "line-through text-muted-foreground" : ""}`}>{g.fabric?.name || "Outside"}</span>
                                 {isDiscarded && (

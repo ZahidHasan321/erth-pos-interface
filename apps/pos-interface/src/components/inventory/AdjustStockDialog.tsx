@@ -35,7 +35,10 @@ type Props = {
 export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, defaultLocation, currentStock, unit }: Props) {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const [location, setLocation] = useState<StockLocation>(defaultLocation);
+  // Fabric + shelf live only in shop stock — the workshop never holds them
+  // (SPEC §4). Only accessories cross both sides, so only they get the toggle.
+  const crossesSides = itemType === "accessory";
+  const [location, setLocation] = useState<StockLocation>(crossesSides ? defaultLocation : "shop");
   const [delta, setDelta] = useState(0);
   const [deltaInput, setDeltaInput] = useState("0");
   const [reasonValue, setReasonValue] = useState<string>("");
@@ -131,12 +134,14 @@ export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, d
 
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-5 space-y-6">
-            <Section label="Location">
-              <div className="grid grid-cols-2 gap-2">
-                <LocationOption icon={Store} label="Shop" active={location === "shop"} onClick={() => setLocation("shop")} />
-                <LocationOption icon={Hammer} label="Workshop" active={location === "workshop"} onClick={() => setLocation("workshop")} />
-              </div>
-            </Section>
+            {crossesSides && (
+              <Section label="Location">
+                <div className="grid grid-cols-2 gap-2">
+                  <LocationOption icon={Store} label="Shop" active={location === "shop"} onClick={() => setLocation("shop")} />
+                  <LocationOption icon={Hammer} label="Workshop" active={location === "workshop"} onClick={() => setLocation("workshop")} />
+                </div>
+              </Section>
+            )}
 
             <Section label="Change" hint={`Current: ${formatQty(itemType, currentStock, unit)}`}>
               <div className="flex items-stretch rounded-lg border border-input overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1">

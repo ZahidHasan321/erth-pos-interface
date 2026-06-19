@@ -613,7 +613,11 @@ export function QualityCheckForm({
               values={measurements}
               enabledKeys={enabledKeys}
               expectedKeys={expectedMeasurementKeys}
-              failedKeys={new Set(evaluation.failed_measurements)}
+              // The entry form never highlights spec mismatches: by design QC
+              // records what's actually on the piece, so we don't nudge the
+              // inspector to edit a reading until it matches the order. The
+              // real evaluation still runs for submit + the fail report.
+              failedKeys={new Set<string>()}
               onChange={setMeasurement}
             />
           ))}
@@ -627,7 +631,9 @@ export function QualityCheckForm({
             values={options}
             enabledKeys={enabledKeys}
             expectedKeys={expectedOptionKeys}
-            failedKeys={new Set(evaluation.failed_options)}
+            // No live mismatch styling on entry — record what's there, don't
+            // steer the inspector toward the spec. See measurements above.
+            failedKeys={new Set<string>()}
             touchedKeys={touchedOptions}
             scopedHide={scopedHideOptions}
             onChange={setOption}
@@ -1044,7 +1050,7 @@ function OptionGroups({
                   <span className="text-red-600">*</span>
                 ) : (
                   <span className="text-amber-600">
-                    (clear, only used when Type 1 is Shaab)
+                    (clear, only used when Type 1 is Zipper)
                   </span>
                 )}
               </SubLabel>

@@ -1,8 +1,7 @@
 import * as React from "react";
-import ErthLogo from "@/assets/erth-light.svg";
-import SakkbaLogo from "@/assets/Sakkba.png";
+import { getInvoiceBrand } from "../invoice/brand";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
-import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
+import { displaySoakHours, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 export interface ReceiptGarment {
     garment_type: string;
@@ -50,6 +49,9 @@ export interface PaymentReceiptData {
     timestamp: string;
     garments?: ReceiptGarment[];
     shelfItems?: ReceiptShelfItem[];
+    // Customer signature captured during fabric selection (uploaded storage URL).
+    // Absent for SALES orders.
+    customerSignatureUrl?: string;
 }
 
 /* ---------- Arabic Mappings (same as OrderInvoice) ---------- */
@@ -96,10 +98,10 @@ const jabzourMap: Record<string, string> = {
     JAB_MAGFI_MURABBA: "مغفي مربع",
     JAB_BAIN_MUSALLAS: "بين مثلث",
     JAB_MAGFI_MUSALLAS: "مغفي مثلث",
-    JAB_SHAAB: "شعاب",
+    JAB_SHAAB: "سحاب",
 };
 const cuffMap: Record<string, string> = {
-    CUF_DOUBLE_GUMSHA: "دبل كمشة",
+    CUF_DOUBLE_GUMSHA: "بزمة فرنسي",
     CUF_MURABBA_KABAK: "مربع كبك",
     CUF_MUSALLAS_KABBAK: "مثلث كبك",
     CUF_MUDAWAR_KABBAK: "مدور كبك",
@@ -122,8 +124,8 @@ const COL_ORDER: ArabicKey[] = [
 
 export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentReceiptData }>(
     ({ data }, ref) => {
-        const isErth = document.documentElement.classList.contains("erth");
-        const brandName = isErth ? "ERTH" : "Sakkba";
+        const brand = getInvoiceBrand();
+        const brandName = brand.name;
 
         const formattedDate = parseUtcTimestamp(data.timestamp).toLocaleDateString("ar-KW", {
             timeZone: TIMEZONE,
@@ -165,7 +167,7 @@ export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentRe
                     القماش: g.fabric_name || "غير محدد",
                     بروفه: g.garment_type === "brova" ? "نعم" : "لا",
                     استعجال: g.express ? "نعم" : "لا",
-                    نقع: g.soaking ? (g.soaking_hours ? `${g.soaking_hours} س` : "نعم") : "لا",
+                    نقع: g.soaking ? (g.soaking_hours ? `${displaySoakHours(g.soaking_hours)} س` : "نعم") : "لا",
                     "خدمة التوصيل": data.homeDelivery ? "منزلي" : "استلام",
                     الإجمالي: `${fmt((g.stitching_price_snapshot || 0) + (g.fabric_price_snapshot || 0) + (g.style_price_snapshot || 0))} د.ك`,
                 };
@@ -181,7 +183,7 @@ export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentRe
                 {/* Header */}
                 <div className="mb-4 pb-3 border-b border-gray-700">
                     <div className="text-center mb-3">
-                        <img src={isErth ? ErthLogo : SakkbaLogo} alt={brandName} className="h-16 mx-auto mb-2" />
+                        <img src={brand.logo} alt={brandName} className="h-16 mx-auto mb-2" />
                         <h1 className="text-2xl font-bold text-gray-800">{brandName} Clothing</h1>
                     </div>
                     <div className="flex justify-between items-start">
@@ -335,6 +337,22 @@ export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentRe
                         </div>
                     </div>
                 </div>
+
+                {/* Customer Signature (same as OrderInvoice) */}
+                {data.customerSignatureUrl && (
+                    <div className="mb-3">
+                        <div className="flex flex-col items-end gap-1">
+                            <span className="text-xs font-semibold text-gray-800">توقيع العميل</span>
+                            <div className="h-20 w-48 border border-gray-700 rounded flex items-center justify-center overflow-hidden bg-white">
+                                <img
+                                    src={data.customerSignatureUrl}
+                                    alt="توقيع العميل"
+                                    className="max-h-full max-w-full object-contain"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Terms (same as OrderInvoice) */}
                 <div className="mt-4 pt-3 border-t border-gray-700">

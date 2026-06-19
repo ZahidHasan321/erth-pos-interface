@@ -214,6 +214,19 @@ BEGIN
     home_delivery = EXCLUDED.home_delivery
   RETURNING * INTO v_work_order_row;
 
+  -- 3b. §3 cashier-processing gate. A WORK order must be cashier-processed
+  --     before it can be dispatched to the workshop. Inline-payment brands have
+  --     no cashier step, so they are "processed" right here at confirmation;
+  --     only the deferred cashier brand (ERTH) leaves the marker NULL so the
+  --     cashier must process it. The app passes `deferToCashier` from its brand
+  --     source of truth (brandUsesCashier) — the DB stays brand-agnostic. The
+  --     advance is persisted above for ALL brands (informational; drives the
+  --     cashier Advance preset; it is NOT a payment — `paid` is the `paid` field).
+  IF NOT COALESCE((p_checkout_details->>'deferToCashier')::boolean, false) THEN
+    UPDATE work_orders SET cashier_processed_at = now()
+    WHERE order_id = p_order_id AND cashier_processed_at IS NULL;
+  END IF;
+
   -- 4. Deduct Shelf Stock & Record Items
   DELETE FROM order_shelf_items WHERE order_id = p_order_id;
 
@@ -1001,10 +1014,15 @@ BEGIN
     END IF;
   END IF;
 
-  -- Bump invoice revision on every payment/refund recording
-  UPDATE work_orders
-  SET invoice_revision = COALESCE(invoice_revision, 0) + 1
-  WHERE order_id = p_order_id;
+  -- Invoice revision = price changes only (SPEC §3). A refund changes what the
+  -- customer owes/has paid → mint a new revision. Plain payments (advance /
+  -- installment / full) do NOT bump: paying does not change the invoice, so
+  -- revision 0 stays the original invoice the customer signed.
+  IF p_transaction_type = 'refund' THEN
+    UPDATE work_orders
+    SET invoice_revision = COALESCE(invoice_revision, 0) + 1
+    WHERE order_id = p_order_id;
+  END IF;
 
   -- Insert the transaction (trigger will sync orders.paid)
   INSERT INTO payment_transactions (
@@ -1025,6 +1043,19 @@ BEGIN
     p_idempotency_key
   )
   RETURNING * INTO v_transaction;
+
+  -- §3 cashier-processing gate: the first payment on a WORK order also clears
+  -- "pending cashier processing", so an order paid via the per-order detail
+  -- page (not just the bulk page) is never stranded as pending. Set once
+  -- (WHERE cashier_processed_at IS NULL keeps the original processor/timestamp
+  -- and stays idempotent); no-op for SALES (no work_orders row) and for refunds.
+  IF p_transaction_type = 'payment' THEN
+    UPDATE work_orders
+    SET cashier_processed_at = now(),
+        cashier_processed_by = p_cashier_id
+    WHERE order_id = p_order_id
+      AND cashier_processed_at IS NULL;
+  END IF;
 
   -- Collect garments if any were selected (mark as collected + completed)
   IF p_collect_garment_ids IS NOT NULL AND array_length(p_collect_garment_ids, 1) > 0 THEN
@@ -1193,6 +1224,220 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- 9b. RPC: Cashier "confirm without payment" for one or more WORK orders (§3).
+-- Clears the cashier-processing gate WITHOUT recording any money, so it needs
+-- no open register. Idempotent on its key; the per-order UPDATE is also
+-- naturally idempotent (only fills a NULL marker, preserving the original
+-- processor). Only confirmed WORK orders that are still pending are touched;
+-- anything else is reported as skipped so the caller can surface partial results.
+CREATE OR REPLACE FUNCTION cashier_confirm_orders_no_payment(
+  p_order_ids INT[],
+  p_cashier_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_my_user_id UUID;
+  v_processed INT[] := ARRAY[]::INT[];
+  v_skipped INT[] := ARRAY[]::INT[];
+  v_order_id INT;
+  v_updated INT;
+  v_result JSONB;
+BEGIN
+  PERFORM assert_active_user();
+
+  -- Attribution guard mirrors record_payment_transaction: non-managers may only
+  -- process under their own id; managers/admins may act on behalf of staff.
+  v_my_user_id := get_my_user_id();
+  IF p_cashier_id IS NOT NULL
+     AND p_cashier_id <> v_my_user_id
+     AND NOT is_manager_or_above() THEN
+    RAISE EXCEPTION 'Cashier mismatch: cannot process orders under another user';
+  END IF;
+  IF p_cashier_id IS NULL THEN
+    p_cashier_id := v_my_user_id;
+  END IF;
+
+  -- Idempotency: a replay returns the original summary without re-touching rows.
+  IF NOT idem_claim(p_idempotency_key, 'cashier_confirm_orders_no_payment') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  IF p_order_ids IS NULL OR array_length(p_order_ids, 1) IS NULL THEN
+    RAISE EXCEPTION 'cashier_confirm_orders_no_payment: no order ids provided';
+  END IF;
+
+  FOREACH v_order_id IN ARRAY p_order_ids
+  LOOP
+    UPDATE work_orders w
+    SET cashier_processed_at = now(),
+        cashier_processed_by = p_cashier_id
+    FROM orders o
+    WHERE w.order_id = v_order_id
+      AND o.id = w.order_id
+      AND o.order_type = 'WORK'
+      AND o.checkout_status = 'confirmed'
+      AND w.cashier_processed_at IS NULL;
+    GET DIAGNOSTICS v_updated = ROW_COUNT;
+    IF v_updated > 0 THEN
+      v_processed := array_append(v_processed, v_order_id);
+    ELSE
+      v_skipped := array_append(v_skipped, v_order_id);
+    END IF;
+  END LOOP;
+
+  v_result := jsonb_build_object(
+    'processed', to_jsonb(v_processed),
+    'skipped', to_jsonb(v_skipped),
+    'processed_count', COALESCE(array_length(v_processed, 1), 0)
+  );
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 9c. RPC: Atomic bulk cashier payment across several WORK orders (§3).
+-- All-or-nothing: the whole batch runs in this single transaction, so any one
+-- rejection (over-amount, closed register, bad order) aborts EVERY payment —
+-- no order is partially or silently collected ("no cash leak"). Each order's
+-- money flows through record_payment_transaction (→ orders.paid trigger,
+-- open-register requirement, per-session attribution); the first payment also
+-- clears that order's cashier-processing gate there. Idempotent on the batch
+-- key AND on a per-order derived key, so a retried batch never double-charges.
+--   p_payments: [{ orderId, amount, paymentType, paymentRefNo?, paymentNote? }]
+CREATE OR REPLACE FUNCTION record_bulk_payment(
+  p_payments JSONB,
+  p_cashier_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_my_user_id UUID;
+  v_item JSONB;
+  v_order_id INT;
+  v_amount DECIMAL;
+  v_derived_key UUID;
+  v_one JSONB;
+  v_results JSONB := '[]'::jsonb;
+  v_total DECIMAL := 0;
+  v_count INT := 0;
+  v_result JSONB;
+BEGIN
+  PERFORM assert_active_user();
+
+  v_my_user_id := get_my_user_id();
+  IF p_cashier_id IS NOT NULL
+     AND p_cashier_id <> v_my_user_id
+     AND NOT is_manager_or_above() THEN
+    RAISE EXCEPTION 'Cashier mismatch: cannot record payments under another user';
+  END IF;
+  IF p_cashier_id IS NULL THEN
+    p_cashier_id := v_my_user_id;
+  END IF;
+
+  -- Whole-batch idempotency: a replayed batch returns the original summary and
+  -- never re-enters the loop (so the inner per-order calls don't re-run either).
+  IF NOT idem_claim(p_idempotency_key, 'record_bulk_payment') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  IF p_payments IS NULL OR jsonb_array_length(p_payments) = 0 THEN
+    RAISE EXCEPTION 'record_bulk_payment: no payments provided';
+  END IF;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_payments)
+  LOOP
+    v_order_id := (v_item->>'orderId')::int;
+    v_amount := (v_item->>'amount')::decimal;
+
+    IF v_order_id IS NULL THEN
+      RAISE EXCEPTION 'record_bulk_payment: missing orderId in a payment item';
+    END IF;
+    IF v_amount IS NULL OR v_amount <= 0 THEN
+      RAISE EXCEPTION 'record_bulk_payment: amount for order % must be greater than 0', v_order_id;
+    END IF;
+
+    -- Derive a stable per-order key from the batch key so a retried batch
+    -- dedupes at the transaction-row level too (belt-and-suspenders with the
+    -- batch claim above). md5 → 32 hex digits casts cleanly to uuid.
+    v_derived_key := CASE
+      WHEN p_idempotency_key IS NULL THEN NULL
+      ELSE md5(p_idempotency_key::text || ':' || v_order_id::text)::uuid
+    END;
+
+    -- Reuse the single-payment RPC: register check, amount validation, the
+    -- payment_transactions insert (→ orders.paid trigger), and the
+    -- cashier-processed marker all happen there. A raise propagates and aborts
+    -- the whole bulk transaction.
+    v_one := record_payment_transaction(
+      p_order_id => v_order_id,
+      p_amount => v_amount,
+      p_payment_type => COALESCE(v_item->>'paymentType', 'cash'),
+      p_payment_ref_no => v_item->>'paymentRefNo',
+      p_payment_note => v_item->>'paymentNote',
+      p_cashier_id => p_cashier_id,
+      p_transaction_type => 'payment',
+      p_idempotency_key => v_derived_key
+    );
+
+    v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'order_id', v_order_id,
+      'amount', v_amount,
+      'order_paid', v_one->'order_paid'
+    ));
+    v_total := v_total + v_amount;
+    v_count := v_count + 1;
+  END LOOP;
+
+  v_result := jsonb_build_object(
+    'results', v_results,
+    'total_charged', v_total,
+    'count', v_count
+  );
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 9d. RPC: Pending WORK orders awaiting cashier processing (§3 Pending queue).
+-- Confirmed WORK orders for the brand whose cashier-processing gate is still
+-- open (work_orders.cashier_processed_at IS NULL). Returns just what the
+-- pending list + bulk-payment page need, newest first.
+CREATE OR REPLACE FUNCTION get_cashier_pending_orders(
+  p_brand TEXT,
+  p_limit INT DEFAULT 200
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_rows JSONB;
+BEGIN
+  SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb) INTO v_rows
+  FROM (
+    SELECT
+      o.id AS order_id,
+      w.invoice_number,
+      c.name AS customer_name,
+      c.phone AS customer_phone,
+      o.order_date,
+      w.delivery_date,
+      COALESCE(o.order_total, 0) AS order_total,
+      COALESCE(o.paid, 0) AS paid,
+      COALESCE(w.advance, 0) AS advance,
+      (SELECT COUNT(*) FROM garments g WHERE g.order_id = o.id) AS garment_count
+    FROM orders o
+    JOIN work_orders w ON w.order_id = o.id
+    JOIN customers c ON c.id = o.customer_id
+    WHERE o.order_type = 'WORK'
+      AND o.checkout_status = 'confirmed'
+      AND w.cashier_processed_at IS NULL
+      AND (p_brand IS NULL OR lower(o.brand::text) = lower(p_brand))
+    ORDER BY o.order_date DESC
+    LIMIT p_limit
+  ) t;
+  RETURN v_rows;
+END;
+$$ LANGUAGE plpgsql;
+
 -- 11. RPC: Toggle home delivery on an order (updates charges + all garments)
 CREATE OR REPLACE FUNCTION toggle_home_delivery(
   p_order_id INT,
@@ -1204,6 +1449,7 @@ DECLARE
   v_old_delivery DECIMAL;
   v_new_delivery DECIMAL;
   v_new_total DECIMAL;
+  v_old_home_delivery BOOLEAN;
 BEGIN
   -- Validate order exists
   SELECT order_total, delivery_charge, discount_value, paid INTO v_order
@@ -1211,6 +1457,8 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Order % not found', p_order_id;
   END IF;
+
+  SELECT home_delivery INTO v_old_home_delivery FROM work_orders WHERE order_id = p_order_id;
 
   v_old_delivery := COALESCE(v_order.delivery_charge, 0);
 
@@ -1235,7 +1483,7 @@ BEGIN
       order_total = v_new_total
   WHERE id = p_order_id;
 
-  -- Update work_orders flag (revision bumped only on payment/refund recording)
+  -- Update work_orders flag
   UPDATE work_orders
   SET home_delivery = p_home_delivery
   WHERE order_id = p_order_id;
@@ -1245,6 +1493,19 @@ BEGIN
   SET home_delivery = p_home_delivery
   WHERE order_id = p_order_id;
 
+  -- Invoice revision = signed-invoice content change (SPEC §3). Switching the
+  -- delivery type rewrites the invoice's delivery line → mint a revision, but
+  -- only when it ACTUALLY changed. This DISTINCT guard is also the idempotency
+  -- mechanism: a re-toggle to the value already set is a no-op (no re-bump, and
+  -- the absolute charge swap nets to zero), so no separate idempotency key is
+  -- needed. (A standalone delivery-charge edit via update_delivery_charge does
+  -- not bump — only a type change re-issues the invoice.)
+  IF p_home_delivery IS DISTINCT FROM v_old_home_delivery THEN
+    UPDATE work_orders
+    SET invoice_revision = COALESCE(invoice_revision, 0) + 1
+    WHERE order_id = p_order_id;
+  END IF;
+
   RETURN jsonb_build_object(
     'status', 'success',
     'order_id', p_order_id,
@@ -1252,6 +1513,45 @@ BEGIN
     'delivery_charge', v_new_delivery,
     'order_total', v_new_total
   );
+END;
+$$ LANGUAGE plpgsql;
+
+-- ── Bump invoice revision (style change with no price move) ───────────────────
+-- SPEC §3: a brova-trial style change re-issues the signed invoice even when the
+-- price/total does not move (a flat qallabi/designer swap, or any net-zero style
+-- edit — "revised invoice but no delta in price"). The reprice path (§2.5) only
+-- bumps when order_total moves, so the feedback flow calls THIS when it wrote a
+-- style-spec change that the reprice found no price delta for. Idempotent;
+-- no-ops for SALES / ALTERATION (no work_orders row → nothing updated).
+CREATE OR REPLACE FUNCTION bump_invoice_revision(
+  p_order_id INT,
+  p_reason TEXT DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_revision INT;
+  v_result JSONB;
+BEGIN
+  -- The bump is additive → must short-circuit a lost-response replay.
+  IF NOT idem_claim(p_idempotency_key, 'bump_invoice_revision') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  UPDATE work_orders
+  SET invoice_revision = COALESCE(invoice_revision, 0) + 1
+  WHERE order_id = p_order_id
+  RETURNING invoice_revision INTO v_revision;
+
+  v_result := jsonb_build_object(
+    'status', 'success',
+    'order_id', p_order_id,
+    'invoice_revision', COALESCE(v_revision, 0),
+    'reason', p_reason
+  );
+
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -1326,6 +1626,19 @@ BEGIN
   SELECT order_type::text INTO v_order_type FROM orders WHERE id = p_order_id;
   IF v_order_type IS NULL THEN
     RAISE EXCEPTION 'Order % not found', p_order_id;
+  END IF;
+
+  -- §3 cashier-processing gate: a WORK order cannot be dispatched to the
+  -- workshop until a cashier has processed it (confirm-without-payment or a
+  -- payment), which sets work_orders.cashier_processed_at. SALES/ALTERATION are
+  -- not gated. The marker is set once and never cleared, so later trips
+  -- (returns/alterations) of an already-processed order pass freely.
+  IF v_order_type = 'WORK'
+     AND NOT EXISTS (
+       SELECT 1 FROM work_orders
+       WHERE order_id = p_order_id AND cashier_processed_at IS NOT NULL
+     ) THEN
+    RAISE EXCEPTION 'WORK order % cannot be dispatched: the cashier has not processed it yet (confirm-without-payment or take a payment first).', p_order_id;
   END IF;
 
   -- 1. Flip first-time garments (trip_number = 0) to transit. The gate keeps
@@ -2098,6 +2411,15 @@ BEGIN
   --    credit is a manual cashier refund). orders.paid is never touched here.
   UPDATE orders SET order_total = p_new_order_total WHERE id = p_order_id;
 
+  -- 4. A style reprice is a price change → mint an invoice revision (SPEC §3),
+  --    but only when the total actually moved; a no-op reprice must not bump.
+  --    Naturally idempotent: idem_claim already short-circuits a replay above.
+  IF p_new_order_total IS DISTINCT FROM v_old_order_total THEN
+    UPDATE work_orders
+    SET invoice_revision = COALESCE(invoice_revision, 0) + 1
+    WHERE order_id = p_order_id;
+  END IF;
+
   v_result := jsonb_build_object(
     'status', 'success',
     'order_id', p_order_id,
@@ -2119,64 +2441,45 @@ $$ LANGUAGE plpgsql;
 -- Uses two sources: orders table for billing totals, payment_transactions for actual collections.
 -- "today_paid"/"month_paid" = paid-so-far on orders created in that period (order-centric).
 -- "today_collected"/"month_collected" = actual cash received in that period (cash-centric).
+-- Cashier "All Orders" stats, scoped to the list's selected period. p_start_iso
+-- is the period lower bound on order_date (UTC instant; NULL = all time), mirroring
+-- the list's own period filter so the panel and the rows always agree. Stats are
+-- order-attributed (billed/collected/outstanding all reference orders PLACED in the
+-- period), forming a coherent collection triangle; actual cash-flow-by-date lives
+-- in the EOD report, not here. Confirmed orders only (drafts/cancelled excluded).
+DROP FUNCTION IF EXISTS get_cashier_summary(text, date, int);
 CREATE OR REPLACE FUNCTION get_cashier_summary(
   p_brand TEXT,
-  p_today DATE DEFAULT CURRENT_DATE,
-  p_tz_offset_minutes INT DEFAULT 180  -- Kuwait UTC+3 = 180 minutes
+  p_start_iso TIMESTAMPTZ DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
-  v_today DATE := p_today;
-  v_month_start DATE := date_trunc('month', p_today)::date;
-  v_order_stats JSONB;
-  v_tx_stats JSONB;
-  v_tz_interval INTERVAL;
-  v_today_start TIMESTAMP;
-  v_today_end TIMESTAMP;
-  v_month_utc_start TIMESTAMP;
+  v_stats JSONB;
 BEGIN
-  -- Convert local date boundaries to UTC for comparing against UTC created_at timestamps
-  v_tz_interval := (p_tz_offset_minutes || ' minutes')::interval;
-  v_today_start := v_today::timestamp - v_tz_interval;
-  v_today_end := (v_today + INTERVAL '1 day')::timestamp - v_tz_interval;
-  v_month_utc_start := v_month_start::timestamp - v_tz_interval;
-
-  -- 1. Order-level aggregates (billing, outstanding, counts)
-  --    order_date is stored as local date, so direct date comparison is correct
   SELECT jsonb_build_object(
-    'all_billed',       COALESCE(SUM(order_total::decimal), 0),
-    'all_collected',    COALESCE(SUM(paid::decimal), 0),
-    'all_outstanding',  COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)), 0),
-    'today_count',      COUNT(*) FILTER (WHERE order_date::date = v_today),
-    'today_billed',     COALESCE(SUM(order_total::decimal) FILTER (WHERE order_date::date = v_today), 0),
-    'today_paid',       COALESCE(SUM(paid::decimal) FILTER (WHERE order_date::date = v_today), 0),
-    'month_billed',     COALESCE(SUM(order_total::decimal) FILTER (WHERE order_date::date >= v_month_start), 0),
-    'month_paid',       COALESCE(SUM(paid::decimal) FILTER (WHERE order_date::date >= v_month_start), 0),
-    'month_outstanding',COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)) FILTER (WHERE order_date::date >= v_month_start), 0),
-    'work_count',       COUNT(*) FILTER (WHERE order_type = 'WORK'),
-    'sales_count',      COUNT(*) FILTER (WHERE order_type = 'SALES'),
-    'unpaid_count',     COUNT(*) FILTER (WHERE order_total::decimal - paid::decimal > 0.001),
-    'work_billed',      COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'WORK'), 0),
-    'sales_billed',     COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'SALES'), 0),
-    'month_work_billed', COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'WORK' AND order_date::date >= v_month_start), 0),
-    'month_sales_billed',COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'SALES' AND order_date::date >= v_month_start), 0)
-  ) INTO v_order_stats
+    'billed',             COALESCE(SUM(order_total::decimal), 0),
+    'collected',          COALESCE(SUM(paid::decimal), 0),
+    'outstanding',        COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)), 0),
+    'order_count',        COUNT(*),
+    -- payment-status buckets (epsilon-tolerant): unpaid = nothing collected,
+    -- partial = some but not all, paid = fully settled. owing = unpaid + partial.
+    'paid_count',         COUNT(*) FILTER (WHERE order_total::decimal - COALESCE(paid::decimal, 0) <= 0.001),
+    'partial_count',      COUNT(*) FILTER (WHERE COALESCE(paid::decimal, 0) > 0.001 AND order_total::decimal - COALESCE(paid::decimal, 0) > 0.001),
+    'unpaid_count',       COUNT(*) FILTER (WHERE COALESCE(paid::decimal, 0) <= 0.001 AND order_total::decimal - COALESCE(paid::decimal, 0) > 0.001),
+    'owing_count',        COUNT(*) FILTER (WHERE order_total::decimal - COALESCE(paid::decimal, 0) > 0.001),
+    'partial_outstanding',COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)) FILTER (WHERE COALESCE(paid::decimal, 0) > 0.001 AND order_total::decimal - COALESCE(paid::decimal, 0) > 0.001), 0),
+    'unpaid_outstanding', COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)) FILTER (WHERE COALESCE(paid::decimal, 0) <= 0.001 AND order_total::decimal - COALESCE(paid::decimal, 0) > 0.001), 0),
+    'work_count',         COUNT(*) FILTER (WHERE order_type = 'WORK'),
+    'sales_count',        COUNT(*) FILTER (WHERE order_type = 'SALES'),
+    'work_billed',        COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'WORK'), 0),
+    'sales_billed',       COALESCE(SUM(order_total::decimal) FILTER (WHERE order_type = 'SALES'), 0)
+  ) INTO v_stats
   FROM orders
-  WHERE brand = p_brand::brand AND checkout_status = 'confirmed';
+  WHERE brand = p_brand::brand
+    AND checkout_status = 'confirmed'
+    AND (p_start_iso IS NULL OR order_date >= p_start_iso);
 
-  -- 2. Transaction-level aggregates (actual cash received)
-  --    created_at is stored as UTC, so use timezone-corrected boundaries
-  SELECT jsonb_build_object(
-    'today_collected',  COALESCE(SUM(pt.amount) FILTER (WHERE pt.created_at >= v_today_start AND pt.created_at < v_today_end AND pt.transaction_type = 'payment'), 0),
-    'today_refunded',   COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.created_at >= v_today_start AND pt.created_at < v_today_end AND pt.transaction_type = 'refund'), 0),
-    'month_collected',  COALESCE(SUM(pt.amount) FILTER (WHERE pt.created_at >= v_month_utc_start AND pt.transaction_type = 'payment'), 0),
-    'month_refunded',   COALESCE(SUM(ABS(pt.amount)) FILTER (WHERE pt.created_at >= v_month_utc_start AND pt.transaction_type = 'refund'), 0)
-  ) INTO v_tx_stats
-  FROM payment_transactions pt
-  JOIN orders o ON o.id = pt.order_id
-  WHERE o.brand = p_brand::brand AND o.checkout_status = 'confirmed';
-
-  RETURN v_order_stats || v_tx_stats;
+  RETURN v_stats;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -2184,12 +2487,30 @@ $$ LANGUAGE plpgsql;
 -- PostgREST can't compare two columns (order_total vs paid), so we do it here.
 CREATE OR REPLACE FUNCTION get_cashier_order_ids_by_payment(
   p_brand TEXT,
-  p_filter TEXT,  -- 'unpaid' or 'paid'
+  p_filter TEXT,  -- 'unpaid' (nothing paid) | 'partial' | 'paid' | 'owing' (unpaid+partial)
   p_limit INT DEFAULT 30
 )
 RETURNS SETOF INT AS $$
 BEGIN
   IF p_filter = 'unpaid' THEN
+    RETURN QUERY
+      SELECT id FROM orders
+      WHERE brand = p_brand::brand
+        AND checkout_status = 'confirmed'
+        AND COALESCE(paid::decimal, 0) <= 0.001
+        AND (order_total::decimal - COALESCE(paid::decimal, 0)) > 0.001
+      ORDER BY order_date DESC
+      LIMIT p_limit;
+  ELSIF p_filter = 'partial' THEN
+    RETURN QUERY
+      SELECT id FROM orders
+      WHERE brand = p_brand::brand
+        AND checkout_status = 'confirmed'
+        AND COALESCE(paid::decimal, 0) > 0.001
+        AND (order_total::decimal - COALESCE(paid::decimal, 0)) > 0.001
+      ORDER BY order_date DESC
+      LIMIT p_limit;
+  ELSIF p_filter = 'owing' THEN
     RETURN QUERY
       SELECT id FROM orders
       WHERE brand = p_brand::brand
@@ -2202,7 +2523,7 @@ BEGIN
       SELECT id FROM orders
       WHERE brand = p_brand::brand
         AND checkout_status = 'confirmed'
-        AND COALESCE(paid::decimal, 0) >= order_total::decimal
+        AND (order_total::decimal - COALESCE(paid::decimal, 0)) <= 0.001
       ORDER BY order_date DESC
       LIMIT p_limit;
   END IF;
@@ -6034,6 +6355,12 @@ BEGIN
     RAISE EXCEPTION 'Restock quantity must be positive (got %)', p_qty;
   END IF;
 
+  -- Fabric and shelf live only in shop stock — the workshop never holds them
+  -- (SPEC §4). Reject any workshop-side mutation of them.
+  IF p_item_type IN ('fabric', 'shelf') AND p_location <> 'shop' THEN
+    RAISE EXCEPTION 'Fabric and shelf stock lives only at the shop — % cannot be restocked at the workshop (SPEC §4)', p_item_type;
+  END IF;
+
   PERFORM set_config('app.movement_type', 'restock', true);
   -- No restock/PO entity to reference: leave ref_type/ref_id empty so the
   -- ledger doesn't carry an orphan ref_type with a NULL ref_id. Attribution
@@ -6107,6 +6434,12 @@ BEGIN
   END IF;
   IF p_reason IS NULL OR length(trim(p_reason)) = 0 THEN
     RAISE EXCEPTION 'Adjustment reason is required';
+  END IF;
+
+  -- Fabric and shelf live only in shop stock — the workshop never holds them
+  -- (SPEC §4). Reject any workshop-side mutation of them.
+  IF p_item_type IN ('fabric', 'shelf') AND p_location <> 'shop' THEN
+    RAISE EXCEPTION 'Fabric and shelf stock lives only at the shop — % cannot be adjusted at the workshop (SPEC §4)', p_item_type;
   END IF;
 
   PERFORM set_config('app.movement_type', 'adjustment', true);
@@ -6762,6 +7095,12 @@ BEGIN
     RAISE EXCEPTION 'record_waste: reason category is required';
   END IF;
 
+  -- Fabric and shelf live only in shop stock — the workshop never holds them
+  -- (SPEC §4). Reject any workshop-side waste of them.
+  IF p_item_type IN ('fabric', 'shelf') AND p_location <> 'shop' THEN
+    RAISE EXCEPTION 'Fabric and shelf stock lives only at the shop — % cannot be wasted at the workshop (SPEC §4)', p_item_type;
+  END IF;
+
   -- FOR UPDATE locks the row before we compute v_new_qty, so two concurrent
   -- wastes on the same item can't both read the same v_current and have the
   -- second absolute write clobber the first (a lost decrement = lost stock).
@@ -7194,6 +7533,12 @@ BEGIN
       RAISE EXCEPTION 'Group for % has no items', v_item_type;
     END IF;
 
+    -- Only accessories cross between shop and workshop — fabric/shelf are
+    -- shop-only (SPEC §4), so they can never appear in a transfer.
+    IF v_item_type <> 'accessory' THEN
+      RAISE EXCEPTION 'Only accessories transfer between shop and workshop — % cannot be transferred (SPEC §4)', v_item_type;
+    END IF;
+
     INSERT INTO transfer_requests (
       brand, direction, item_type, status,
       requested_by, notes, created_at
@@ -7275,6 +7620,12 @@ BEGIN
 
     IF v_group->'items' IS NULL OR jsonb_array_length(v_group->'items') = 0 THEN
       RAISE EXCEPTION 'Group for % has no items', v_item_type;
+    END IF;
+
+    -- Only accessories cross between shop and workshop — fabric/shelf are
+    -- shop-only (SPEC §4), so they can never appear in a transfer.
+    IF v_item_type <> 'accessory' THEN
+      RAISE EXCEPTION 'Only accessories transfer between shop and workshop — % cannot be transferred (SPEC §4)', v_item_type;
     END IF;
 
     -- 1. Create the transfer already in 'dispatched' state.

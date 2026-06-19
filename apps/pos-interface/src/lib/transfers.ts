@@ -108,8 +108,10 @@ export function itemNamesPreview(t: TransferRequestWithItems, max = 2): string {
 export function sourceStockOf(t: TransferRequestWithItems, it: TransferRequestWithItems["items"][number]): number | null {
   const src = sourceSideOf(t.direction);
   const key = src === "shop" ? "shop_stock" : "workshop_stock";
-  if (it.fabric) return Number((it.fabric as Fabric)[key] ?? 0);
-  if (it.shelf_item) return Number((it.shelf_item as Shelf)[key] ?? 0);
+  // Fabric + shelf are shop-only (SPEC §4) — they never carry workshop stock,
+  // so always read their shop_stock regardless of transfer direction.
+  if (it.fabric) return Number((it.fabric as Fabric).shop_stock ?? 0);
+  if (it.shelf_item) return Number((it.shelf_item as Shelf).shop_stock ?? 0);
   if (it.accessory) return Number((it.accessory as Accessory)[key] ?? 0);
   return null;
 }

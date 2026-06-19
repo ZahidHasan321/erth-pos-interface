@@ -11,7 +11,7 @@ function CashierStandaloneDetailPage() {
     return (
         <CashierOrderDetailBody
             orderId={orderId}
-            onBack={() => navigate({ to: "/cashier" })}
+            onBack={() => navigate({ to: "/cashier/orders" })}
         />
     );
 }

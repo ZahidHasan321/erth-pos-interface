@@ -4,6 +4,7 @@ import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
 import { Minus, Plus } from "lucide-react";
 import type { RefundItem } from "@/api/cashier";
+import { displaySoakHours } from "@/lib/utils";
 
 interface GarmentData {
     id: string;
@@ -326,7 +327,7 @@ export function RefundItemSelector({ garments, shelfItems, expressSurcharge, soa
                                             ...(getGarmentPrice(g, "stitching") > 0 || isComponentRefunded(g, "stitching") ? [["stitching", "Stitching", getGarmentPrice(g, "stitching"), isComponentRefunded(g, "stitching")] as const] : []),
                                             ...(getGarmentPrice(g, "style") > 0 || isComponentRefunded(g, "style") ? [["style", "Style", getGarmentPrice(g, "style"), isComponentRefunded(g, "style")] as const] : []),
                                             ...(g.express ? [["express", "Express", getGarmentPrice(g, "express"), isComponentRefunded(g, "express")] as const] : []),
-                                            ...(g.soaking ? [["soaking", `Soaking ${g.soaking_hours ?? 8}h`, getGarmentPrice(g, "soaking"), isComponentRefunded(g, "soaking")] as const] : []),
+                                            ...(g.soaking ? [["soaking", `Soaking ${displaySoakHours(g.soaking_hours ?? 8)}h`, getGarmentPrice(g, "soaking"), isComponentRefunded(g, "soaking")] as const] : []),
                                         ] as const).map(([key, label, price, alreadyRefunded]) => (
                                             <button
                                                 key={key}

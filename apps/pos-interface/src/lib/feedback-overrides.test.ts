@@ -20,6 +20,7 @@ import {
   measurementReassignNeedsConfirm,
   orderFinalsInProduction,
   brovaEditable,
+  isBrovaFeedbackSubject,
   type StagedMeasurement,
 } from "./feedback-overrides";
 
@@ -723,6 +724,43 @@ describe("brovaEditable", () => {
     it(description, () => {
       const garment = g(partial);
       expect(brovaEditable(garment)).toBe(expected);
+    });
+  }
+});
+
+// ─── isBrovaFeedbackSubject ───────────────────────────────────────────────────
+
+describe("isBrovaFeedbackSubject", () => {
+  // Table-driven: [description, garment-partial, expected]. Defaults from g():
+  // location "shop"; garment_type overridden per case.
+  const cases: Array<[string, Record<string, unknown>, boolean]> = [
+    // ── Brovas that ARE feedback subjects ──
+    ["first trial: brova at shop, awaiting_trial, no verdict → subject", { garment_type: "brova", piece_stage: "awaiting_trial" }, true],
+    ["Reject-Repair (pre-dispatch): brova_trialed, acceptance false, needs_repair → subject", { garment_type: "brova", piece_stage: "brova_trialed", acceptance_status: false, feedback_status: "needs_repair" }, true],
+    ["Accept-with-Fix (fresh, pre-dispatch): brova_trialed, accepted, needs_repair → subject (editable until dispatch)", { garment_type: "brova", piece_stage: "brova_trialed", acceptance_status: true, feedback_status: "needs_repair" }, true],
+    ["plain Accept: brova_trialed, accepted, feedback_status 'accepted' → subject (editable until production)", { garment_type: "brova", piece_stage: "brova_trialed", acceptance_status: true, feedback_status: "accepted" }, true],
+    ["Reject-Repair returned: awaiting_trial, acceptance false, verdict cleared → subject (re-trial)", { garment_type: "brova", piece_stage: "awaiting_trial", acceptance_status: false, feedback_status: null }, true],
+
+    // ── Returned Accept-with-Fix = collect-only (NOT a subject) ──
+    ["Accept-with-Fix returned (lands ready_for_pickup): accepted, verdict cleared → NOT a subject", { garment_type: "brova", piece_stage: "ready_for_pickup", acceptance_status: true, feedback_status: null }, false],
+    ["Accept-with-Fix returned (legacy awaiting_trial): accepted, verdict cleared → NOT a subject", { garment_type: "brova", piece_stage: "awaiting_trial", acceptance_status: true, feedback_status: null }, false],
+
+    // ── Finals are never feedback subjects ──
+    ["final at shop, ready_for_pickup → NOT a subject (collected at cashier)", { garment_type: "final", piece_stage: "ready_for_pickup" }, false],
+    ["parked final (waiting_for_acceptance) → NOT a subject", { garment_type: "final", piece_stage: "waiting_for_acceptance" }, false],
+
+    // ── Alteration-out garments never feed back ──
+    ["alteration garment at shop → NOT a subject", { garment_type: "alteration", piece_stage: "ready_for_pickup" }, false],
+
+    // ── Location / terminal gates ──
+    ["brova not at shop (workshop) → NOT a subject", { garment_type: "brova", piece_stage: "awaiting_trial", location: "workshop" }, false],
+    ["brova completed (terminal) → NOT a subject", { garment_type: "brova", piece_stage: "completed" }, false],
+    ["brova waiting_for_acceptance → NOT a subject (excluded stage)", { garment_type: "brova", piece_stage: "waiting_for_acceptance" }, false],
+  ];
+
+  for (const [description, partial, expected] of cases) {
+    it(description, () => {
+      expect(isBrovaFeedbackSubject(g(partial))).toBe(expected);
     });
   }
 });

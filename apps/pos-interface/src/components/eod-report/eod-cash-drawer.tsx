@@ -13,9 +13,12 @@ const fmtTime = (iso: string): string =>
 interface EodCashDrawerProps {
     date: string;
     report: EodReportSummary;
+    // Cashier shell: hide expected cash + variance (blind count, SPEC §3).
+    // The manager Store > End of Day report leaves this false to show them.
+    hideReconciliation?: boolean;
 }
 
-export function EodCashDrawer({ date, report }: EodCashDrawerProps) {
+export function EodCashDrawer({ date, report, hideReconciliation = false }: EodCashDrawerProps) {
     const { data: sessionRes, isLoading } = useRegisterSessionByDate(date);
     const session = sessionRes?.data;
 
@@ -59,7 +62,7 @@ export function EodCashDrawer({ date, report }: EodCashDrawerProps) {
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
                 <div className="flex items-center gap-2">
                     <Wallet className="h-4 w-4 text-muted-foreground" />
-                    <h2 className="text-base font-semibold">Cash drawer reconciliation</h2>
+                    <h2 className="text-base font-semibold">{hideReconciliation ? "Cash drawer" : "Cash drawer reconciliation"}</h2>
                 </div>
                 <div className="flex items-center gap-2">
                     {reopened && (
@@ -82,15 +85,25 @@ export function EodCashDrawer({ date, report }: EodCashDrawerProps) {
                 <Row label="Paid In / Out" value={`+${fmtK(cashInTotal)} / −${fmtK(cashOutTotal)}`} />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-border">
-                <Row label="Expected Cash" value={fmtK(expectedCash)} emphasize />
-                <Row
-                    label="Counted Cash"
-                    value={session.closing_counted_cash !== null ? fmtK(Number(session.closing_counted_cash)) : "-"}
-                    emphasize
-                />
-                <VarianceRow variance={variance} closed={closed} />
-            </div>
+            {hideReconciliation ? (
+                <div className="pt-4 border-t border-border">
+                    <Row
+                        label="Counted Cash"
+                        value={session.closing_counted_cash !== null ? fmtK(Number(session.closing_counted_cash)) : "-"}
+                        emphasize
+                    />
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-border">
+                    <Row label="Expected Cash" value={fmtK(expectedCash)} emphasize />
+                    <Row
+                        label="Counted Cash"
+                        value={session.closing_counted_cash !== null ? fmtK(Number(session.closing_counted_cash)) : "-"}
+                        emphasize
+                    />
+                    <VarianceRow variance={variance} closed={closed} />
+                </div>
+            )}
 
             {(cashIn.length > 0 || cashOut.length > 0) && (
                 <div className="mt-5 pt-4 border-t border-border">

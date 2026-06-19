@@ -106,7 +106,7 @@ export const Route = createFileRoute("/$main")<{
       {
         rel: "icon",
         type: "image/svg+xml",
-        href: params.main === "erth" ? "/erth.svg" : "/Sakkba.png",
+        href: params.main === "qass" ? "/qass.svg" : params.main === "erth" ? "/erth.svg" : "/Sakkba.png",
       },
     ],
   }),
@@ -124,8 +124,8 @@ function RouteComponent() {
   // Apply brand-specific theme
   useEffect(() => {
     const root = document.documentElement;
-    // Remove both theme classes first
-    root.classList.remove("erth", "sakkba");
+    // Remove all brand theme classes first
+    root.classList.remove("erth", "sakkba", "qass");
     // Add the current brand theme
     root.classList.add(main);
 

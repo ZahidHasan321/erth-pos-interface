@@ -10,8 +10,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@repo/ui/select";
-import { Checkbox } from "@repo/ui/checkbox";
-import { Plus } from "lucide-react";
+import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import {
     type AlterationGarmentSchema,
@@ -298,9 +298,9 @@ export function AlterationGarmentForm({
                     </p>
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-2">
-                    {/* Collar group */}
-                    <StyleGroup title="Collar">
+                <div className="grid items-start gap-3 lg:grid-cols-2">
+                    {/* Collar group — densest, so it spans the full width */}
+                    <StyleGroup title="Collar" className="lg:col-span-2">
                         <ImagePickerField
                             label="Type"
                             value={styleStr("collar_type")}
@@ -315,41 +315,25 @@ export function AlterationGarmentForm({
                             onChange={(v) => setStyle("collar_button", v)}
                             placeholder="Button"
                         />
-                        <CheckboxImage
-                            label="Small Tabbagi"
-                            checked={styleBool("small_tabaggi")}
-                            onChange={(v) => setStyle("small_tabaggi", v)}
-                            image={smallTabaggiImage}
+                        <SegField
+                            label="Position"
+                            value={styleStr("collar_position")}
+                            options={[
+                                { value: "up", label: "Up" },
+                                { value: "down", label: "Down" },
+                            ]}
+                            onChange={(v) => setStyle("collar_position", v || null)}
                         />
-                        <div className="flex flex-col gap-1">
-                            <span className="text-sm font-medium text-slate-700">Position</span>
-                            <div className="flex gap-3">
-                                <label className="flex items-center gap-1.5 text-sm">
-                                    <input
-                                        type="checkbox"
-                                        checked={styleStr("collar_position") === "up"}
-                                        onChange={(e) =>
-                                            setStyle("collar_position", e.target.checked ? "up" : "")
-                                        }
-                                    />
-                                    UP
-                                </label>
-                                <label className="flex items-center gap-1.5 text-sm">
-                                    <input
-                                        type="checkbox"
-                                        checked={styleStr("collar_position") === "down"}
-                                        onChange={(e) =>
-                                            setStyle("collar_position", e.target.checked ? "down" : "")
-                                        }
-                                    />
-                                    DOWN
-                                </label>
-                            </div>
-                        </div>
                         <ThicknessField
                             label="Thickness"
                             value={styleStr("collar_thickness")}
                             onChange={(v) => setStyle("collar_thickness", v)}
+                        />
+                        <IconToggle
+                            label="Small Tabbagi"
+                            checked={styleBool("small_tabaggi")}
+                            onChange={(v) => setStyle("small_tabaggi", v)}
+                            image={smallTabaggiImage}
                         />
                     </StyleGroup>
 
@@ -387,8 +371,8 @@ export function AlterationGarmentForm({
                         />
                     </StyleGroup>
 
-                    {/* Jabzour */}
-                    <StyleGroup title="Jabzour">
+                    {/* Jabzour — grows to full width when the second type appears */}
+                    <StyleGroup title="Jabzour" className={isShaab ? "lg:col-span-2" : undefined}>
                         <ImagePickerField
                             label="Type"
                             value={styleStr("jabzour_1")}
@@ -397,18 +381,13 @@ export function AlterationGarmentForm({
                             placeholder="Jabzour type"
                         />
                         {isShaab && (
-                            <div className="flex items-end gap-1.5">
-                                <Plus className="mb-2 size-3 text-muted-foreground/60 shrink-0" />
-                                <div className="flex-1">
-                                    <ImagePickerField
-                                        label="2nd"
-                                        value={styleStr("jabzour_2")}
-                                        options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
-                                        onChange={(v) => setStyle("jabzour_2", v)}
-                                        placeholder="2nd type"
-                                    />
-                                </div>
-                            </div>
+                            <ImagePickerField
+                                label="2nd type"
+                                value={styleStr("jabzour_2")}
+                                options={jabzourTypes.filter((j) => j.value !== "JAB_SHAAB")}
+                                onChange={(v) => setStyle("jabzour_2", v)}
+                                placeholder="2nd type"
+                            />
                         )}
                         <ThicknessField
                             label="Thickness"
@@ -420,19 +399,19 @@ export function AlterationGarmentForm({
 
                     {/* Accessories */}
                     <StyleGroup title="Accessories">
-                        <CheckboxImage
+                        <IconToggle
                             label="Wallet"
                             checked={styleBool("wallet_pocket")}
                             onChange={(v) => setStyle("wallet_pocket", v)}
                             image={walletIcon}
                         />
-                        <CheckboxImage
+                        <IconToggle
                             label="Pen"
                             checked={styleBool("pen_holder")}
                             onChange={(v) => setStyle("pen_holder", v)}
                             image={penIcon}
                         />
-                        <CheckboxImage
+                        <IconToggle
                             label="Mobile"
                             checked={styleBool("mobile_pocket")}
                             onChange={(v) => setStyle("mobile_pocket", v)}
@@ -442,26 +421,15 @@ export function AlterationGarmentForm({
 
                     {/* Lines */}
                     <StyleGroup title="Lines">
-                        <div className="flex items-center gap-4 px-1">
-                            {[1, 2].map((n) => (
-                                <label key={n} className="flex items-center gap-2 text-sm">
-                                    <Checkbox
-                                        checked={linesVal === n}
-                                        onCheckedChange={(c) => setStyle("lines", c ? n : null)}
-                                    />
-                                    <span>{n} line{n > 1 ? "s" : ""}</span>
-                                </label>
-                            ))}
-                            {linesVal != null && (
-                                <button
-                                    type="button"
-                                    onClick={() => setStyle("lines", null)}
-                                    className="text-sm text-slate-500 hover:text-slate-800 underline"
-                                >
-                                    clear
-                                </button>
-                            )}
-                        </div>
+                        <SegField
+                            label="Count"
+                            value={linesVal != null ? String(linesVal) : ""}
+                            options={[
+                                { value: "1", label: "1 line" },
+                                { value: "2", label: "2 lines" },
+                            ]}
+                            onChange={(v) => setStyle("lines", v ? Number(v) : null)}
+                        />
                     </StyleGroup>
                 </div>
             </div>
@@ -478,13 +446,35 @@ export function AlterationGarmentForm({
     );
 }
 
-function StyleGroup({ title, children }: { title: string; children: React.ReactNode }) {
+// Shared trigger height so image-bearing and text-only selects line up. The
+// `data-[size=default]` variant is needed to override the primitive's own h-9.
+const TRIGGER_H = "h-10 data-[size=default]:h-10";
+
+function StyleGroup({
+    title,
+    className,
+    children,
+}: {
+    title: string;
+    className?: string;
+    children: React.ReactNode;
+}) {
     return (
-        <div className="rounded-lg border border-slate-200 bg-white p-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className={cn("rounded-lg border border-slate-200 bg-white p-3", className)}>
+            <div className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {title}
             </div>
-            <div className="flex flex-wrap items-end gap-3">{children}</div>
+            <div className="flex flex-wrap items-start gap-3">{children}</div>
+        </div>
+    );
+}
+
+// Label-on-top wrapper so every control in a group shares one baseline grid.
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="flex flex-col gap-1">
+            <Label className="text-xs font-medium text-slate-500">{label}</Label>
+            {children}
         </div>
     );
 }
@@ -504,22 +494,21 @@ function ImagePickerField({
 }) {
     const selected = options.find((o) => o.value === value);
     return (
-        <div className="min-w-[8rem] flex-1 space-y-1">
-            <Label className="text-sm text-slate-600">{label}</Label>
+        <Field label={label}>
             <Select
                 value={value || ""}
                 onValueChange={(v) => onChange(v === "__clear" ? null : v)}
             >
-                <SelectTrigger className="bg-background">
+                <SelectTrigger className={cn("w-36 bg-background", TRIGGER_H)}>
                     {selected ? (
                         selected.image ? (
                             <img
                                 src={selected.image}
                                 alt={selected.alt}
-                                className="min-w-10 h-10 object-contain"
+                                className="h-7 w-auto object-contain"
                             />
                         ) : (
-                            <span>{selected.displayText}</span>
+                            <span className="truncate">{selected.displayText}</span>
                         )
                     ) : (
                         <SelectValue placeholder={placeholder} />
@@ -543,7 +532,7 @@ function ImagePickerField({
                     ))}
                 </SelectContent>
             </Select>
-        </div>
+        </Field>
     );
 }
 
@@ -559,14 +548,13 @@ function ThicknessField({
     disabled?: boolean;
 }) {
     return (
-        <div className="min-w-[7rem] space-y-1">
-            <Label className="text-sm text-slate-600">{label}</Label>
+        <Field label={label}>
             <Select
                 value={value || ""}
                 onValueChange={(v) => onChange(v === "__clear" ? null : v)}
                 disabled={disabled}
             >
-                <SelectTrigger className="bg-background min-w-[6rem]">
+                <SelectTrigger className={cn("w-32 bg-background", TRIGGER_H)}>
                     <SelectValue placeholder="Thickness" />
                 </SelectTrigger>
                 <SelectContent>
@@ -582,11 +570,51 @@ function ThicknessField({
                     ))}
                 </SelectContent>
             </Select>
-        </div>
+        </Field>
     );
 }
 
-function CheckboxImage({
+// Single-select segmented toggle. Clicking the active segment clears it, so it
+// behaves like the sparse change map (no selection = no change recorded).
+function SegField({
+    label,
+    value,
+    options,
+    onChange,
+}: {
+    label: string;
+    value: string;
+    options: { value: string; label: string }[];
+    onChange: (v: string) => void;
+}) {
+    return (
+        <Field label={label}>
+            <div className="flex h-10 overflow-hidden rounded-md border border-slate-300">
+                {options.map((opt) => {
+                    const active = value === opt.value;
+                    return (
+                        <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => onChange(active ? "" : opt.value)}
+                            className={cn(
+                                "border-r border-slate-300 px-3 text-sm font-medium transition last:border-r-0",
+                                active
+                                    ? "bg-slate-900 text-white"
+                                    : "bg-white text-slate-700 hover:bg-slate-50",
+                            )}
+                        >
+                            {opt.label}
+                        </button>
+                    );
+                })}
+            </div>
+        </Field>
+    );
+}
+
+// Labeled on/off toggle with the option's icon, matched to the field height.
+function IconToggle({
     label,
     checked,
     onChange,
@@ -598,26 +626,25 @@ function CheckboxImage({
     image: string;
 }) {
     return (
-        <label
-            className={
-                "relative flex cursor-pointer flex-col items-center gap-1 rounded-md border-2 bg-white px-2 py-1.5 text-xs text-slate-700 transition " +
-                (checked
-                    ? "border-slate-900 ring-2 ring-slate-900/20"
-                    : "border-slate-200 hover:bg-slate-50")
-            }
-        >
-            <Checkbox
-                checked={checked}
-                onCheckedChange={(v) => onChange(!!v)}
-                className="sr-only"
-            />
-            {checked && (
-                <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
-                    ✓
-                </span>
-            )}
-            <img src={image} alt={label} className="h-9 w-9 object-contain" />
-            <span className="font-medium">{label}</span>
-        </label>
+        <Field label={label}>
+            <button
+                type="button"
+                onClick={() => onChange(!checked)}
+                aria-pressed={checked}
+                className={cn(
+                    "relative flex h-10 w-16 items-center justify-center rounded-md border transition",
+                    checked
+                        ? "border-slate-900 bg-slate-50 ring-1 ring-slate-900"
+                        : "border-slate-300 bg-white hover:bg-slate-50",
+                )}
+            >
+                <img src={image} alt={label} className="h-6 w-6 object-contain" />
+                {checked && (
+                    <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-slate-900 text-white">
+                        <Check className="size-3" />
+                    </span>
+                )}
+            </button>
+        </Field>
     );
 }

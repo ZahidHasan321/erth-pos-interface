@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-    Search, CreditCard, CheckCircle2, XCircle, Clock, Loader2,
+    Search, CreditCard, CheckCircle2, XCircle, Clock, Loader2, Wallet, Layers, AlertCircle,
 } from "lucide-react";
 import { Input } from "@repo/ui/input";
 import { Button } from "@repo/ui/button";
@@ -9,13 +9,13 @@ import { ChipToggle } from "@repo/ui/chip-toggle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
-import { TIMEZONE } from "@/lib/utils";
 import {
     useRecentCashierOrders,
     useCashierOrderListSearch,
     useCashierSummary,
 } from "@/hooks/useCashier";
-import type { CashierOrderListItem, CashierSummary, CashierPeriod } from "@/api/cashier";
+import type { CashierOrderListItem, CashierSummary, CashierPeriod, CashierFilter } from "@/api/cashier";
+import { EMPTY_CASHIER_SUMMARY } from "@/api/cashier";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
 import { DonutChart } from "@/components/charts/donut-chart";
 import { OrderDetailShell } from "./order-detail-shell";
@@ -95,7 +95,7 @@ function OrderRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (i
                 )}
                 {item.order_type && (
                     <span className="text-xs font-medium px-2 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
-                        {item.order_type === "WORK" ? "Work" : "Sales"}
+                        {item.order_type === "WORK" ? "Work" : item.order_type === "ALTERATION" ? "Alteration" : "Sales"}
                     </span>
                 )}
                 {hasReady && item.garment_total > 0 && (
@@ -189,7 +189,7 @@ function OrderTableRow({ item, onSelect }: { item: CashierOrderListItem; onSelec
                     )}
                     {item.order_type && (
                         <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                            {item.order_type === "WORK" ? "Work" : "Sales"}
+                            {item.order_type === "WORK" ? "Work" : item.order_type === "ALTERATION" ? "Alteration" : "Sales"}
                         </span>
                     )}
                     {hasReady && item.garment_total > 0 && (
@@ -234,131 +234,157 @@ function OrderTable({ items, onSelect }: { items: CashierOrderListItem[]; onSele
 }
 
 // ── Reports Panel ───────────────────────────────────────────────────────────
-const UNPAID_PAGE_SIZE = 8;
+const OWING_PAGE_SIZE = 8;
 
-export type DashboardFilter = "all" | "today" | "unpaid" | "paid" | "work" | "sales";
+const PERIOD_LABEL: Record<CashierPeriod, string> = {
+    all: "All time",
+    today: "Today",
+    month: "This month",
+    last2: "Last 2 months",
+    quarter: "This quarter",
+};
 
-function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
+function StatRow({ label, value, dotClass, strong }: { label: string; value: string; dotClass?: string; strong?: boolean }) {
+    return (
+        <div className={`flex justify-between ${strong ? "font-semibold" : ""}`}>
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+                {dotClass && <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />}
+                {label}
+            </span>
+            <span className="font-semibold tabular-nums">{value}</span>
+        </div>
+    );
+}
+
+// Period-scoped cashier stats. Everything here reflects the same period the list
+// is filtered to, so the panel and the rows always tell one story:
+//   1. Collections — billed / collected / outstanding for orders placed in the period
+//   2. Payment status — clickable buckets that drive the list filter
+//   3. Outstanding — the actionable "who still owes" worklist, largest balance first
+function ReportsPanel({ summary, period, owingOrders, activeFilter, onFilter, onSelectOrder }: {
     summary: CashierSummary;
-    unpaidOrders: CashierOrderListItem[];
+    period: CashierPeriod;
+    owingOrders: CashierOrderListItem[];
+    activeFilter: CashierFilter;
+    onFilter: (f: CashierFilter) => void;
     onSelectOrder: (id: string) => void;
 }) {
-    const [unpaidVisible, setUnpaidVisible] = useState(UNPAID_PAGE_SIZE);
-    const now = new Date();
-    const monthName = now.toLocaleDateString("en-GB", { timeZone: TIMEZONE, month: "long" });
+    const [owingVisible, setOwingVisible] = useState(OWING_PAGE_SIZE);
 
-    const todayCount = Number(summary.today_count);
-    const todayBilled = Number(summary.today_billed);
-    const todayPaid = Number(summary.today_paid);
-    const todayDue = Math.max(0, todayBilled - todayPaid);
-    const todayCollectionRate = todayBilled > 0 ? Math.round((todayPaid / todayBilled) * 100) : 0;
+    const billed = Number(summary.billed);
+    const collected = Number(summary.collected);
+    const outstanding = Number(summary.outstanding);
+    const orderCount = Number(summary.order_count);
+    const collectionRate = billed > 0 ? Math.round((collected / billed) * 100) : 0;
+    const avgOrder = orderCount > 0 ? billed / orderCount : 0;
 
-    const monthTotal = Number(summary.month_billed);
-    const monthPaid = Number(summary.month_paid);
-    const monthOutstanding = Number(summary.month_outstanding);
-    const monthCollectionRate = monthTotal > 0 ? Math.round((monthPaid / monthTotal) * 100) : 0;
+    const statusRows = [
+        { key: "paid" as const, label: "Fully paid", count: Number(summary.paid_count), owed: 0, dot: "bg-emerald-600" },
+        { key: "partial" as const, label: "Partially paid", count: Number(summary.partial_count), owed: Number(summary.partial_outstanding), dot: "bg-amber-500" },
+        { key: "unpaid" as const, label: "Unpaid", count: Number(summary.unpaid_count), owed: Number(summary.unpaid_outstanding), dot: "bg-destructive" },
+    ];
 
-    const totalUnpaidAmount = Number(summary.all_outstanding);
-    const unpaidCount = Number(summary.unpaid_count);
+    const sortedOwing = [...owingOrders].sort((a, b) => (b.order_total - b.paid) - (a.order_total - a.paid));
 
     return (
         <div className="space-y-2">
+            {/* 1. Collections overview for the selected period */}
             <Card className="p-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5" /> Today
+                    <Wallet className="h-3.5 w-3.5" /> Collections · {PERIOD_LABEL[period]}
                 </h3>
-                {todayCount > 0 ? (
+                {orderCount > 0 ? (
                     <div className="flex items-center gap-3">
                         <DonutChart
-                            size={90}
+                            size={92}
                             strokeWidth={11}
                             hideLegend
-                            center={{ value: `${todayCollectionRate}%`, label: "collected" }}
+                            center={{ value: `${collectionRate}%`, label: "collected" }}
                             segments={[
-                                { value: todayPaid, color: "#047857", label: "Collected", amount: fmtK(todayPaid) },
-                                { value: todayDue, color: "#ea580c", label: "Due", amount: fmtK(todayDue) },
+                                { value: collected, color: "#047857", label: "Collected", amount: fmtK(collected) },
+                                { value: outstanding, color: "#ea580c", label: "Outstanding", amount: fmtK(outstanding) },
                             ]}
                         />
                         <div className="flex-1 text-xs tabular-nums space-y-1">
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Orders</span>
-                                <span className="font-semibold">{todayCount}</span>
+                            <StatRow label="Orders" value={String(orderCount)} />
+                            <StatRow label="Collected" value={fmtK(collected)} dotClass="bg-emerald-600" />
+                            <StatRow label="Outstanding" value={fmtK(outstanding)} dotClass="bg-orange-500" />
+                            <div className="border-t border-border pt-1">
+                                <StatRow label="Billed" value={fmtK(billed)} strong />
                             </div>
-                            <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />Collected</span>
-                                <span className="font-semibold">{fmtK(todayPaid)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />Due</span>
-                                <span className="font-semibold">{fmtK(todayDue)}</span>
-                            </div>
-                            <div className="border-t border-border pt-1 flex justify-between font-semibold">
-                                <span className="text-muted-foreground">Billed</span>
-                                <span>{fmtK(todayBilled)}</span>
-                            </div>
+                            <StatRow label="Avg order" value={fmtK(avgOrder)} />
                         </div>
                     </div>
                 ) : (
-                    <p className="text-xs text-muted-foreground text-center py-3">No orders today yet</p>
+                    <p className="text-xs text-muted-foreground text-center py-3">No orders in this period</p>
+                )}
+                {(Number(summary.work_count) > 0 || Number(summary.sales_count) > 0) && (
+                    <div className="mt-2 pt-2 border-t border-border grid grid-cols-2 gap-2 text-xs tabular-nums">
+                        <div>
+                            <p className="text-muted-foreground">Work · {Number(summary.work_count)}</p>
+                            <p className="font-semibold">{fmtK(Number(summary.work_billed))}</p>
+                        </div>
+                        <div>
+                            <p className="text-muted-foreground">Sales · {Number(summary.sales_count)}</p>
+                            <p className="font-semibold">{fmtK(Number(summary.sales_billed))}</p>
+                        </div>
+                    </div>
                 )}
             </Card>
 
+            {/* 2. Payment status breakdown — click a row to filter the list */}
             <Card className="p-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
-                    <CreditCard className="h-3.5 w-3.5" /> {monthName}
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5" /> Payment status
                 </h3>
-                {monthTotal > 0 ? (
-                    <div className="flex items-center gap-3">
-                        <DonutChart
-                            size={90}
-                            strokeWidth={11}
-                            hideLegend
-                            center={{ value: `${monthCollectionRate}%`, label: "collected" }}
-                            segments={[
-                                { value: monthPaid, color: "#047857", label: "Collected", amount: fmtK(monthPaid) },
-                                { value: monthOutstanding, color: "#ea580c", label: "Remaining", amount: fmtK(monthOutstanding) },
-                            ]}
-                        />
-                        <div className="flex-1 text-xs tabular-nums space-y-1">
-                            <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />Collected</span>
-                                <span className="font-semibold">{fmtK(monthPaid)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />Remaining</span>
-                                <span className="font-semibold">{fmtK(monthOutstanding)}</span>
-                            </div>
-                            <div className="border-t border-border pt-1 flex justify-between font-semibold">
-                                <span className="text-muted-foreground">Billed</span>
-                                <span>{fmtK(monthTotal)}</span>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <p className="text-xs text-muted-foreground text-center py-3">No orders this month</p>
-                )}
+                <div className="space-y-1">
+                    {statusRows.map((s) => {
+                        const isActive = activeFilter === s.key;
+                        return (
+                            <button
+                                key={s.key}
+                                type="button"
+                                onClick={() => onFilter(s.key)}
+                                className={`w-full text-left px-2.5 py-2 rounded-lg border transition-colors ${isActive ? "border-primary bg-primary/5" : "border-transparent hover:bg-accent hover:border-border"}`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <span className="flex items-center gap-2 text-xs font-medium">
+                                        <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+                                        {s.label}
+                                    </span>
+                                    <span className="flex items-center gap-2 tabular-nums">
+                                        {s.owed > 0 && <span className="text-[11px] text-destructive">{fmtK(s.owed)}</span>}
+                                        <span className="text-xs font-bold">{s.count}</span>
+                                    </span>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
             </Card>
 
+            {/* 3. Outstanding worklist — largest balance owed first */}
             <Card className="p-3">
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                        <CreditCard className="h-3.5 w-3.5" /> Outstanding ({unpaidCount || unpaidOrders.length})
+                        <AlertCircle className="h-3.5 w-3.5" /> Outstanding ({Number(summary.owing_count)})
                     </h3>
-                    {totalUnpaidAmount > 0 && (
-                        <span className="font-semibold text-base text-destructive tabular-nums">{fmtK(totalUnpaidAmount)}</span>
+                    {outstanding > 0 && (
+                        <span className="font-semibold text-base text-destructive tabular-nums">{fmtK(outstanding)}</span>
                     )}
                 </div>
-                {unpaidOrders.length === 0 ? (
+                {sortedOwing.length === 0 ? (
                     <div className="text-center py-4">
                         <CheckCircle2 className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground font-medium">All orders are fully paid</p>
+                        <p className="text-xs text-muted-foreground font-medium">Everything is collected</p>
                     </div>
                 ) : (
                     <>
                         <div className="space-y-1">
-                            {unpaidOrders.slice(0, unpaidVisible).map((o, i) => {
+                            {sortedOwing.slice(0, owingVisible).map((o, i) => {
                                 const due = o.order_total - o.paid;
                                 const paidPct = o.order_total > 0 ? Math.round((o.paid / o.order_total) * 100) : 0;
+                                const ready = o.garment_ready > 0 && o.garment_total > 0;
                                 return (
                                     <button key={o.id} type="button" onClick={() => onSelectOrder(String(o.id))}
                                         className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-accent transition-all duration-150 cursor-pointer pointer-coarse:active:scale-[0.99] border border-transparent hover:border-border"
@@ -367,6 +393,7 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <span className="font-semibold text-xs tabular-nums">#{o.id}</span>
                                                 <span className="text-xs truncate text-muted-foreground">{o.customer_name || "-"}</span>
+                                                {ready && <span className="text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded bg-primary text-primary-foreground shrink-0">Ready</span>}
                                             </div>
                                             <span className="font-semibold text-xs text-destructive tabular-nums shrink-0">{fmtK(due)}</span>
                                         </div>
@@ -382,10 +409,10 @@ function ReportsPanel({ summary, unpaidOrders, onSelectOrder }: {
                                 );
                             })}
                         </div>
-                        {unpaidOrders.length > unpaidVisible && (
+                        {sortedOwing.length > owingVisible && (
                             <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground mt-1.5"
-                                onClick={() => setUnpaidVisible(v => v + UNPAID_PAGE_SIZE)}>
-                                Show more ({unpaidOrders.length - unpaidVisible} remaining)
+                                onClick={() => setOwingVisible(v => v + OWING_PAGE_SIZE)}>
+                                Show more ({sortedOwing.length - owingVisible} remaining)
                             </Button>
                         )}
                     </>
@@ -401,9 +428,9 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
     const [listSearchInput, setListSearchInput] = useState("");
     const [listSearchQuery, setListSearchQuery] = useState("");
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-    // Default to the pending-payment queue (confirmed + still owing), not the full
-    // transaction history. Paid/All chips stay available to look paid orders up.
-    const [dashboardFilter, setDashboardFilter] = useState<DashboardFilter>("unpaid");
+    // "All Orders" is a lookup surface (the initial-processing queue is the Pending
+    // tab), so default to All. Period drives both the list and the stats panel.
+    const [dashboardFilter, setDashboardFilter] = useState<CashierFilter>("all");
     const [period, setPeriod] = useState<CashierPeriod>("all");
 
     const { data: recentResult, isLoading: isLoadingRecent, isFetching: isFetchingRecent } = useRecentCashierOrders(dashboardFilter, period);
@@ -412,19 +439,16 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
     useEffect(() => { if (recentResult) setHasLoadedOnce(true); }, [recentResult]);
     const isInitialLoad = !hasLoadedOnce && isLoadingRecent;
 
-    const { data: summaryResult } = useCashierSummary();
-    const summary: CashierSummary = summaryResult?.data || {
-        all_billed: 0, all_collected: 0, all_outstanding: 0, today_count: 0, today_billed: 0, today_paid: 0,
-        today_collected: 0, today_refunded: 0, month_billed: 0, month_paid: 0, month_outstanding: 0,
-        month_collected: 0, month_refunded: 0, work_count: 0, sales_count: 0, unpaid_count: 0,
-        work_billed: 0, sales_billed: 0, month_work_billed: 0, month_sales_billed: 0,
-    };
+    const { data: summaryResult } = useCashierSummary(period);
+    const summary: CashierSummary = summaryResult?.data || EMPTY_CASHIER_SUMMARY;
 
     const { data: listSearchResult, isFetching: isListSearching } = useCashierOrderListSearch(listSearchQuery);
     const searchedOrders = listSearchResult?.data || [];
 
-    const { data: unpaidResult } = useRecentCashierOrders("unpaid");
-    const allUnpaidOrders = (unpaidResult?.data || []).filter(o => (o.order_total - o.paid) > 0.001);
+    // The outstanding worklist tracks every owing order in the period (unpaid +
+    // partial), independent of the list's current chip.
+    const { data: owingResult } = useRecentCashierOrders("owing", period);
+    const owingOrders = (owingResult?.data || []).filter(o => (o.order_total - o.paid) > 0.001);
 
     const allDisplayOrders = listSearchQuery ? searchedOrders : recentOrders;
     const displayOrders = allDisplayOrders.slice(0, visibleCount);
@@ -483,11 +507,9 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
                             <div className="flex flex-wrap gap-1.5">
                                 {([
                                     { key: "all" as const, label: "All" },
-                                    { key: "today" as const, label: `Today (${Number(summary.today_count)})` },
                                     { key: "unpaid" as const, label: `Unpaid (${Number(summary.unpaid_count)})` },
-                                    { key: "paid" as const, label: "Paid" },
-                                    { key: "work" as const, label: `Work (${Number(summary.work_count)})` },
-                                    { key: "sales" as const, label: `Sales (${Number(summary.sales_count)})` },
+                                    { key: "partial" as const, label: `Partial (${Number(summary.partial_count)})` },
+                                    { key: "paid" as const, label: `Paid (${Number(summary.paid_count)})` },
                                 ] as const).map((f) => (
                                     <ChipToggle
                                         key={f.key}
@@ -502,10 +524,11 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All time</SelectItem>
+                                    <SelectItem value="today">Today</SelectItem>
                                     <SelectItem value="month">This month</SelectItem>
                                     <SelectItem value="last2">Last 2 months</SelectItem>
                                     <SelectItem value="quarter">This quarter</SelectItem>
+                                    <SelectItem value="all">All time</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -517,7 +540,7 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
                                     <>{allDisplayOrders.length} result{allDisplayOrders.length !== 1 ? "s" : ""}</>
                                 ) : dashboardFilter !== "all" ? (
                                     <>
-                                        {{ today: "Today", paid: "Paid", unpaid: "Unpaid", work: "Work Orders", sales: "Sales Orders" }[dashboardFilter] || dashboardFilter} ({allDisplayOrders.length})
+                                        {{ paid: "Paid", unpaid: "Unpaid", partial: "Partially paid", owing: "Outstanding", work: "Work Orders", sales: "Sales Orders" }[dashboardFilter] || dashboardFilter} ({allDisplayOrders.length})
                                         <button type="button" onClick={() => setDashboardFilter("all")} className="ml-1 text-primary hover:underline">clear</button>
                                     </>
                                 ) : (
@@ -573,7 +596,14 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
                         </div>
                     </div>
                     <div className="md:col-span-2 pr-1 overflow-visible">
-                        <ReportsPanel summary={summary} unpaidOrders={allUnpaidOrders} onSelectOrder={onSelectOrder} />
+                        <ReportsPanel
+                            summary={summary}
+                            period={period}
+                            owingOrders={owingOrders}
+                            activeFilter={dashboardFilter}
+                            onFilter={(f) => setDashboardFilter(dashboardFilter === f ? "all" : f)}
+                            onSelectOrder={onSelectOrder}
+                        />
                     </div>
                 </div>
             </div>

@@ -66,7 +66,7 @@ export const jabzourTypes: BaseOption[] = [
   { value: "JAB_BAIN_MUSALLAS", displayText: "Bain Musallas", image: bainMusallas },
   { value: "JAB_MAGFI_MURABBA", displayText: "Magfi Murabba", image: magfiMurabba },
   { value: "JAB_MAGFI_MUSALLAS", displayText: "Magfi Musallas", image: magfiMusallas },
-  { value: "JAB_SHAAB", displayText: "Shaab", image: shaab },
+  { value: "JAB_SHAAB", displayText: "Zipper", image: shaab },
 ];
 
 export const topPocketTypes: BaseOption[] = [
@@ -77,7 +77,7 @@ export const topPocketTypes: BaseOption[] = [
 ];
 
 export const cuffTypes: BaseOption[] = [
-  { value: "CUF_DOUBLE_GUMSHA", displayText: "Double Gumsha", image: doubleGumsha },
+  { value: "CUF_DOUBLE_GUMSHA", displayText: "French Cuff", image: doubleGumsha },
   { value: "CUF_MURABBA_KABAK", displayText: "Murabba Kabak", image: murabbaKabak },
   { value: "CUF_MUSALLAS_KABBAK", displayText: "Musallas Kabbak", image: musallasKabbak },
   { value: "CUF_MUDAWAR_KABBAK", displayText: "Mudawar Kabbak", image: mudawarKabbak },

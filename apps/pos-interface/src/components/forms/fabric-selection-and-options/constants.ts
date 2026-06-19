@@ -85,7 +85,7 @@ export const jabzourTypes: BaseOption[] = [
   { value: "JAB_BAIN_MUSALLAS", alt: "Bain Musallas", displayText: "Bain Musallas", image: bainMusallas },
   { value: "JAB_MAGFI_MURABBA", alt: "Magfi Murabba", displayText: "Magfi Murabba", image: magfiMurabba },
   { value: "JAB_MAGFI_MUSALLAS", alt: "Magfi  Musallas", displayText: "Magfi  Musallas", image: magfiMusallas },
-  { value: "JAB_SHAAB", alt: "Shaab", displayText: "Shaab", image: shaab },
+  { value: "JAB_SHAAB", alt: "Zipper", displayText: "Zipper", image: shaab },
 ];
 
 /** Top pocket types */
@@ -103,7 +103,7 @@ export const sidePocketTypes: BaseOption[] = [
 
 /** Cuff types (used for sleeves/cuffs) */
 export const cuffTypes: BaseOption[] = [
-  { value: "CUF_DOUBLE_GUMSHA", alt: "Double Gumsha", displayText: "Double Gumsha", image: doubleGumsha },
+  { value: "CUF_DOUBLE_GUMSHA", alt: "French Cuff", displayText: "French Cuff", image: doubleGumsha },
   { value: "CUF_MURABBA_KABAK", alt: "Murabba Kabak", displayText: "Murabba Kabak", image: murabbaKabak },
   { value: "CUF_MUSALLAS_KABBAK", alt: "Musallas Kabbak", displayText: "Musallas Kabbak", image: musallasKabbak },
   { value: "CUF_MUDAWAR_KABBAK", alt: "Mudawar Kabbak", displayText: "Mudawar Kabbak", image: mudawarKabbak },

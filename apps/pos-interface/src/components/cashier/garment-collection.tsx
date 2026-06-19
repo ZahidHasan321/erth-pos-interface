@@ -1,6 +1,7 @@
 import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
 import type { Garment } from "@repo/database";
+import { displaySoakHours } from "@/lib/utils";
 
 type GarmentWithFabric = Garment & { fabric?: { id: number; name: string } | null };
 
@@ -41,6 +42,7 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
         const eligible = isEligibleForCollection(g);
         const isCompleted = g.piece_stage === "completed";
         const isBrova = g.garment_type === "brova";
+        const isAlteration = g.garment_type === "alteration";
         const status = getCashierStatus(g);
         const fabricData = g.fabric;
         const isSelected = selectedIds.has(g.id);
@@ -82,10 +84,12 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                             className={`text-[10px] px-1.5 py-0 font-semibold ${
                                 isBrova
                                     ? "bg-amber-50 text-amber-700 border-amber-300"
-                                    : "bg-blue-50 text-blue-700 border-blue-300"
+                                    : isAlteration
+                                      ? "bg-slate-50 text-slate-700 border-slate-300"
+                                      : "bg-blue-50 text-blue-700 border-blue-300"
                             }`}
                         >
-                            {isBrova ? "Brova" : "Final"}
+                            {isBrova ? "Brova" : isAlteration ? "Alteration" : "Final"}
                         </Badge>
                         {g.express && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold bg-red-50 text-red-700 border-red-300">
@@ -94,7 +98,7 @@ export function GarmentCollection({ garments, selectedIds, onToggle, onToggleAll
                         )}
                         {g.soaking && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold bg-cyan-50 text-cyan-700 border-cyan-300">
-                                Soaking{g.soaking_hours ? ` ${g.soaking_hours}h` : ""}
+                                Soaking{g.soaking_hours ? ` ${displaySoakHours(g.soaking_hours)}h` : ""}
                             </Badge>
                         )}
                         {fabricData?.name ? (
