@@ -116,56 +116,93 @@ export function isTerminalGarmentState(g: SurfaceGarment): boolean {
 
 // ── Per-surface membership (mirrors the rendered queues) ─────────────────────
 
-/** receiving.tsx — Lost + 5 transit-to-workshop sections. */
-export function inReceiving(g: SurfaceGarment): boolean {
-  if (g.location === "lost_in_transit") return true; // Lost section
-  if (g.location !== "transit_to_workshop") return false;
-  if (g.garment_type === "alteration") return true; // Alteration orders (out)
-  const trip = g.trip_number ?? 1;
-  if (trip === 1) {
-    if (g.express) return true; // Express
-    if (g.garment_type === "brova") return true; // Brova
-    if (g.garment_type === "final") return true; // Finals
-    return false;
-  }
-  return isAlteration(trip, g.garment_type); // Work-order alterations (trip >= 2)
-}
+export type ReceivingSection =
+  | "lost"
+  | "alteration_out"
+  | "express"
+  | "brova"
+  | "finals"
+  | "work_order_alt";
 
 /**
- * parking.tsx — OR of the rendered sub-sections. Critical that this mirrors the
- * VISIBLE sections (not the broad `parked` array), so a garment in `parked` that
- * falls into no sub-section is detected as a leak.
+ * receiving.tsx — exclusive section assignment (Lost + 5 transit-to-workshop
+ * sections). Returns the section a garment renders in, or null.
  */
-export function inParking(g: SurfaceGarment, ctx: SurfaceContext): boolean {
-  if (g.location !== "workshop" || g.in_production) return false;
+export function receivingSection(g: SurfaceGarment): ReceivingSection | null {
+  if (g.location === "lost_in_transit") return "lost";
+  if (g.location !== "transit_to_workshop") return null;
+  if (g.garment_type === "alteration") return "alteration_out";
+  const trip = g.trip_number ?? 1;
+  if (trip === 1) {
+    if (g.express) return "express"; // express brova + express final
+    if (g.garment_type === "brova") return "brova";
+    if (g.garment_type === "final") return "finals";
+    return null;
+  }
+  return isAlteration(trip, g.garment_type) ? "work_order_alt" : null;
+}
+
+/** receiving.tsx — Lost + 5 transit-to-workshop sections. */
+export function inReceiving(g: SurfaceGarment): boolean {
+  return receivingSection(g) !== null;
+}
+
+export type ParkingSection =
+  | "express"
+  | "brova"
+  | "alteration_out"
+  | "returns"
+  | "finals"
+  | "customer_approved"
+  | "finals_not_yet_approved";
+
+/**
+ * parking.tsx — exclusive section assignment. Mirrors the rendered sub-sections
+ * (NOT the broad `parked` array), so a garment in `parked` that falls into no
+ * sub-section is detected as a leak. Returns the section, or null.
+ */
+export function parkingSection(
+  g: SurfaceGarment,
+  ctx: SurfaceContext,
+): ParkingSection | null {
+  if (g.location !== "workshop" || g.in_production) return null;
   const trip = g.trip_number ?? 1;
 
-  // Finals locked at waiting_for_acceptance: both "Finals not yet approved" and
-  // "Customer approved" render them (finals only, trip 1).
+  // Finals locked at waiting_for_acceptance (finals only, trip 1): split by
+  // whether a brova in the order has been approved.
   if (g.piece_stage === "waiting_for_acceptance") {
-    return g.garment_type === "final" && trip === 1;
+    if (g.garment_type !== "final" || trip !== 1) return null;
+    return ctx.isBrovaApproved(g.order_id)
+      ? "customer_approved"
+      : "finals_not_yet_approved";
   }
 
   // `parked` = workshop & !in_production & not waiting_for_acceptance.
-  if (g.garment_type === "alteration") return true; // Alteration orders (out)
+  if (g.garment_type === "alteration") return "alteration_out";
 
   if (trip > 1) {
     // Returns section — excluded once accepted.
-    return g.feedback_status !== "accepted";
+    return g.feedback_status !== "accepted" ? "returns" : null;
   }
 
   // trip === 1 work-order garment (brova / final).
   if (g.garment_type === "brova") {
-    return true; // Express (express brova) or Brova (non-express brova)
+    return g.express ? "express" : "brova";
   }
   if (g.garment_type === "final") {
-    const hadBrova = ctx.hadBrova(g.order_id);
-    const inExpress = g.express === true && !hadBrova; // Express (express, no brova)
-    const inDirect = g.express !== true && !hadBrova; // Finals (direct, no brova)
-    const inApproved = hadBrova; // Customer approved / Finals (released in a brova order)
-    return inExpress || inDirect || inApproved;
+    // Express section takes express finals only in orders with NO brova; every
+    // other released final renders in the schedulable "Finals" section.
+    return g.express === true && !ctx.hadBrova(g.order_id) ? "express" : "finals";
   }
-  return false;
+  return null;
+}
+
+/**
+ * parking.tsx — true iff the garment renders in any parking sub-section.
+ * Mirrors the VISIBLE sections, so a `parked` garment in no sub-section leaks.
+ */
+export function inParking(g: SurfaceGarment, ctx: SurfaceContext): boolean {
+  return parkingSection(g, ctx) !== null;
 }
 
 /** getSchedulerGarments. */
@@ -201,10 +238,20 @@ export function inSoakQueue(g: SurfaceGarment): boolean {
   );
 }
 
+export type DispatchTab = "ready" | "in_transit";
+
+/** dispatch.tsx — exclusive tab assignment (Ready / In transit), or null. */
+export function dispatchTab(g: SurfaceGarment): DispatchTab | null {
+  if (g.location === "transit_to_shop") return "in_transit";
+  if (g.location === "workshop" && g.piece_stage === "ready_for_dispatch") {
+    return "ready";
+  }
+  return null;
+}
+
 /** dispatch.tsx — Ready tab + In-transit tab. */
 export function inDispatch(g: SurfaceGarment): boolean {
-  if (g.location === "transit_to_shop") return true; // In transit
-  return g.location === "workshop" && g.piece_stage === "ready_for_dispatch"; // Ready
+  return dispatchTab(g) !== null;
 }
 
 export type WorkshopSurface =

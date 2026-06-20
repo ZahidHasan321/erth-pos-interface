@@ -19,6 +19,7 @@ import { Truck, Package, History, Printer, ChevronDown, Loader2 } from "lucide-r
 import { formatDate, cn, parseUtcTimestamp, getKuwaitMidnight, getLocalDateStr, TIMEZONE } from "@/lib/utils";
 import { getDispatchHistory, type DispatchHistoryRow } from "@/api/garments";
 import type { WorkshopGarment } from "@repo/database";
+import { dispatchTab } from "@repo/database";
 
 // URL is the source of truth for the active tab so a "ready to dispatch"
 // notification can deep-link the right tab. Default (ready) is omitted.
@@ -569,9 +570,7 @@ function DispatchPage() {
   // (brova_trialed lives at shop under unified flow; receiving resets any stray
   // brova_trialed returning to the workshop back to waiting_cut.)
   const readyGarments = useMemo(
-    () => allGarments.filter(
-      (g) => g.location === "workshop" && g.piece_stage === "ready_for_dispatch",
-    ),
+    () => allGarments.filter((g) => dispatchTab(g) === "ready"),
     [allGarments],
   );
 
@@ -592,7 +591,7 @@ function DispatchPage() {
 
   // In transit garments
   const inTransitGarments = useMemo(
-    () => allGarments.filter((g) => g.location === "transit_to_shop"),
+    () => allGarments.filter((g) => dispatchTab(g) === "in_transit"),
     [allGarments],
   );
   const searchedInTransit = useMemo(

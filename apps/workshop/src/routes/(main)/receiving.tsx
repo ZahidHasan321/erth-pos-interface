@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCon
 import { BrandBadge, ExpressBadge, AlterationBadge } from "@/components/shared/StageBadge";
 import { cn, formatDate, getDeliveryUrgency } from "@/lib/utils";
 import type { WorkshopGarment } from "@repo/database";
-import { isAlteration, getAlterationNumber } from "@repo/database";
+import { getAlterationNumber, receivingSection } from "@repo/database";
 import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -399,19 +399,15 @@ function ReceivingPage() {
     .filter((g, i, arr) => arr.findIndex((x) => x.id === g.id) === i);
   const lostInTransit = allGarments.filter((g) => g.location === "lost_in_transit");
 
-  // Alteration-order garments live in their own section regardless of trip.
-  const alterationOut = inTransit.filter((g) => g.garment_type === "alteration");
-
-  // Work-order garments only (brova / final). Initial trip = trip 1; trip 2+
-  // returns go to the Work Order Alterations section below.
-  const workOrderGarments = inTransit.filter((g) => g.garment_type !== "alteration");
-  const initialTrip = workOrderGarments.filter((g) => (g.trip_number ?? 1) === 1);
-  const expressGarments = initialTrip.filter((g) => g.express);
-  const brovaInitial = initialTrip.filter((g) => !g.express && g.garment_type === "brova");
-  const finalsInitial = initialTrip.filter((g) => !g.express && g.garment_type === "final");
+  // Section membership comes from the shared classifier (receivingSection) so the
+  // no-leak partition test guards these queues. See @repo/database/workshop-surfaces.
+  const alterationOut = inTransit.filter((g) => receivingSection(g) === "alteration_out");
+  const expressGarments = inTransit.filter((g) => receivingSection(g) === "express");
+  const brovaInitial = inTransit.filter((g) => receivingSection(g) === "brova");
+  const finalsInitial = inTransit.filter((g) => receivingSection(g) === "finals");
 
   // Work order alterations: brova/final returning (trip >= 2).
-  const alterations = workOrderGarments.filter((g) => isAlteration(g.trip_number, g.garment_type));
+  const alterations = inTransit.filter((g) => receivingSection(g) === "work_order_alt");
 
   // Group garments by order, sort groups by delivery date, brovas before finals, flatten
   const groupByOrderSorted = (garments: WorkshopGarment[]): WorkshopGarment[] => {

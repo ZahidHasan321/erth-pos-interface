@@ -40,7 +40,8 @@ import {
   Zap,
   Loader2,
 } from "lucide-react";
-import type { WorkshopGarment } from "@repo/database";
+import type { WorkshopGarment, SurfaceContext, ParkingSection } from "@repo/database";
+import { parkingSection } from "@repo/database";
 
 function AltBadge({ trip }: { trip: number }) {
   return (
@@ -365,12 +366,6 @@ function ParkingPage() {
       ),
     [allGarments],
   );
-  // Alteration-order garments (garment_type='alteration') get their own section
-  // regardless of trip — they don't share the brova/final/returns flow.
-  const alterationOutGarments = useMemo(
-    () => parked.filter((g) => g.garment_type === "alteration"),
-    [parked],
-  );
   const workOrderParked = useMemo(
     () => parked.filter((g) => g.garment_type !== "alteration"),
     [parked],
@@ -379,14 +374,6 @@ function ParkingPage() {
     () => workOrderParked.filter((g) => (g.trip_number ?? 1) === 1),
     [workOrderParked],
   );
-  const returnsGarments = useMemo(
-    () =>
-      workOrderParked.filter(
-        (g) => (g.trip_number ?? 1) > 1 && g.feedback_status !== "accepted",
-      ),
-    [workOrderParked],
-  );
-
   // Finals still locked at waiting_for_acceptance (trip 1).
   const waitingFinals = useMemo(
     () =>
@@ -409,16 +396,6 @@ function ParkingPage() {
   const isBrovaApprovedForOrder = useMemo(
     () => (orderId: number) => (waitingBrovaStatus[orderId]?.accepted ?? 0) > 0,
     [waitingBrovaStatus],
-  );
-
-  // Finals still parked, split by brova acceptance.
-  const finalsNotYetApprovedGarments = useMemo(
-    () => waitingFinals.filter((g) => !isBrovaApprovedForOrder(g.order_id)),
-    [waitingFinals, isBrovaApprovedForOrder],
-  );
-  const customerApprovedLockedFinals = useMemo(
-    () => waitingFinals.filter((g) => isBrovaApprovedForOrder(g.order_id)),
-    [waitingFinals, isBrovaApprovedForOrder],
   );
 
   // Released finals (non-express AND express both allowed here — we split below).
@@ -457,30 +434,26 @@ function ParkingPage() {
     [brovaOrderIdSet, brovaPlansMap],
   );
 
-  // Express: express brovas + express finals in orders with NO brova (no plan to inherit).
-  const expressGarments = useMemo(
-    () =>
-      trip1.filter(
-        (g) =>
-          g.express && (g.garment_type === "brova" || !hadBrova(g.order_id)),
-      ),
-    [trip1, hadBrova],
+  // Section membership comes from the shared classifier (parkingSection) so the
+  // no-leak partition test guards these queues. Built from the page's own
+  // hadBrova / isBrovaApprovedForOrder (which include the at-shop DB fallback).
+  // See @repo/database/workshop-surfaces.
+  const surfaceCtx = useMemo<SurfaceContext>(
+    () => ({
+      hadBrova: (id) => (id == null ? false : hadBrova(id)),
+      isBrovaApproved: (id) => (id == null ? false : isBrovaApprovedForOrder(id)),
+    }),
+    [hadBrova, isBrovaApprovedForOrder],
   );
-  // Brova: non-express brovas
-  const brovaGarments = useMemo(
-    () => trip1.filter((g) => !g.express && g.garment_type === "brova"),
-    [trip1],
-  );
-  // Customer Approved (released): finals already out of waiting_for_acceptance.
-  const customerApprovedSchedulableGarments = useMemo(
-    () => releasedFinals.filter((g) => hadBrova(g.order_id)),
-    [releasedFinals, hadBrova],
-  );
-  // Finals: non-express released finals in orders with no brova — direct finals.
-  const directFinalsGarments = useMemo(
-    () => releasedFinals.filter((g) => !g.express && !hadBrova(g.order_id)),
-    [releasedFinals, hadBrova],
-  );
+  const inSection = (s: ParkingSection) =>
+    allGarments.filter((g) => parkingSection(g, surfaceCtx) === s);
+  const expressGarments = inSection("express");
+  const brovaGarments = inSection("brova");
+  const alterationOutGarments = inSection("alteration_out");
+  const returnsGarments = inSection("returns");
+  const finalsNotYetApprovedGarments = inSection("finals_not_yet_approved");
+  const customerApprovedLockedFinals = inSection("customer_approved");
+  const finalsSchedulable = inSection("finals");
   // Group by order, sort groups by delivery date, brovas before finals within group, then flatten.
   const groupByOrderSorted = (arr: WorkshopGarment[]): WorkshopGarment[] => {
     const groups = new Map<number, WorkshopGarment[]>();
@@ -516,10 +489,7 @@ function ParkingPage() {
   const sortedCustomerApprovedLocked = groupByOrderSorted(
     customerApprovedLockedFinals,
   );
-  const sortedAllSchedulableFinals = groupByOrderSorted([
-    ...directFinalsGarments,
-    ...customerApprovedSchedulableGarments,
-  ]);
+  const sortedAllSchedulableFinals = groupByOrderSorted(finalsSchedulable);
 
   // ── Search & Returns filter (URL is the source of truth) ───────────────────
   const sp = Route.useSearch();
