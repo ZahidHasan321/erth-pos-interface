@@ -8,7 +8,9 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
     "supabase": "node_modules/.bin/supabase",
-    "supabase:functions:deploy": "node_modules/.bin/supabase functions deploy auth-login && node_modules/.bin/supabase functions deploy auth-admin"
+    "supabase:functions:deploy": "node_modules/.bin/supabase functions deploy auth-login && node_modules/.bin/supabase functions deploy auth-admin",
+    "e2e:setup": "pnpm --filter e2e run setup",
+    "e2e": "pnpm --filter e2e run test"
   },
   "devDependencies": {
     "prettier": "^3.7.4",
