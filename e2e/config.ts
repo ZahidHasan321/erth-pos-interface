@@ -61,4 +61,29 @@ export const USERS = {
     department: "workshop" as const,
     jobFunctions: ["cutter"] as string[],
   },
+  // Workshop ADMIN — needed to drive the WHOLE workshop flow. Plain staff:workshop
+  // is DENIED /receiving|parking|scheduler|dispatch (only admin / manager:workshop
+  // get "full" there — see apps/workshop/src/lib/rbac.ts). An admin lands on
+  // /receiving after login (getPostLoginPath: not a terminal user) and has "full"
+  // on every workshop route, so one user can receive → park → schedule → dispatch.
+  workshopAdmin: {
+    username: "e2e_wsadmin",
+    name: "E2E Workshop Admin",
+    role: "admin" as const,
+    department: "workshop" as const,
+    jobFunctions: [] as string[],
+  },
 };
+
+// Worker/unit resources the scheduler's ProductionPlanDialog + WorkerDropdown read
+// (apps/workshop/src/hooks/useResources.ts → public.resources). One worker per
+// non-sewing stage; sewing is unit-collaborative so it lists a UNIT, backed by a
+// public.units row. responsibility must equal the stage name the plan keys map to.
+export const SEW_UNIT = "Unit A";
+export const WORKERS = {
+  cutting: "E2E Cutter Worker",
+  sewing: SEW_UNIT, // sewing is assigned by unit, not individual
+  finishing: "E2E Finisher",
+  ironing: "E2E Ironer",
+  quality_check: "E2E Inspector",
+} as const;

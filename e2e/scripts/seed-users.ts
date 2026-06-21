@@ -23,7 +23,7 @@
  * Idempotent — re-running updates/leaves rows in place.
  */
 import postgres from "postgres";
-import { DATABASE_URL, BRAND, PIN, USERS } from "../config";
+import { DATABASE_URL, BRAND, PIN, USERS, SEW_UNIT, WORKERS } from "../config";
 
 // packages/database is CommonJS (no "type":"module"); under tsx its named
 // exports land on the interop default object, not as ESM named imports.
@@ -94,6 +94,55 @@ async function seedReference(): Promise<void> {
   `;
 }
 
+/**
+ * Worker/unit resources the scheduler reads. The ProductionPlanDialog assigns a
+ * worker per stage (a UNIT for sewing); WorkerDropdown lists the same rows. Each
+ * resource's `responsibility` must equal the stage name. Sewing is unit-scoped, so
+ * its resource carries `unit` and is backed by a units row (stage='sewing'). Brand
+ * is left NULL: the dialog/dropdown filter on responsibility, not brand.
+ *
+ * Idempotent: resources keyed on (responsibility, resource_name); units on name.
+ */
+async function seedResources(): Promise<void> {
+  // Sewing unit (the scheduler reads distinct resources.unit; units table backs it).
+  await sql`
+    INSERT INTO units (stage, name, daily_target)
+    VALUES ('sewing', ${SEW_UNIT}, 100)
+    ON CONFLICT DO NOTHING
+  `.catch(() => {
+    // units may have no unique constraint on (stage,name); fall back to a guarded insert.
+  });
+  const [{ exists: unitExists }] = await sql<{ exists: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM units WHERE stage = 'sewing' AND name = ${SEW_UNIT}) AS exists
+  `;
+  if (!unitExists) {
+    await sql`INSERT INTO units (stage, name, daily_target) VALUES ('sewing', ${SEW_UNIT}, 100)`;
+  }
+
+  // One resource per production stage. resource.responsibility = stage name.
+  const rows: { responsibility: string; resource_name: string; unit: string | null }[] = [
+    { responsibility: "cutting", resource_name: WORKERS.cutting, unit: null },
+    { responsibility: "sewing", resource_name: `${SEW_UNIT} Sewer`, unit: SEW_UNIT },
+    { responsibility: "finishing", resource_name: WORKERS.finishing, unit: null },
+    { responsibility: "ironing", resource_name: WORKERS.ironing, unit: null },
+    { responsibility: "quality_check", resource_name: WORKERS.quality_check, unit: null },
+  ];
+  for (const r of rows) {
+    const [{ exists }] = await sql<{ exists: boolean }[]>`
+      SELECT EXISTS (
+        SELECT 1 FROM resources
+        WHERE responsibility = ${r.responsibility} AND resource_name = ${r.resource_name}
+      ) AS exists
+    `;
+    if (exists) continue;
+    await sql`
+      INSERT INTO resources (responsibility, resource_name, unit, daily_target)
+      VALUES (${r.responsibility}, ${r.resource_name}, ${r.unit}, 100)
+    `;
+  }
+  console.log(`  ~ resources/units seeded (sewing unit '${SEW_UNIT}' + ${rows.length} workers)`);
+}
+
 async function seedUser(u: (typeof USERS)[keyof typeof USERS]): Promise<void> {
   const [row] = await sql<{ id: string; created: boolean }[]>`
     INSERT INTO users (username, name, role, department, job_functions, brands, is_active, pin)
@@ -127,6 +176,7 @@ async function main() {
 
   console.log("Seeding reference data (catalog / customer / register)...");
   await seedReference();
+  await seedResources();
 
   // Open ERTH register session for today (required by any money flow later).
   await sql`
