@@ -26,6 +26,7 @@ import { Route as MainProfileRouteImport } from './routes/$main/profile'
 import { Route as MainNotificationsRouteImport } from './routes/$main/notifications'
 import { Route as MainStoreRouteRouteImport } from './routes/$main/store/route'
 import { Route as MainCashierRouteRouteImport } from './routes/$main/cashier/route'
+import { Route as MainDeliveryIndexRouteImport } from './routes/$main/delivery/index'
 import { Route as MainCustomersIndexRouteImport } from './routes/$main/customers/index'
 import { Route as MainCashierIndexRouteImport } from './routes/$main/cashier/index'
 import { Route as MainAppointmentsIndexRouteImport } from './routes/$main/appointments/index'
@@ -147,6 +148,11 @@ const MainStoreRouteRoute = MainStoreRouteRouteImport.update({
 const MainCashierRouteRoute = MainCashierRouteRouteImport.update({
   id: '/cashier',
   path: '/cashier',
+  getParentRoute: () => MainRouteRoute,
+} as any)
+const MainDeliveryIndexRoute = MainDeliveryIndexRouteImport.update({
+  id: '/delivery/',
+  path: '/delivery/',
   getParentRoute: () => MainRouteRoute,
 } as any)
 const MainCustomersIndexRoute = MainCustomersIndexRouteImport.update({
@@ -391,6 +397,7 @@ export interface FileRoutesByFullPath {
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/cashier/': typeof MainCashierIndexRoute
   '/$main/customers/': typeof MainCustomersIndexRoute
+  '/$main/delivery/': typeof MainDeliveryIndexRoute
   '/$main/orders/order-management/brova-feedback': typeof MainOrdersOrderManagementBrovaFeedbackRoute
   '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
   '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
@@ -443,6 +450,7 @@ export interface FileRoutesByTo {
   '/$main/appointments': typeof MainAppointmentsIndexRoute
   '/$main/cashier': typeof MainCashierIndexRoute
   '/$main/customers': typeof MainCustomersIndexRoute
+  '/$main/delivery': typeof MainDeliveryIndexRoute
   '/$main/orders/order-management/brova-feedback': typeof MainOrdersOrderManagementBrovaFeedbackRoute
   '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
   '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
@@ -500,6 +508,7 @@ export interface FileRoutesById {
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/cashier/': typeof MainCashierIndexRoute
   '/$main/customers/': typeof MainCustomersIndexRoute
+  '/$main/delivery/': typeof MainDeliveryIndexRoute
   '/$main/orders/order-management/brova-feedback': typeof MainOrdersOrderManagementBrovaFeedbackRoute
   '/$main/orders/order-management/cancel-order': typeof MainOrdersOrderManagementCancelOrderRoute
   '/$main/orders/order-management/change-options': typeof MainOrdersOrderManagementChangeOptionsRoute
@@ -558,6 +567,7 @@ export interface FileRouteTypes {
     | '/$main/appointments/'
     | '/$main/cashier/'
     | '/$main/customers/'
+    | '/$main/delivery/'
     | '/$main/orders/order-management/brova-feedback'
     | '/$main/orders/order-management/cancel-order'
     | '/$main/orders/order-management/change-options'
@@ -610,6 +620,7 @@ export interface FileRouteTypes {
     | '/$main/appointments'
     | '/$main/cashier'
     | '/$main/customers'
+    | '/$main/delivery'
     | '/$main/orders/order-management/brova-feedback'
     | '/$main/orders/order-management/cancel-order'
     | '/$main/orders/order-management/change-options'
@@ -666,6 +677,7 @@ export interface FileRouteTypes {
     | '/$main/appointments/'
     | '/$main/cashier/'
     | '/$main/customers/'
+    | '/$main/delivery/'
     | '/$main/orders/order-management/brova-feedback'
     | '/$main/orders/order-management/cancel-order'
     | '/$main/orders/order-management/change-options'
@@ -813,6 +825,13 @@ declare module '@tanstack/react-router' {
       path: '/cashier'
       fullPath: '/$main/cashier'
       preLoaderRoute: typeof MainCashierRouteRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/delivery/': {
+      id: '/$main/delivery/'
+      path: '/delivery'
+      fullPath: '/$main/delivery/'
+      preLoaderRoute: typeof MainDeliveryIndexRouteImport
       parentRoute: typeof MainRouteRoute
     }
     '/$main/customers/': {
@@ -1152,6 +1171,7 @@ interface MainRouteRouteChildren {
   MainOrdersViewWorkOrderRoute: typeof MainOrdersViewWorkOrderRoute
   MainAppointmentsIndexRoute: typeof MainAppointmentsIndexRoute
   MainCustomersIndexRoute: typeof MainCustomersIndexRoute
+  MainDeliveryIndexRoute: typeof MainDeliveryIndexRoute
   MainOrdersOrderManagementBrovaFeedbackRoute: typeof MainOrdersOrderManagementBrovaFeedbackRoute
   MainOrdersOrderManagementCancelOrderRoute: typeof MainOrdersOrderManagementCancelOrderRoute
   MainOrdersOrderManagementChangeOptionsRoute: typeof MainOrdersOrderManagementChangeOptionsRoute
@@ -1179,6 +1199,7 @@ const MainRouteRouteChildren: MainRouteRouteChildren = {
   MainOrdersViewWorkOrderRoute: MainOrdersViewWorkOrderRoute,
   MainAppointmentsIndexRoute: MainAppointmentsIndexRoute,
   MainCustomersIndexRoute: MainCustomersIndexRoute,
+  MainDeliveryIndexRoute: MainDeliveryIndexRoute,
   MainOrdersOrderManagementBrovaFeedbackRoute:
     MainOrdersOrderManagementBrovaFeedbackRoute,
   MainOrdersOrderManagementCancelOrderRoute:

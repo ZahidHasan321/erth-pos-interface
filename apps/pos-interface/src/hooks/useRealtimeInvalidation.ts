@@ -5,6 +5,7 @@ import { NOTIFICATIONS_KEY } from './useNotifications';
 import { TRANSFER_BADGE_KEY } from './useTransfers';
 import { showNotificationToast } from '@/components/notification-toast';
 import { useAuth } from '@/context/auth';
+import { getBrand } from '@/api/orders';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): { (...args: Parameters<T>): void; cancel: () => void } {
@@ -169,16 +170,24 @@ export function useRealtimeInvalidation() {
           const row = payload.new as {
             id?: number;
             department?: string;
+            brand?: string | null;
             scope?: 'department' | 'user';
             recipient_user_id?: string | null;
             title?: string;
             body?: string | null;
             type?: string;
           };
+          // Department toasts must match the brand currently in view (or be
+          // brand-agnostic), so another brand's notification never surfaces on
+          // this brand's screen (SPEC §1 per-brand isolation) — mirrors the
+          // notifications list, which is fetched with p_brand: getBrand().
+          // User-scoped notifications are addressed to this user and always show.
+          const brandMatches =
+            !row.brand || row.brand.toLowerCase() === getBrand().toLowerCase();
           const isForMe =
             row.scope === 'user'
               ? !!currentUserId && row.recipient_user_id === currentUserId
-              : row.department === 'shop';
+              : row.department === 'shop' && brandMatches;
           if (!isForMe) return;
           qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
           if (row.id != null) {

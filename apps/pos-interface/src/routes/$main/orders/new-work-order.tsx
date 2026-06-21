@@ -61,7 +61,7 @@ import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
-import { brandUsesCashier } from "@/lib/constants";
+import { brandUsesCashier, isHomeBasedBrand } from "@/lib/constants";
 import { useAuth } from "@/context/auth";
 import { format } from "date-fns";
 import { CalendarClock } from "lucide-react";
@@ -136,6 +136,7 @@ function NewWorkOrder() {
     const { user } = useAuth();
     const { main } = useParams({ strict: false });
     const cashierHandlesPayment = brandUsesCashier(main);
+    const isHomeBased = isHomeBasedBrand(main);
     const steps = React.useMemo(() => getSteps(cashierHandlesPayment), [cashierHandlesPayment]);
     const { styles, stylePricingRules, stitchingAdult, stitchingChild } = usePricing();
 
@@ -911,7 +912,7 @@ function NewWorkOrder() {
                 expressCharge: data.express_charge ?? 0,
                 soakingCharge: data.soaking_charge ?? 0,
                 shelfCharge: data.shelf_charge ?? 0,
-                homeDelivery: cashierHandlesPayment ? false : data.home_delivery,
+                homeDelivery: isHomeBased ? true : (cashierHandlesPayment ? false : data.home_delivery),
                 deliveryDate: order.delivery_date ?? undefined,
                 stitchingPrice: data.stitching_price,
             },
@@ -1506,6 +1507,7 @@ function NewWorkOrder() {
                             onPrintLabels={() => handlePrintLabels()}
                             onPrintCard2={() => handlePrintCard2()}
                             cashierHandlesPayment={cashierHandlesPayment}
+                            isHomeBased={isHomeBased}
                             onConfirm={(data) => {
                                 if (cashierHandlesPayment) {
                                     openDialog(

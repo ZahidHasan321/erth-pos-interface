@@ -105,6 +105,8 @@ interface OrderSummaryAndPaymentFormProps {
   deliveryDate?: string | null;
   /** When true, hides payment/discount controls and shows a confirmation-only summary (ERTH brand) */
   cashierHandlesPayment?: boolean;
+  /** When true (home-based brand, SPEC §1), delivery is forced to Home Delivery: Pick-Up is hidden and home_delivery is locked true. */
+  isHomeBased?: boolean;
   onPrintLabels?: () => void;
   onPrintCard2?: () => void;
 }
@@ -124,11 +126,23 @@ export function OrderSummaryAndPaymentForm({
   orderType,
   deliveryDate,
   cashierHandlesPayment,
+  isHomeBased,
   onPrintLabels,
   onPrintCard2,
 }: OrderSummaryAndPaymentFormProps) {
   const invoiceRef = React.useRef<HTMLDivElement>(null);
   const { getPrice, styles, stylePricingRules } = usePricing();
+
+  // Home-based brands are delivery-only (SPEC §1): lock home_delivery true and
+  // never show the Pick-Up option.
+  React.useEffect(() => {
+    if (isHomeBased && form.getValues("home_delivery") !== true) {
+      form.setValue("home_delivery", true, { shouldDirty: false });
+    }
+  }, [isHomeBased, form]);
+  const effectiveDeliveryOptions = isHomeBased
+    ? deliveryOptions.filter((o) => o.value === true)
+    : deliveryOptions;
 
   // Watch form values
   const [
@@ -653,10 +667,10 @@ export function OrderSummaryAndPaymentForm({
                     <RadioGroup
                       onValueChange={(value) => field.onChange(value === "true")}
                       value={field.value ? "true" : "false"}
-                      className="grid grid-cols-2 gap-4"
+                      className={cn("grid gap-4", isHomeBased ? "grid-cols-1" : "grid-cols-2")}
                       disabled={isOrderClosed}
                     >
-                      {deliveryOptions.map((option) => {
+                      {effectiveDeliveryOptions.map((option) => {
                         const isDisabled = isOrderClosed;
                         const isSelected = field.value === option.value;
                         return (

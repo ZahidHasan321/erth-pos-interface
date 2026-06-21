@@ -1,7 +1,8 @@
 "use client";
 
 import { getFabrics } from "@/api/fabrics";
-import { saveWorkOrderGarments, getOrderDetails, updateOrder } from "@/api/orders";
+import { saveWorkOrderGarments, getOrderDetails, updateOrder, getBrand } from "@/api/orders";
+import { isHomeBasedBrand } from "@/lib/constants";
 import { uploadOrderSignature } from "@/lib/storage";
 import { getMeasurementsByCustomerId } from "@/api/measurements";
 import { getStyles } from "@/api/styles";
@@ -297,7 +298,11 @@ export function FabricSelectionForm({
             let totalStitchingCharge = 0;
             let totalStyleCharge = 0;
 
-            const hasBrova = data.garments.some(g => g.garment_type === 'brova');
+            // Home-based brands never create brova (finals only, SPEC §1) — force
+            // final + home delivery at save so a stray default can't slip a trial
+            // garment or a pickup through.
+            const homeBased = isHomeBasedBrand(getBrand());
+            const hasBrova = !homeBased && data.garments.some(g => g.garment_type === 'brova');
 
             const garmentsToSave = data.garments.map((garment) => {
                 const stitchingSnapshot = stitchingPrice;
@@ -325,6 +330,7 @@ export function FabricSelectionForm({
 
                 return mapFormValuesToGarment({
                     ...garment,
+                    garment_type: homeBased ? 'final' : garment.garment_type,
                     piece_stage: pieceStage,
                     location: location,
                     trip_number: tripNumber
@@ -342,7 +348,7 @@ export function FabricSelectionForm({
                 style_charge: totalStyleCharge,
                 stitching_price: stitchingPrice,
                 delivery_date: deliveryDate,
-                home_delivery: homeDelivery,
+                home_delivery: homeBased ? true : homeDelivery,
             });
         },
         onSuccess: async (response) => {
@@ -570,6 +576,12 @@ export function FabricSelectionForm({
     }
 
     const isFormDisabled = (isSaved && !isEditing) || !orderId || isOrderClosed;
+    // Home-based brands have no brova (SPEC §1): drop the Brova column entirely.
+    const fabricColumns = isHomeBasedBrand(getBrand())
+        ? fabricSelectionColumns.filter(
+              (c) => (c as { accessorKey?: string }).accessorKey !== "garment_type",
+          )
+        : fabricSelectionColumns;
 
     const copyFabricToAll = () => {
         const garments = form.getValues("garments");
@@ -814,7 +826,7 @@ export function FabricSelectionForm({
                             </div>
 
                             <DataTable
-                                columns={fabricSelectionColumns}
+                                columns={fabricColumns}
                                 data={garmentFields}
                                 removeRow={removeGarmentRow}
                                 measurementOptions={measurementOptions}

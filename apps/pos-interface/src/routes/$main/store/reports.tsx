@@ -1,12 +1,12 @@
 import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, ArrowDownToLine, Send, AlertTriangle, Settings2, Package, type LucideIcon } from "lucide-react";
+import { BarChart3, ArrowDownToLine, Send, AlertTriangle, Settings2, Package, Building2, type LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@repo/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
 import { cn } from "@/lib/utils";
-import { getMovements, getMovementAggregates, getTopItemsByMovement } from "@/api/stockMovements";
+import { getMovements, getMovementAggregates, getTopItemsByMovement, getConsumptionByBrand } from "@/api/stockMovements";
 import { MOVEMENT_TYPE_LABELS, getWasteReasonLabel } from "@/lib/inventory";
 import type { StockMovementType, StockItemType } from "@repo/database";
 import type { TopItem } from "@/api/stockMovements";
@@ -65,6 +65,14 @@ function ReportsPage() {
     queryKey: ["top_restocked", "shop", itemType, from, to],
     queryFn: () => getTopItemsByMovement({ movementType: "restock", from, to, limit: 10, location: "shop", itemType }),
     staleTime: 60_000,
+  });
+  // The one sanctioned cross-brand view (§1/§4): how each brand draws down the
+  // shared fabric pool. Only meaningful for fabric (the only stock home brands use).
+  const { data: consumptionByBrand = [] } = useQuery({
+    queryKey: ["consumption_by_brand", itemType, from, to],
+    queryFn: () => getConsumptionByBrand({ from, to, itemType }),
+    staleTime: 60_000,
+    enabled: itemType === "fabric",
   });
   const { data: recentAdjustments = [] } = useQuery({
     queryKey: ["recent_adjustments", "shop", itemType, from, to],
@@ -209,6 +217,42 @@ function ReportsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Consumption by brand — the only cross-brand view (§1/§4), fabric only */}
+      {itemType === "fabric" && (
+        <Card className="mb-6">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-muted-foreground" /> Consumption by brand
+              </h3>
+              <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">{consumed.toFixed(1)} {unit} total</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground/70 mb-4">How each brand draws down the shared fabric stock.</p>
+            {consumptionByBrand.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No fabric consumption in this period.</p>
+            ) : (
+              <div className="space-y-3">
+                {consumptionByBrand.map((b) => {
+                  const max = Math.max(...consumptionByBrand.map((x) => Number(x.total)), 1);
+                  const pct = Math.round((Number(b.total) / max) * 100);
+                  const label = b.brand === "UNATTRIBUTED" ? "Unattributed" : b.brand;
+                  return (
+                    <div key={b.brand} className="flex items-center gap-3 text-sm">
+                      <span className="w-28 shrink-0 truncate text-muted-foreground" title={label}>{label}</span>
+                      <div className="flex-1 min-w-0 h-1.5 bg-muted rounded-full overflow-hidden" aria-hidden="true">
+                        <div className="h-full bg-primary/70 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="tabular-nums text-muted-foreground w-12 text-right">{b.count}</span>
+                      <span className="tabular-nums font-medium w-20 text-right">{Number(b.total).toFixed(1)} {unit}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Waste by reason */}
       <Card className="mb-6">

@@ -157,6 +157,27 @@ export async function getMovementAggregates(args: {
   return data as AggregatesResult;
 }
 
+export type ConsumptionByBrand = { brand: string; total: number; count: number };
+
+/**
+ * Fabric consumption broken down by the consuming brand (SPEC §1/§4) — the one
+ * sanctioned cross-brand view: how each brand draws down ERTH's shared shop
+ * stock. Pre-attribution (historical) rows bucket as "UNATTRIBUTED".
+ */
+export async function getConsumptionByBrand(args: {
+  from: string;
+  to: string;
+  itemType?: StockItemType;
+}): Promise<ConsumptionByBrand[]> {
+  const { data, error } = await db.rpc("get_consumption_by_brand", {
+    p_from: args.from,
+    p_to: args.to,
+    p_item_type: args.itemType ?? "fabric",
+  });
+  if (error) throw new Error(`Could not load consumption by brand: ${error.message}`);
+  return (data ?? []) as ConsumptionByBrand[];
+}
+
 export type TopItem = { item_type: StockItemType; item_id: number; total: number; name: string | null };
 
 export async function getTopItemsByMovement(args: {

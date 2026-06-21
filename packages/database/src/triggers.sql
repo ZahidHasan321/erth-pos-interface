@@ -3025,14 +3025,10 @@ RETURNS BOOLEAN AS $$
     EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role = 'super_admin')
     -- workshop department sees all brands (they process orders for every brand)
     OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND department = 'workshop')
-    -- active user with no brands set = unrestricted (backwards compat). Must
-    -- also confirm an active row exists, otherwise deactivated/missing users
-    -- would fall through this branch and gain access.
-    OR (
-      EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true)
-      AND NOT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND brands IS NOT NULL AND array_length(brands, 1) > 0)
-    )
-    -- brand is in the user's brands array (case-insensitive)
+    -- brand is in the user's brands array (case-insensitive). The old
+    -- "NULL brands = unrestricted" wildcard was removed for production per-brand
+    -- isolation (SPEC §1): a shop user with no brands set is locked out, while
+    -- super_admin and workshop are still covered by the branches above.
     OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND lower(brand_value) = ANY(brands));
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
@@ -4786,6 +4782,9 @@ RETURNS JSONB AS $$
       AND nr.user_id = get_my_user_id()
     WHERE n.expires_at > now()
       AND (p_brand IS NULL OR n.brand = p_brand::brand)
+      -- server-side brand fence: never return a brand the caller can't access,
+      -- regardless of the client-supplied p_brand (SPEC §1 per-brand isolation)
+      AND (n.brand IS NULL OR can_access_brand(n.brand::text))
       AND (p_type IS NULL OR n.type::text = p_type)
       AND (NOT p_unread_only OR nr.read_at IS NULL)
       AND (
@@ -4815,6 +4814,7 @@ RETURNS INTEGER AS $$
     AND nr.user_id = get_my_user_id()
   WHERE n.expires_at > now()
     AND (p_brand IS NULL OR n.brand = p_brand::brand)
+    AND (n.brand IS NULL OR can_access_brand(n.brand::text))
     AND (p_type IS NULL OR n.type::text = p_type)
     AND (NOT p_unread_only OR nr.read_at IS NULL)
     AND (
@@ -4833,6 +4833,7 @@ RETURNS INTEGER AS $$
   FROM notifications n
   WHERE n.expires_at > now()
     AND (p_brand IS NULL OR n.brand = p_brand::brand)
+    AND (n.brand IS NULL OR can_access_brand(n.brand::text))
     AND (
       (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
       OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
@@ -4866,6 +4867,7 @@ BEGIN
   FROM notifications n
   WHERE n.expires_at > now()
     AND (p_brand IS NULL OR n.brand = p_brand::brand)
+    AND (n.brand IS NULL OR can_access_brand(n.brand::text))
     AND (
       (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
       OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
@@ -6206,6 +6208,7 @@ DECLARE
   v_user_id UUID;
   v_unit_cost NUMERIC;
   v_ref_id INT;
+  v_brand brand;
 BEGIN
   IF v_delta = 0 THEN
     RETURN;  -- no-op, nothing to log
@@ -6219,12 +6222,20 @@ BEGIN
   v_unit_cost := NULLIF(_movement_setting('app.movement_unit_cost'), '')::NUMERIC;
   v_ref_id := NULLIF(_movement_setting('app.movement_ref_id'), '')::INT;
 
+  -- Attribute order-referenced movements (consumption/return) to the consuming
+  -- brand so ERTH's fabric report can break usage down per brand (SPEC §1/§4).
+  -- Non-order stock ops (restock/adjust/transfer/waste) carry no brand.
+  IF _movement_setting('app.movement_ref_type') = 'order' AND v_ref_id IS NOT NULL THEN
+    SELECT brand INTO v_brand FROM orders WHERE id = v_ref_id;
+  END IF;
+
   INSERT INTO stock_movements (
     item_type, item_id, location, movement_type,
     qty_delta, qty_before, qty_after,
     ref_type, ref_id,
     supplier_id, unit_cost,
     reason, notes, image_url,
+    brand,
     user_id
   )
   VALUES (
@@ -6236,6 +6247,7 @@ BEGIN
              CASE WHEN v_type = 'adjustment' THEN 'unattributed' ELSE NULL END),
     _movement_setting('app.movement_notes'),
     _movement_setting('app.movement_image_url'),
+    v_brand,
     v_user_id
   );
 END;
@@ -7729,3 +7741,144 @@ BEGIN
   RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
+
+-- ════════════════════════════════════════════════════════════════════════
+-- HOME-BASED BRAND DELIVERY (SPEC §1 / §5)
+-- Home-based brands (SAKKBA/QASS) have no cashier; their final handover happens
+-- on a per-brand Delivery page. deliver_order hands over a WHOLE order in one
+-- all-or-nothing action: it refuses unless EVERY non-terminal garment of the
+-- order is back at the shop and ready_for_pickup, then reuses collect_garments
+-- (so fulfillment_type = delivered for home_delivery garments, piece_stage =
+-- completed, collected_at = now(); the recompute_order_phase trigger then flips
+-- order_phase -> completed). Idempotent: a re-run on a fully-delivered order is a
+-- no-op. SECURITY INVOKER, so RLS is the brand fence — exactly like
+-- collect_garments, which it wraps: an order for a brand the caller can't access
+-- is simply not visible, so it reads as 'not found'.
+-- ════════════════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION deliver_order(p_order_id INT)
+RETURNS JSONB AS $$
+DECLARE
+  v_total INT;
+  v_ready INT;
+  v_ids   UUID[];
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM orders WHERE id = p_order_id) THEN
+    RAISE EXCEPTION 'Order % not found', p_order_id;
+  END IF;
+
+  SELECT
+    count(*) FILTER (WHERE piece_stage NOT IN ('completed','discarded')),
+    count(*) FILTER (WHERE piece_stage NOT IN ('completed','discarded')
+                     AND location = 'shop' AND piece_stage = 'ready_for_pickup')
+  INTO v_total, v_ready
+  FROM garments
+  WHERE order_id = p_order_id;
+
+  -- Idempotent: nothing left to hand over.
+  IF v_total = 0 THEN
+    RETURN jsonb_build_object('status', 'noop', 'message', 'Order already fully delivered');
+  END IF;
+
+  -- Whole-order, all-or-nothing: refuse a partial delivery.
+  IF v_ready < v_total THEN
+    RAISE EXCEPTION 'Cannot deliver order %: % of % garment(s) are not yet back at the shop and ready for delivery',
+      p_order_id, (v_total - v_ready), v_total;
+  END IF;
+
+  SELECT array_agg(id) INTO v_ids
+  FROM garments
+  WHERE order_id = p_order_id
+    AND location = 'shop'
+    AND piece_stage = 'ready_for_pickup';
+
+  RETURN collect_garments(p_order_id, v_ids, NULL);
+END;
+$$ LANGUAGE plpgsql;
+
+-- List a home-based brand's WORK orders for the Delivery page. p_status:
+--   'ready'     -> confirmed, not yet completed, and EVERY non-terminal garment
+--                  is back at the shop ready_for_pickup (deliverable now).
+--   'delivered' -> already handed over (order_phase = completed), newest first.
+-- Read-only; SECURITY INVOKER so RLS fences the brand, plus an explicit filter.
+CREATE OR REPLACE FUNCTION get_delivery_orders(
+  p_brand  brand,
+  p_status TEXT DEFAULT 'ready'
+)
+RETURNS JSONB AS $$
+  WITH gstats AS (
+    SELECT
+      order_id,
+      count(*) AS total_garments,
+      count(*) FILTER (WHERE piece_stage NOT IN ('completed','discarded')) AS active_garments,
+      count(*) FILTER (WHERE piece_stage NOT IN ('completed','discarded')
+                       AND location = 'shop' AND piece_stage = 'ready_for_pickup') AS ready_garments,
+      min(delivery_date) AS delivery_date,
+      max(collected_at)  AS last_delivered_at
+    FROM garments
+    GROUP BY order_id
+  )
+  SELECT COALESCE(
+    jsonb_agg(row_to_json(t)
+      ORDER BY t.last_delivered_at DESC NULLS LAST,
+               t.delivery_date     ASC  NULLS LAST,
+               t.order_id          DESC),
+    '[]'::jsonb)
+  FROM (
+    SELECT
+      o.id              AS order_id,
+      wo.invoice_number,
+      c.name            AS customer_name,
+      c.phone           AS customer_phone,
+      o.order_total,
+      o.paid,
+      gs.total_garments,
+      gs.active_garments,
+      gs.ready_garments,
+      gs.delivery_date,
+      gs.last_delivered_at
+    FROM orders o
+    JOIN work_orders wo ON wo.order_id = o.id
+    JOIN customers   c  ON c.id = o.customer_id
+    JOIN gstats      gs ON gs.order_id = o.id
+    WHERE o.brand = p_brand
+      AND o.order_type = 'WORK'
+      AND o.checkout_status = 'confirmed'
+      AND (
+        (p_status = 'ready'
+          AND wo.order_phase <> 'completed'
+          AND gs.active_garments > 0
+          AND gs.ready_garments = gs.active_garments)
+        OR
+        (p_status = 'delivered'
+          AND wo.order_phase = 'completed')
+      )
+  ) t;
+$$ LANGUAGE sql STABLE;
+
+-- ─── Fabric/stock consumption broken down by consuming brand (SPEC §1/§4) ───
+-- The single sanctioned cross-brand view: how each brand draws down ERTH's
+-- shared shop stock. Sums `consumption` movements in [from, to) per brand using
+-- the same ABS(qty_delta)+annotated_qty measure as the other aggregates.
+-- Pre-attribution (historical) rows have NULL brand -> bucketed 'UNATTRIBUTED'.
+-- Defaults to fabric on the shop side (where the home brands' usage lands).
+CREATE OR REPLACE FUNCTION get_consumption_by_brand(
+  p_from      TIMESTAMPTZ,
+  p_to        TIMESTAMPTZ,
+  p_item_type stock_item_type DEFAULT 'fabric',
+  p_location  stock_location  DEFAULT 'shop'
+)
+RETURNS JSONB AS $$
+  SELECT COALESCE(jsonb_agg(row_to_json(t) ORDER BY t.total DESC), '[]'::jsonb)
+  FROM (
+    SELECT
+      COALESCE(brand::text, 'UNATTRIBUTED') AS brand,
+      SUM(ABS(qty_delta) + COALESCE(annotated_qty, 0)) AS total,
+      COUNT(*) AS count
+    FROM stock_movements
+    WHERE created_at >= p_from AND created_at < p_to
+      AND movement_type = 'consumption'
+      AND (p_item_type IS NULL OR item_type = p_item_type)
+      AND (p_location  IS NULL OR location  = p_location)
+    GROUP BY brand
+  ) t;
+$$ LANGUAGE sql STABLE;

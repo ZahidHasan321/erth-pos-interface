@@ -40,7 +40,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@repo/ui/sidebar";
-import { BRAND_NAMES, brandUsesCashier } from "@/lib/constants";
+import { BRAND_NAMES, brandUsesCashier, isHomeBasedBrand } from "@/lib/constants";
 import { useTransferBadgeCounts } from "@/hooks/useTransfers";
 
 const data = {
@@ -92,6 +92,12 @@ const data = {
           url: "cashier",
           icon: Banknote,
           cashierBrandOnly: true,
+        },
+        {
+          title: "Delivery",
+          url: "delivery",
+          icon: PackageCheck,
+          homeBrandOnly: true,
         },
         {
           title: "Order Management",
@@ -166,6 +172,7 @@ type NavSubItem = {
   url: string;
   icon?: React.ComponentType<{ className?: string }>;
   cashierBrandOnly?: boolean;
+  homeBrandOnly?: boolean;
   allowedBrands?: readonly string[];
   isCollapsible?: boolean;
   count?: number;
@@ -439,6 +446,7 @@ export function AppSidebar({
               <SidebarMenu>
                 {(item.items as NavSubItem[]).filter((subItem) => {
                   if (subItem.cashierBrandOnly && !brandUsesCashier(main)) return false;
+                  if (subItem.homeBrandOnly && !isHomeBasedBrand(main)) return false;
                   if (subItem.allowedBrands && !subItem.allowedBrands.includes(main)) return false;
                   return true;
                 }).map((subItem) => {

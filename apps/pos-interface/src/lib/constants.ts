@@ -30,6 +30,25 @@ export function brandUsesCashier(brand: string | null | undefined): boolean {
   return BRANDS_WITH_CASHIER.has(brand.toLowerCase());
 }
 
+/** All known brand keys (lowercase route-param form). */
+export const ALL_BRANDS: ReadonlySet<string> = new Set(Object.values(BRAND_NAMES));
+
+/**
+ * Brand operating type (SPEC §1). ERTH is the showroom brand — it holds all
+ * stock and runs the full lifecycle (cashier, brova, pickup-or-delivery). Every
+ * other known brand (SAKKBA, QASS) is home-based: no cashier (payment is taken
+ * inline at order-taking), no brova (finals only, straight to delivery),
+ * delivery-only (home delivery forced, pickup hidden), final handover on the
+ * per-brand Delivery page, and no stock of its own (the store/inventory
+ * surfaces are ERTH-only). Defined as the complement of the cashier (showroom)
+ * set so the two operating types stay mutually exclusive from one source of truth.
+ */
+export function isHomeBasedBrand(brand: string | null | undefined): boolean {
+  if (!brand) return false;
+  const b = brand.toLowerCase();
+  return ALL_BRANDS.has(b) && !BRANDS_WITH_CASHIER.has(b);
+}
+
 export const ORDER_PHASE_LABELS = {
     new: "New",
     in_progress: "In Progress",

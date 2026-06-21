@@ -33,6 +33,13 @@ The **verbatim specification** of this product's features and workflows (§1–�
 - **Workshop** (`apps/workshop`) — production scheduling, terminals, dispatch, resources (§6).
 - Frontend never touches the DB directly — all writes go through RPCs/triggers so lifecycle rules are enforced server-side.
 
+**Brand types — showroom vs home-based.** The three brands split into two operating models — a single classification (a brand set + a case-normalizing helper, like the cashier set in §3) that drives lifecycle, payment, fulfilment, and surface visibility:
+
+- **Showroom brand — ERTH.** Has the physical showroom and holds **all** stock. Full lifecycle (brova + finals), a role-locked **cashier** that takes payment and performs final handover (§3), and pickup-or-delivery fulfilment.
+- **Home-based brands — SAKKBA, QASS.** No showroom, no cashier — payment is taken **inline at order-taking** (§3). **No brova** (finals only, straight through production); **delivery-only** (pickup removed; `home_delivery` forced true at order-taking); and final handover/completion happens on a per-brand **Delivery page** — the home-brand analogue of the cashier's handover (§5). They hold **no stock of their own**: their fabric is drawn from ERTH's shop stock.
+
+**Everything is per-brand and stays within its own brand shell** — a brand's Delivery page, orders, and surfaces never appear under another brand. The **only** cross-brand view is ERTH's fabric-usage report, which attributes fabric consumption to the consuming brand (§4).
+
 ---
 
 ## 2. The garment lifecycle (the heart of the system)
@@ -93,6 +100,8 @@ awaiting_trial / ready_for_pickup → brova_trialed → completed
 **7. Shop receives** — brovas → `piece_stage: awaiting_trial`; finals → `piece_stage: ready_for_pickup`; both `location: shop`.
 
 **8. Brova trial → finals release → collection** — all outcomes in §2.5.
+
+**Home-based brand variant (§1).** A home-based brand's WORK order runs the same production spine with the brova surface removed. At **1B** every garment is created `final` — no brova, so no brova-parking and all start `waiting_cut`. At **1C** payment is taken inline (no cashier queue; step 2 is skipped) and `home_delivery` is forced true (pickup is not offered). Production (3–6) is identical. At **7** finals land `ready_for_pickup` as usual. **8 has no trial:** once **every** garment of the order is back at the shop and `ready_for_pickup`, the order is handed over as a whole on the brand's **Delivery page** (§5), stamping the same final handover (`fulfillment_type: delivered`, `piece_stage: completed`, `order_phase: completed`). With no brova, `acceptance_status` / `feedback_status` are never written and the §2.5 branch tree does not apply.
 
 ### 2.5 Branch tree — every outcome
 
@@ -309,7 +318,7 @@ A customer brings in a **completed** garment to be fixed. This is distinct from 
   - **Idempotent close:** a replayed close (same key) returns the original summary and writes NO additional audit event.
   - **Append-only history:** every close writes a `register_close_events` row (never overwritten); the session row keeps only the latest close. Reopen + re-close ⇒ one additional event.
   - **Frozen day rejects money:** with no open session for the brand, payment recording is rejected.
-- **Brand gate.** Which brands use the cashier flow is a single source of truth (a brand set + a case-normalizing helper; currently ERTH only). It drives inline-payment-vs-cashier-queue routing, the `/cashier` route guard, and sidebar visibility. Enabling a brand = a one-line set addition; brands not in the set take payment inline at order-taking.
+- **Brand gate (brand type, §1).** The cashier is the **showroom-brand** surface; which brands use it is a single source of truth (a brand set + a case-normalizing helper; currently ERTH only). It drives inline-payment-vs-cashier-queue routing, the `/cashier` route guard, and sidebar visibility. Brands not in the set are **home-based**: they take payment **inline at order-taking** and have **no cashier** — their final handover/completion is done on a per-brand **Delivery page** instead (§5).
 
 ---
 
@@ -330,6 +339,7 @@ The store/inventory area is **4 surfaces per app**: Inventory, Transfers, Stockt
 
 - **movement_type:** `restock` · `consumption` · `transfer_out` · `transfer_in` · `adjustment` · `waste` · `return`.
 - Stock-mutating RPCs (restock, adjust, consume-for-order, transfer dispatch/receive, order completion) all stamp context before their UPDATEs.
+- **Brand attribution on consumption.** A work-order fabric `consumption` row also carries the **consuming brand** (the order's `brand`), stamped from the order at confirmation. Because home-based brands (§1) hold no stock and draw their fabric from ERTH's shared shop pool, this is what lets ERTH's fabric report show how each brand draws it down (Reports, below). Other movement types need no brand.
 - **Order confirmation rejects on insufficient stock.** A confirm/checkout that decrements stock (work-order completion, sales-order completion/create) locks each item row and rejects with a descriptive error when the relevant side's on-hand < required qty — never drives stock negative. Customer-brought fabric (`fabric_source: OUT`) is excluded from the decrement and guard.
 - **Suppliers** are first-class, shared across item types; the restock dialog can create one inline.
 - **No silent stock edits:** the metadata edit dialog has no stock field — all stock changes go through Restock, Adjust, Damage/Waste, or a validated Stocktake, each requiring a reason.
@@ -362,7 +372,7 @@ The store/inventory area is **4 surfaces per app**: Inventory, Transfers, Stockt
 - **Direct / bulk send:** a side may **push** accessories with no request (e.g. returning a batch of devices). Bulk send is atomic — all decrements + in-transit rows commit or roll back together.
 - UI tabs: `Needs my action` / `Active` / `All` / `History`. Per-row action = transfer status (`requested` → send · `dispatched`/`partially_received` → receive) × role × side. No `approved` state, no approve/reject.
 
-**Reports** — each side's reports cover **its own stock movements only** (its `location`). The **shop** reports KPI cards (restocked/consumed/net/lost), top items by movement type, and recent adjustments. The **workshop** holds no fabric, so it has **no consumption / fabric-usage report** — its reports cover only the accessory flows it actually has (restocked, received, sent out, lost). Both surface a **waste breakdown** (by reason category, with cost impact) on a ~2-week cadence and the stocktake-history view.
+**Reports** — each side's reports cover **its own stock movements only** (its `location`). The **shop** reports KPI cards (restocked/consumed/net/lost), top items by movement type, and recent adjustments; its **fabric** report additionally breaks **consumption down by consuming brand** (ERTH vs the home-based brands, §1) — the **only** cross-brand view in the system; every other surface is per-brand. The **workshop** holds no fabric, so it has **no consumption / fabric-usage report** — its reports cover only the accessory flows it actually has (restocked, received, sent out, lost). Both surface a **waste breakdown** (by reason category, with cost impact) on a ~2-week cadence and the stocktake-history view.
 
 **RBAC:**
 
@@ -391,6 +401,10 @@ transfers:cancel   → manager + admin
 > UI direction, typography, and tech-stack conventions for this app live in `ENGINEERING.md` §11.
 
 **Role shells.** Order-taker shell (order creation, garment tracking, customer mgmt) and a separate role-locked Cashier shell (§3). Brand is determined by the authenticated user.
+
+**Home-based brand order-taking (§1).** For a home-based brand the new-work-order form takes payment **inline** (no cashier deferral) and **forces home delivery** — the Pick-Up option is not shown and `home_delivery` is set true on every garment. Garments are created **final only** — the brova option is not offered — so the order has no trial and no parked finals.
+
+**Delivery page (home-based brands).** Each home-based brand shell carries a dedicated **Delivery** surface — the home-brand analogue of ERTH's cashier handover (§3), scoped to that brand and **never shown on ERTH**. It lists the brand's confirmed WORK orders that are **ready to deliver**: every garment of the order back at the shop and `ready_for_pickup` (the same readiness the showroom `ready_for_pickup` label derives, §2.8). Delivery is **whole-order, all-or-nothing** — the action is enabled only when **all** the order's garments are present, and completing it hands over the entire order in one step through the shared handover RPC (every garment → `piece_stage: completed`, `fulfillment_type: delivered`; `order_phase: completed`). A delivered order leaves the ready list for a delivered/history view. **No money is handled here** (payment was taken at order-taking) — it is purely the final-handover completion these brands otherwise lack.
 
 ---
 

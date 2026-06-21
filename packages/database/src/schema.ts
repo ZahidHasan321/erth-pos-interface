@@ -1507,6 +1507,9 @@ export const stockMovements = pgTable("stock_movements", {
     // attributes the loss (§2.9); responsible party is derived in SQL.
     annotated_qty: numeric("annotated_qty", { precision: 10, scale: 2 }),
     root_cause: rootCauseEnum("root_cause"),
+    // consuming brand for order-referenced movements (SPEC §1/§4): lets ERTH's
+    // fabric report attribute consumption per brand. NULL for non-order stock ops.
+    brand: brandEnum("brand"),
     // who/when
     user_id: uuid("user_id").references(() => users.id),
     created_at: timestamp("created_at").defaultNow().notNull(),
