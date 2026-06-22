@@ -6,7 +6,7 @@
  * "Auto-Calculated" / "Replaced" are intentionally skipped.
  *
  * CSV directory (override with AIRTABLE_DIR env var):
- *   ../../../../seperate-repo/erth-showrom-api/airtable_data/ERP ALPACA V8/
+ *   ../../../../seperate-repo/erth-showrom-api/airtable_data/ERP ALPACA V10 (Copy)/
  *
  * Usage:
  *   pnpm --filter @repo/database tsx scripts/import-airtable.ts          # dry-run
@@ -39,7 +39,7 @@ const ONLY: Set<string> | null = onlyArg
 
 const DEFAULT_DIR = path.resolve(
     __dirname,
-    "../../../../seperate-repo/erth-showrom-api/airtable_data/ERP ALPACA V8"
+    "../../../../seperate-repo/erth-showrom-api/airtable_data/ERP ALPACA V10 (Copy)"
 );
 const AIRTABLE_DIR = process.env.AIRTABLE_DIR || DEFAULT_DIR;
 
@@ -67,6 +67,13 @@ const blank = (v: unknown): boolean =>
     v === undefined || v === null || (typeof v === "string" && v.trim() === "");
 
 const txt = (v: unknown): string | null => (blank(v) ? null : String(v).trim());
+
+// Some V10 columns are comma-joined lists (duplicate phones, multi rec-ids);
+// take the first segment so it matches a single-value natural/foreign key.
+const first = (v: unknown): string | null => {
+    const t = txt(v);
+    return t ? (t.split(",")[0]!.trim() || null) : null;
+};
 
 const num = (v: unknown): number | null => {
     if (blank(v)) return null;
@@ -133,8 +140,9 @@ const ORDER_PHASE_MAP: Record<string, string> = {
     "03 IN PRODUCTION": "in_progress",
     "04 FN WTG": "in_progress",
     "05 READY FOR DISPATCH": "in_progress",
-    "06 FINAL AT SHOP": "in_progress",
-    "06 FINAL+BROVA AT SHOP": "in_progress",
+    // "at shop" = production finished; archived as settled/completed history.
+    "06 FINAL AT SHOP": "completed",
+    "06 FINAL+BROVA AT SHOP": "completed",
     "WITH BROVA ALT": "in_progress",
     Done: "completed",
 };
@@ -168,12 +176,70 @@ const mapJabzour1 = (v: unknown): "BUTTON" | "ZIPPER" | null => {
     return null;
 };
 
+// Orders still in production at export time. These are NOT archived as
+// completed -- they are excluded here and re-entered in the new system at their
+// true lifecycle stage by staff at cutover (see active-orders worklist).
+const ACTIVE_PHASES = new Set(["02 BR PRD", "03 PENDING", "04 FN WTG", "05 FN PRD"]);
+
 // -- Lookup maps populated as we insert ---------------------------------------
 
 const customerByPhone = new Map<string, number>();      // phone → customers.id
 const measurementByMid = new Map<string, string>();     // "IM000805" → measurements.id (uuid)
 const fabricByName = new Map<string, number>();         // fabric name → fabrics.id
 const orderByInvoice = new Map<string, number>();       // FATOURA → orders.id
+const fabricByAirtableId = new Map<string, number>();    // FABRIC airtable_id (recXXX) → fabrics.id
+const measurementByAirtableId = new Map<string, string>(); // MEASURE airtable_id (recXXX) → measurements.id (uuid)
+
+// -- Style rec-id → app code lookups (built from CSV lookup tables) -----------
+// Each maps an Airtable rec-id (from ORDERS.csv) → app style code (or null).
+
+function buildStyleRecMap(
+    csvFile: string,
+    nameToCode: Record<string, string | null>
+): Map<string, string | null> {
+    const map = new Map<string, string | null>();
+    for (const row of loadCsv(csvFile)) {
+        const id = txt(row["airtable_id"]);
+        const name = (txt(row["Name"]) ?? "").trim().toUpperCase();
+        if (id) map.set(id, nameToCode[name] ?? null);
+    }
+    return map;
+}
+
+// collar_type: COLLAR NAME REQUESTED rec-id → COLLAR.csv Name → app code
+const collarRecToCode = buildStyleRecMap("COLLAR.csv", {
+    "QALABI COLLAR":  "COL_QALLABI",
+    "JAPANES COLLAR": "COL_JAPANESE",
+    "STRAIT COLLAR":  "COL_STRAIT_COLLAR",
+    "ROUND COLLAR":   "COL_DOWN_COLLAR",
+});
+
+// collar_button: BUTTONS NAME REQUESTED rec-id → BUTTONS.csv Name → app code
+// Airtable button names have no confident match to the app's Arabic button codes.
+const buttonRecToCode = buildStyleRecMap("BUTTONS.csv", {
+    "VISIBLE PUSH-BUTTON":           null,
+    "VISIBLE BUTTON WITH BUTTONHOLE": null,
+    "MULTI HOLES":                   null,
+});
+
+// front_pocket_type: F PCK REQUESTED rec-id → FRONT POCKET.csv Name → app code
+const fpckRecToCode = buildStyleRecMap("FRONT POCKET.csv", {
+    "SQUARE":                    "FRO_MURABBA_FRONT_POCKET",
+    "CIRCULAR":                  "FRO_MUDAWWAR_FRONT_POCKET",
+    "WITH CORNER":               "FRO_MUSALLAS_FRONT_POCKET",
+    "CIRCULAR WITHOUT THICKNESS": "FRO_MUDAWWAR_MAGFI_FRONT_POCKET",
+    "TRIANGLE":                  null,
+});
+
+// jabzour_2: JABZOUR 2 NAME rec-id → JABZOUR.csv Name → app code
+// HIDE=مخفي(magfi), APPARENT=عادي(bain); plain=murabba, +TRIANGLE=musallas
+const jab2RecToCode = buildStyleRecMap("JABZOUR.csv", {
+    "ABU JARAH":         null,
+    "HIDE":              "JAB_MAGFI_MURABBA",
+    "HIDE+TRIANGLE":     "JAB_MAGFI_MUSALLAS",
+    "APPARENT":          "JAB_BAIN_MURABBA",
+    "APPARENT+TRIANGLE": "JAB_BAIN_MUSALLAS",
+});
 
 // -- Section runners ----------------------------------------------------------
 
@@ -293,6 +359,8 @@ async function importFabrics() {
             RETURNING id
         `;
         fabricByName.set(name, row.id);
+        const fabAir = txt(r["airtable_id"]);
+        if (fabAir) fabricByAirtableId.set(fabAir, row.id);
         inserted++;
     }
     console.log(`  inserted=${inserted} skipped=${skipped}`);
@@ -317,17 +385,29 @@ async function importStyles() {
     ];
 
     let total = 0;
+    const seenStyleCodes = new Set<string>();
     for (const spec of specs) {
         const rows = loadCsv(spec.file);
         for (const r of rows) {
             const name = txt(r["Name"]);
             if (!name) continue;
 
+            // styles has a UNIQUE (code, brand) index, but legacy component codes
+            // overlap across components (a jabzour and a pocket can both be "2").
+            // Namespace by component type and null any remaining duplicate so the
+            // unique index is never violated.
+            let code = spec.codeCol ? txt(r[spec.codeCol]) : null;
+            if (code) {
+                code = `${spec.type}-${code}`;
+                if (seenStyleCodes.has(code)) code = null;
+                else seenStyleCodes.add(code);
+            }
+
             const payload = {
                 name,
                 type: spec.type,
                 component: spec.component,
-                code: spec.codeCol ? txt(r[spec.codeCol]) : null,
+                code,
                 image_url: txt(r["IMAGE"]) ?? txt(r["SKETCHES B"]),
                 brand: "ERTH" as const,
             };
@@ -387,7 +467,7 @@ async function importMeasurements() {
 
         // CUSTOMER 2 column holds the customer's PHONE; CustomerID column holds
         // the numeric ID (varies by export). Try phone first.
-        const phone = txt(r["TEL 📞"]) ?? txt(r["CUSTOMER 2"]);
+        const phone = first(r["TEL 📞"]) ?? first(r["CUSTOMER 2"]);
         const customerId = phone ? customerByPhone.get(phone) : undefined;
         if (!customerId) { skipped++; continue; }
 
@@ -402,7 +482,7 @@ async function importMeasurements() {
             shoulder: num(r["SHOULDER"]),
             chest_upper: num(r["UP CHEST"]),
             chest_full: num(r["CHEST"]),
-            chest_front: num(r["HALF CHEST"]),
+            chest_front: num(r["FRONT CHEST"]) ?? num(r["HALF CHEST"]),
             chest_back: num(r["BACK CHEST"]),
             armhole_front: num(r["ArmholeFront"]),
             sleeve_length: num(r["SLEEVES LENGTH"]),
@@ -425,6 +505,14 @@ async function importMeasurements() {
             jabzour_length: num(r["JABZOUR L"]) ?? num(r["JABZ L inv"]),
             chest_provision: num(r["ChestProvision"]),
             waist_provision: num(r["Waist Provision"]),
+            // V10-only measurement columns (absent in V8 -> null)
+            basma_length: num(r["BAZMA LENGTH"]),
+            basma_width: num(r["BAZMA WIDTH"]),
+            pen_pocket_length: num(r["PEN PCK LENGTH"]),
+            pen_pocket_width: num(r["PEN PCK WIDTH"]),
+            bottom_hemming: num(r["BOTTOM HEM"]),
+            sleeve_hemming: num(r["SLEEVES HEM"]),
+            second_button_distance: num(r["DISTANCE TO FIRST BUTTON"]),
         };
 
         if (DRY_RUN) { inserted++; continue; }
@@ -432,8 +520,10 @@ async function importMeasurements() {
         const existing = await sql<{ id: string }[]>`
             SELECT id FROM measurements WHERE measurement_id = ${measurementId} LIMIT 1
         `;
+        const mAir = txt(r["airtable_id"]);
         if (existing.length) {
             measurementByMid.set(measurementId, existing[0].id);
+            if (mAir) measurementByAirtableId.set(mAir, existing[0].id);
             skipped++;
             continue;
         }
@@ -442,6 +532,7 @@ async function importMeasurements() {
             INSERT INTO measurements ${sql(payload)} RETURNING id
         `;
         measurementByMid.set(measurementId, row.id);
+        if (mAir) measurementByAirtableId.set(mAir, row.id);
         inserted++;
     }
     console.log(`  inserted=${inserted} skipped=${skipped}`);
@@ -464,6 +555,9 @@ async function importOrders() {
     for (const r of rows) {
         const fatoura = txt(r["FATOURA"]);
         if (!fatoura) { skipped++; continue; }
+        // Skip active/in-production orders -- they are re-entered manually, not archived.
+        const prodPhase = (txt(r["PRODUCTION PHASE"]) || "").toUpperCase();
+        if (ACTIVE_PHASES.has(prodPhase)) { skipped++; continue; }
         const phone = txt(r["PHONE CUSTOMER 📞"]) ?? txt(r["PHONE CUSTOMER"]);
         const customerId = phone ? customerByPhone.get(phone) : undefined;
         if (!customerId) { skipped++; continue; }
@@ -490,7 +584,7 @@ async function importOrders() {
         const invoiceNumber = parseInt(fatoura.replace(/^0+/, ""), 10);
         const workOrderPayload = {
             invoice_number: Number.isFinite(invoiceNumber) ? invoiceNumber : null,
-            delivery_date: ts(r["FNL DELIVERY DATE REQUESTED"]) ?? ts(r["BRV DELIVERY DATE REQUESTED"]),
+            delivery_date: ts(r["DELIVERY DATE REQUESTED"]) ?? ts(r["FNL DELIVERY DATE REQUESTED"]) ?? ts(r["BRV DELIVERY DATE REQUESTED"]),
             order_phase: mapOrderPhase(r["PRODUCTION PHASE"]),
             home_delivery: bool(r["HomeDelivery"]) ?? false,
         };
@@ -558,37 +652,46 @@ async function importGarments() {
         const orderId = invRef ? orderByInvoice.get(invRef) : undefined;
         if (!orderId) { skipped++; continue; }
 
-        // Old "PRODUCT" or "Libellé" sometimes carries fabric name; FABRIC link
-        // is exported as fabric NAME in some columns. Use FABRIC SUPPLIER as
-        // best-effort lookup if a dedicated column isn't present in this export.
+        // Fabric link: V10 ORDERS.FABRIC is a rec-id -> FABRIC.airtable_id; V8
+        // exported a fabric name in PRODUCT/Libellé. Try rec-id, then name.
+        // (rec-id maps are only populated in a full run -- import garments in
+        // the same process as fabrics + measurements.)
+        const fabricRec = first(r["FABRIC"]);
         const fabricName = txt(r["PRODUCT"]) ?? txt(r["Libellé"]);
-        const fabricId = fabricName ? fabricByName.get(fabricName) : undefined;
+        const fabricId = (fabricRec ? fabricByAirtableId.get(fabricRec) : undefined)
+            ?? (fabricName ? fabricByName.get(fabricName) : undefined);
 
-        // Measurement linkage: legacy MEASURE.csv has a GARMENT column linking
-        // back to PCE REF; we follow that direction below if needed. The ORDERS
-        // CSV itself does not have a direct measurement-id column.
+        // Measurement link: V10 ORDERS.ID M is a rec-id -> MEASURE.airtable_id.
+        // (V8 had no piece-level measurement id; linkGarmentMeasurements() below
+        // back-fills from MEASURE.GARMENT when present.)
+        const measRec = first(r["ID M"]);
+        const garmentMeasUuid = measRec ? (measurementByAirtableId.get(measRec) ?? null) : null;
+
         const payload = {
             order_id: orderId,
             garment_id: pceRef,
             fabric_id: fabricId ?? null,
-            measurement_id: null, // populated by linkGarmentMeasurements() below
-            style: mapStyle(r["PRODUCT TYPE REQUESTED"]),
+            measurement_id: garmentMeasUuid,
+            style: mapStyle(r["DF PRODUCT TYPE REQUESTED"] ?? r["PRODUCT TYPE REQUESTED"]),
             quantity: num(r["QTY"]) ?? 1,
             fabric_length: num(r["consump"]),
-            soaking: bool(r["WATER"]) ?? false,
-            collar_type: txt(r["COLLAR IMAGE REQUESTED"]),
-            cuffs_thickness: txt(r["COLLAR THICKNESS"]),
-            collar_button: txt(r["TYPE BUTTONS"]),
+            soaking: bool(r["SOAKING"]) ?? bool(r["SOAKING ?"]) ?? bool(r["WATER"]) ?? false,
+            collar_type: (txt(r["COLLAR NAME REQUESTED"]) ? collarRecToCode.get(txt(r["COLLAR NAME REQUESTED"])!) ?? null : null),
+            // NOTE: pre-existing V8 quirk -- collar-thickness data lands in cuffs_thickness
+            // (collar_thickness column left unset). Preserved; flag for review.
+            cuffs_thickness: txt(r["HASHWA COLLAR REQUESTED"]) ?? txt(r["COLLAR THICKNESS"]),
+            collar_button: (txt(r["BUTTONS NAME REQUESTED"]) ? buttonRecToCode.get(txt(r["BUTTONS NAME REQUESTED"])!) ?? null : null),
             jabzour_1: mapJabzour1(r["JABZOUR 1 REQUESTED"]),
-            jabzour_2: txt(r["JABZOUR 2 IMAGE"]),
+            jabzour_2: (txt(r["JABZOUR 2 NAME"]) ? jab2RecToCode.get(txt(r["JABZOUR 2 NAME"])!) ?? null : null),
             jabzour_thickness: txt(r["HASHWA JABZOUR REQUESTED"]),
-            front_pocket_type: txt(r["F PCK"]),
+            front_pocket_type: (txt(r["F PCK REQUESTED"]) ? fpckRecToCode.get(txt(r["F PCK REQUESTED"])!) ?? null : null),
             front_pocket_thickness: txt(r["HASHWA F PCK REQUESTED"]),
             pen_holder: bool(r["P PCK REQUESTED"]) ?? false,
+            // V10 dropped W PCK / M PCK from the pieces table -> import as false
             wallet_pocket: bool(r["W PCK REQUESTED"]) ?? false,
             mobile_pocket: bool(r["M PCK REQUESTED"]) ?? false,
             small_tabaggi: bool(r["SMALL TABAGGI REQUESTED"]) ?? false,
-            cuffs_type: txt(r["SLEEVES TYPE"]),
+            cuffs_type: txt(r["SLEEVES TYPE REQUESTED"]) ?? txt(r["SLEEVES TYPE"]),
             lines: num(r["LINES REQUESTED"]) ?? 1,
             delivery_date: ts(r["FINAL DEL DATE REQUESTED"]),
             notes: txt(r["SPECIAL REQUESTS"]),
@@ -713,24 +816,32 @@ async function main() {
     console.log(`Source: ${AIRTABLE_DIR}`);
     if (ONLY) console.log(`Only: ${[...ONLY].join(",")}`);
 
-    try {
-        await importCustomers();
-        await importFabrics();
-        await importStyles();
-        await importCampaigns();
-        await importMeasurements();
-        await importOrders();
-        await importGarments();
-        await linkGarmentMeasurements();
-        await importPayments();
-        await importShelf();
-        console.log("\n✓ done");
-    } catch (e) {
-        console.error("\n✗ failed:", e);
-        process.exitCode = 1;
-    } finally {
-        await sql.end();
+    const steps: Array<[string, () => Promise<void>]> = [
+        ["customers", importCustomers],
+        ["fabrics", importFabrics],
+        ["styles", importStyles],
+        ["campaigns", importCampaigns],
+        ["measurements", importMeasurements],
+        ["orders", importOrders],
+        ["garments", importGarments],
+        ["link-measurements", linkGarmentMeasurements],
+        ["payments", importPayments],
+        ["shelf", importShelf],
+    ];
+    // Isolate each section: a failure in one (e.g. a catalog constraint) must not
+    // abort the primary data sections. Idempotent, so re-running heals partials.
+    let failures = 0;
+    for (const [label, fn] of steps) {
+        try {
+            await fn();
+        } catch (e) {
+            failures++;
+            console.error(`\n✗ section '${label}' failed: ${(e as Error).message}`);
+        }
     }
+    console.log(failures ? `\n⚠ done with ${failures} failed section(s)` : "\n✓ done");
+    process.exitCode = failures ? 1 : 0;
+    await sql.end();
 }
 
 main();
