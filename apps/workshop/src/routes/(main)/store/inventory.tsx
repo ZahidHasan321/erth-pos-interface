@@ -18,7 +18,6 @@ import { getAccessories } from "@/api/accessories";
 import { UNIT_OF_MEASURE_LABELS } from "@/components/store/transfer-constants";
 import { RestockDialog } from "@/components/inventory/RestockDialog";
 import { AdjustStockDialog } from "@/components/inventory/AdjustStockDialog";
-import { StocktakeBanner } from "@/components/inventory/StocktakeBanner";
 import { PageHeader } from "@/components/shared/PageShell";
 import type { Accessory, StockItemType } from "@repo/database";
 
@@ -82,8 +81,6 @@ function InventoryPage() {
         </Button>
       </PageHeader>
 
-      <StocktakeBanner />
-
       <NeedToRestock items={needRestock} />
 
       <div className="flex items-center justify-end gap-2 mb-4 flex-wrap">
@@ -112,8 +109,7 @@ function InventoryPage() {
 }
 
 // ─── Need to restock ──────────────────────────────────────────────────
-// Supporting info, not an alert: the stocktake banner owns the dominant
-// alert region. This recedes to a neutral card so the page reads as one
+// Supporting info, not an alert: a neutral card so the page reads as one
 // hierarchy — the low/out signal stays on the per-row quantity only.
 
 type RestockItem = { type: ItemType; id: number; name: string; qty: number; threshold: number };

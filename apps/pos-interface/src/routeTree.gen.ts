@@ -11,16 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as AboutRouteImport } from './routes/about'
-import { Route as CashierRouteRouteImport } from './routes/cashier/route'
 import { Route as MainRouteRouteImport } from './routes/$main/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as CashierIndexRouteImport } from './routes/cashier/index'
 import { Route as MainIndexRouteImport } from './routes/$main/index'
-import { Route as CashierProcessRouteImport } from './routes/cashier/process'
-import { Route as CashierOrdersRouteImport } from './routes/cashier/orders'
-import { Route as CashierHistoryRouteImport } from './routes/cashier/history'
-import { Route as CashierEodRouteImport } from './routes/cashier/eod'
-import { Route as CashierOrderIdRouteImport } from './routes/cashier/$orderId'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
 import { Route as MainProfileRouteImport } from './routes/$main/profile'
 import { Route as MainNotificationsRouteImport } from './routes/$main/notifications'
@@ -47,6 +40,7 @@ import { Route as MainOrdersNewSalesOrderRouteImport } from './routes/$main/orde
 import { Route as MainOrdersNewAlterationOrderRouteImport } from './routes/$main/orders/new-alteration-order'
 import { Route as MainOrdersCustomerProfilesOrdersRouteImport } from './routes/$main/orders/customer-profiles-orders'
 import { Route as MainCustomersCustomerIdRouteImport } from './routes/$main/customers/$customerId'
+import { Route as MainCashierPurchasesRouteImport } from './routes/$main/cashier/purchases'
 import { Route as MainCashierProcessRouteImport } from './routes/$main/cashier/process'
 import { Route as MainCashierOrdersRouteImport } from './routes/$main/cashier/orders'
 import { Route as MainCashierOrderIdRouteImport } from './routes/$main/cashier/$orderId'
@@ -75,11 +69,6 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CashierRouteRoute = CashierRouteRouteImport.update({
-  id: '/cashier',
-  path: '/cashier',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const MainRouteRoute = MainRouteRouteImport.update({
   id: '/$main',
   path: '/$main',
@@ -90,40 +79,10 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CashierIndexRoute = CashierIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => CashierRouteRoute,
-} as any)
 const MainIndexRoute = MainIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => MainRouteRoute,
-} as any)
-const CashierProcessRoute = CashierProcessRouteImport.update({
-  id: '/process',
-  path: '/process',
-  getParentRoute: () => CashierRouteRoute,
-} as any)
-const CashierOrdersRoute = CashierOrdersRouteImport.update({
-  id: '/orders',
-  path: '/orders',
-  getParentRoute: () => CashierRouteRoute,
-} as any)
-const CashierHistoryRoute = CashierHistoryRouteImport.update({
-  id: '/history',
-  path: '/history',
-  getParentRoute: () => CashierRouteRoute,
-} as any)
-const CashierEodRoute = CashierEodRouteImport.update({
-  id: '/eod',
-  path: '/eod',
-  getParentRoute: () => CashierRouteRoute,
-} as any)
-const CashierOrderIdRoute = CashierOrderIdRouteImport.update({
-  id: '/$orderId',
-  path: '/$orderId',
-  getParentRoute: () => CashierRouteRoute,
 } as any)
 const authLoginRoute = authLoginRouteImport.update({
   id: '/(auth)/login',
@@ -258,6 +217,11 @@ const MainCustomersCustomerIdRoute = MainCustomersCustomerIdRouteImport.update({
   path: '/customers/$customerId',
   getParentRoute: () => MainRouteRoute,
 } as any)
+const MainCashierPurchasesRoute = MainCashierPurchasesRouteImport.update({
+  id: '/purchases',
+  path: '/purchases',
+  getParentRoute: () => MainCashierRouteRoute,
+} as any)
 const MainCashierProcessRoute = MainCashierProcessRouteImport.update({
   id: '/process',
   path: '/process',
@@ -359,7 +323,6 @@ const MainOrdersOrderManagementFeedbackOrderIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$main': typeof MainRouteRouteWithChildren
-  '/cashier': typeof CashierRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/home': typeof HomeRoute
   '/$main/cashier': typeof MainCashierRouteRouteWithChildren
@@ -367,16 +330,11 @@ export interface FileRoutesByFullPath {
   '/$main/notifications': typeof MainNotificationsRoute
   '/$main/profile': typeof MainProfileRoute
   '/login': typeof authLoginRoute
-  '/cashier/$orderId': typeof CashierOrderIdRoute
-  '/cashier/eod': typeof CashierEodRoute
-  '/cashier/history': typeof CashierHistoryRoute
-  '/cashier/orders': typeof CashierOrdersRoute
-  '/cashier/process': typeof CashierProcessRoute
   '/$main/': typeof MainIndexRoute
-  '/cashier/': typeof CashierIndexRoute
   '/$main/cashier/$orderId': typeof MainCashierOrderIdRoute
   '/$main/cashier/orders': typeof MainCashierOrdersRoute
   '/$main/cashier/process': typeof MainCashierProcessRoute
+  '/$main/cashier/purchases': typeof MainCashierPurchasesRoute
   '/$main/customers/$customerId': typeof MainCustomersCustomerIdRoute
   '/$main/orders/customer-profiles-orders': typeof MainOrdersCustomerProfilesOrdersRoute
   '/$main/orders/new-alteration-order': typeof MainOrdersNewAlterationOrderRoute
@@ -421,16 +379,11 @@ export interface FileRoutesByTo {
   '/$main/notifications': typeof MainNotificationsRoute
   '/$main/profile': typeof MainProfileRoute
   '/login': typeof authLoginRoute
-  '/cashier/$orderId': typeof CashierOrderIdRoute
-  '/cashier/eod': typeof CashierEodRoute
-  '/cashier/history': typeof CashierHistoryRoute
-  '/cashier/orders': typeof CashierOrdersRoute
-  '/cashier/process': typeof CashierProcessRoute
   '/$main': typeof MainIndexRoute
-  '/cashier': typeof CashierIndexRoute
   '/$main/cashier/$orderId': typeof MainCashierOrderIdRoute
   '/$main/cashier/orders': typeof MainCashierOrdersRoute
   '/$main/cashier/process': typeof MainCashierProcessRoute
+  '/$main/cashier/purchases': typeof MainCashierPurchasesRoute
   '/$main/customers/$customerId': typeof MainCustomersCustomerIdRoute
   '/$main/orders/customer-profiles-orders': typeof MainOrdersCustomerProfilesOrdersRoute
   '/$main/orders/new-alteration-order': typeof MainOrdersNewAlterationOrderRoute
@@ -470,7 +423,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$main': typeof MainRouteRouteWithChildren
-  '/cashier': typeof CashierRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/home': typeof HomeRoute
   '/$main/cashier': typeof MainCashierRouteRouteWithChildren
@@ -478,16 +430,11 @@ export interface FileRoutesById {
   '/$main/notifications': typeof MainNotificationsRoute
   '/$main/profile': typeof MainProfileRoute
   '/(auth)/login': typeof authLoginRoute
-  '/cashier/$orderId': typeof CashierOrderIdRoute
-  '/cashier/eod': typeof CashierEodRoute
-  '/cashier/history': typeof CashierHistoryRoute
-  '/cashier/orders': typeof CashierOrdersRoute
-  '/cashier/process': typeof CashierProcessRoute
   '/$main/': typeof MainIndexRoute
-  '/cashier/': typeof CashierIndexRoute
   '/$main/cashier/$orderId': typeof MainCashierOrderIdRoute
   '/$main/cashier/orders': typeof MainCashierOrdersRoute
   '/$main/cashier/process': typeof MainCashierProcessRoute
+  '/$main/cashier/purchases': typeof MainCashierPurchasesRoute
   '/$main/customers/$customerId': typeof MainCustomersCustomerIdRoute
   '/$main/orders/customer-profiles-orders': typeof MainOrdersCustomerProfilesOrdersRoute
   '/$main/orders/new-alteration-order': typeof MainOrdersNewAlterationOrderRoute
@@ -529,7 +476,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$main'
-    | '/cashier'
     | '/about'
     | '/home'
     | '/$main/cashier'
@@ -537,16 +483,11 @@ export interface FileRouteTypes {
     | '/$main/notifications'
     | '/$main/profile'
     | '/login'
-    | '/cashier/$orderId'
-    | '/cashier/eod'
-    | '/cashier/history'
-    | '/cashier/orders'
-    | '/cashier/process'
     | '/$main/'
-    | '/cashier/'
     | '/$main/cashier/$orderId'
     | '/$main/cashier/orders'
     | '/$main/cashier/process'
+    | '/$main/cashier/purchases'
     | '/$main/customers/$customerId'
     | '/$main/orders/customer-profiles-orders'
     | '/$main/orders/new-alteration-order'
@@ -591,16 +532,11 @@ export interface FileRouteTypes {
     | '/$main/notifications'
     | '/$main/profile'
     | '/login'
-    | '/cashier/$orderId'
-    | '/cashier/eod'
-    | '/cashier/history'
-    | '/cashier/orders'
-    | '/cashier/process'
     | '/$main'
-    | '/cashier'
     | '/$main/cashier/$orderId'
     | '/$main/cashier/orders'
     | '/$main/cashier/process'
+    | '/$main/cashier/purchases'
     | '/$main/customers/$customerId'
     | '/$main/orders/customer-profiles-orders'
     | '/$main/orders/new-alteration-order'
@@ -639,7 +575,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$main'
-    | '/cashier'
     | '/about'
     | '/home'
     | '/$main/cashier'
@@ -647,16 +582,11 @@ export interface FileRouteTypes {
     | '/$main/notifications'
     | '/$main/profile'
     | '/(auth)/login'
-    | '/cashier/$orderId'
-    | '/cashier/eod'
-    | '/cashier/history'
-    | '/cashier/orders'
-    | '/cashier/process'
     | '/$main/'
-    | '/cashier/'
     | '/$main/cashier/$orderId'
     | '/$main/cashier/orders'
     | '/$main/cashier/process'
+    | '/$main/cashier/purchases'
     | '/$main/customers/$customerId'
     | '/$main/orders/customer-profiles-orders'
     | '/$main/orders/new-alteration-order'
@@ -697,7 +627,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   MainRouteRoute: typeof MainRouteRouteWithChildren
-  CashierRouteRoute: typeof CashierRouteRouteWithChildren
   AboutRoute: typeof AboutRoute
   HomeRoute: typeof HomeRoute
   authLoginRoute: typeof authLoginRoute
@@ -722,13 +651,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/cashier': {
-      id: '/cashier'
-      path: '/cashier'
-      fullPath: '/cashier'
-      preLoaderRoute: typeof CashierRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/$main': {
       id: '/$main'
       path: '/$main'
@@ -743,54 +665,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/cashier/': {
-      id: '/cashier/'
-      path: '/'
-      fullPath: '/cashier/'
-      preLoaderRoute: typeof CashierIndexRouteImport
-      parentRoute: typeof CashierRouteRoute
-    }
     '/$main/': {
       id: '/$main/'
       path: '/'
       fullPath: '/$main/'
       preLoaderRoute: typeof MainIndexRouteImport
       parentRoute: typeof MainRouteRoute
-    }
-    '/cashier/process': {
-      id: '/cashier/process'
-      path: '/process'
-      fullPath: '/cashier/process'
-      preLoaderRoute: typeof CashierProcessRouteImport
-      parentRoute: typeof CashierRouteRoute
-    }
-    '/cashier/orders': {
-      id: '/cashier/orders'
-      path: '/orders'
-      fullPath: '/cashier/orders'
-      preLoaderRoute: typeof CashierOrdersRouteImport
-      parentRoute: typeof CashierRouteRoute
-    }
-    '/cashier/history': {
-      id: '/cashier/history'
-      path: '/history'
-      fullPath: '/cashier/history'
-      preLoaderRoute: typeof CashierHistoryRouteImport
-      parentRoute: typeof CashierRouteRoute
-    }
-    '/cashier/eod': {
-      id: '/cashier/eod'
-      path: '/eod'
-      fullPath: '/cashier/eod'
-      preLoaderRoute: typeof CashierEodRouteImport
-      parentRoute: typeof CashierRouteRoute
-    }
-    '/cashier/$orderId': {
-      id: '/cashier/$orderId'
-      path: '/$orderId'
-      fullPath: '/cashier/$orderId'
-      preLoaderRoute: typeof CashierOrderIdRouteImport
-      parentRoute: typeof CashierRouteRoute
     }
     '/(auth)/login': {
       id: '/(auth)/login'
@@ -974,6 +854,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainCustomersCustomerIdRouteImport
       parentRoute: typeof MainRouteRoute
     }
+    '/$main/cashier/purchases': {
+      id: '/$main/cashier/purchases'
+      path: '/purchases'
+      fullPath: '/$main/cashier/purchases'
+      preLoaderRoute: typeof MainCashierPurchasesRouteImport
+      parentRoute: typeof MainCashierRouteRoute
+    }
     '/$main/cashier/process': {
       id: '/$main/cashier/process'
       path: '/process'
@@ -1100,6 +987,7 @@ interface MainCashierRouteRouteChildren {
   MainCashierOrderIdRoute: typeof MainCashierOrderIdRoute
   MainCashierOrdersRoute: typeof MainCashierOrdersRoute
   MainCashierProcessRoute: typeof MainCashierProcessRoute
+  MainCashierPurchasesRoute: typeof MainCashierPurchasesRoute
   MainCashierIndexRoute: typeof MainCashierIndexRoute
 }
 
@@ -1107,6 +995,7 @@ const MainCashierRouteRouteChildren: MainCashierRouteRouteChildren = {
   MainCashierOrderIdRoute: MainCashierOrderIdRoute,
   MainCashierOrdersRoute: MainCashierOrdersRoute,
   MainCashierProcessRoute: MainCashierProcessRoute,
+  MainCashierPurchasesRoute: MainCashierPurchasesRoute,
   MainCashierIndexRoute: MainCashierIndexRoute,
 }
 
@@ -1222,32 +1111,9 @@ const MainRouteRouteWithChildren = MainRouteRoute._addFileChildren(
   MainRouteRouteChildren,
 )
 
-interface CashierRouteRouteChildren {
-  CashierOrderIdRoute: typeof CashierOrderIdRoute
-  CashierEodRoute: typeof CashierEodRoute
-  CashierHistoryRoute: typeof CashierHistoryRoute
-  CashierOrdersRoute: typeof CashierOrdersRoute
-  CashierProcessRoute: typeof CashierProcessRoute
-  CashierIndexRoute: typeof CashierIndexRoute
-}
-
-const CashierRouteRouteChildren: CashierRouteRouteChildren = {
-  CashierOrderIdRoute: CashierOrderIdRoute,
-  CashierEodRoute: CashierEodRoute,
-  CashierHistoryRoute: CashierHistoryRoute,
-  CashierOrdersRoute: CashierOrdersRoute,
-  CashierProcessRoute: CashierProcessRoute,
-  CashierIndexRoute: CashierIndexRoute,
-}
-
-const CashierRouteRouteWithChildren = CashierRouteRoute._addFileChildren(
-  CashierRouteRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   MainRouteRoute: MainRouteRouteWithChildren,
-  CashierRouteRoute: CashierRouteRouteWithChildren,
   AboutRoute: AboutRoute,
   HomeRoute: HomeRoute,
   authLoginRoute: authLoginRoute,

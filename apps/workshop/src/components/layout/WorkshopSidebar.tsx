@@ -39,7 +39,6 @@ import {
   UserCog,
   Package,
   Building2,
-  ClipboardCheck,
 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconSparkles /*, IconStack2 */ } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
@@ -102,7 +101,6 @@ export function WorkshopSidebar() {
   const storeItems = [
     { label: "Inventory", icon: Package,        href: "/store/inventory" },
     { label: "Transfers", icon: ArrowRightLeft, href: "/store/transfers", count: transfersBadge, badgeTone: "warn" as const },
-    { label: "Stocktake", icon: ClipboardCheck, href: "/store/stocktake" },
     { label: "Suppliers", icon: Building2,      href: "/store/suppliers" },
     { label: "Reports",   icon: BarChart,       href: "/store/reports" },
   ];

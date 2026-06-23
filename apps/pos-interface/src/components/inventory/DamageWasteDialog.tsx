@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { AlertTriangle, ImagePlus, Loader2, Minus, Plus, ShieldAlert, X } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { Textarea } from "@repo/ui/textarea";
@@ -20,6 +19,7 @@ import {
   getUnitSuffix,
 } from "@/lib/inventory";
 import { cn } from "@/lib/utils";
+import { Field } from "./dialog-bits";
 import type { StockItemType, StockLocation, UnitOfMeasure } from "@repo/database";
 
 type Props = {
@@ -319,17 +319,5 @@ export function DamageWasteDialog({
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between">
-        <Label className="text-sm font-semibold">{label}</Label>
-        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
-      </div>
-      {children}
-    </div>
   );
 }

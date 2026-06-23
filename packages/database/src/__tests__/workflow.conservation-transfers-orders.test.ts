@@ -626,6 +626,7 @@ function restockWithPhoto(tx: Tx, fabricId: number, qty: number, url: string) {
       p_item_id => ${fabricId},
       p_location => 'shop'::stock_location,
       p_qty => ${qty},
+      p_unit_cost => 5,
       p_image_url => ${url},
       p_user_id => ${MANAGER.id}::uuid,
       p_idempotency_key => ${randomUUID()}::uuid

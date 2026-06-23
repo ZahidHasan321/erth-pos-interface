@@ -43,6 +43,7 @@ import {
   CUSTOMER_ID,
   FABRIC_A_ID,
   STYLE_ID,
+  SHELF_A_ID,
 } from "./fixtures";
 
 // Production chain order (post_cutting disabled, soaking is a parallel track).
@@ -1138,6 +1139,120 @@ export async function getRegisterSession(tx: Tx, opts: { date?: string } = {}) {
   );
   return res.r as Record<string, unknown> | null;
 }
+
+// ─── Stock purchases (non-customer expense payables) ─────────────────────────
+
+/** restock_item RPC. Shop fabric/shelf restock requires a unit cost and mints
+ *  an unpaid stock_purchases payable + maintains WAC. Returns the RPC result. */
+export async function restock(
+  tx: Tx,
+  args: {
+    itemType?: "fabric" | "shelf" | "accessory";
+    itemId?: number;
+    location?: "shop" | "workshop";
+    qty: number;
+    unitCost?: number | null;
+    supplierId?: number | null;
+    notes?: string | null;
+    idempotencyKey?: string;
+  },
+) {
+  await actAs(tx, MANAGER.id);
+  const res = only(
+    await tx`
+      SELECT restock_item(
+        ${args.itemType ?? "fabric"}::stock_item_type,
+        ${args.itemId ?? FABRIC_A_ID},
+        ${args.location ?? "shop"}::stock_location,
+        ${args.qty},
+        ${args.supplierId ?? null}::int,
+        ${args.unitCost ?? null}::numeric,
+        ${args.notes ?? null}::text,
+        NULL,
+        ${MANAGER.id}::uuid,
+        ${args.idempotencyKey ?? randomUUID()}::uuid
+      ) AS r
+    `,
+    "restock_item",
+  );
+  return res.r as {
+    success: boolean;
+    new_stock: number;
+    avg_cost: number | null;
+    purchase_id: number | null;
+    total_cost: number | null;
+  };
+}
+
+/** pay_stock_purchase RPC. Cash settlements post a drawer cash_out (need an open
+ *  session); non-cash leave the drawer untouched. */
+export async function payStockPurchase(
+  tx: Tx,
+  purchaseId: number,
+  amount: number,
+  opts: {
+    paymentType?: "cash" | "knet" | "link_payment" | "bank_transfer" | "others";
+    sessionId?: number | null;
+    refNo?: string | null;
+    note?: string | null;
+    idempotencyKey?: string;
+  } = {},
+) {
+  await actAs(tx, CASHIER.id);
+  const res = only(
+    await tx`
+      SELECT pay_stock_purchase(
+        ${purchaseId},
+        ${amount},
+        ${opts.paymentType ?? "cash"},
+        ${opts.sessionId ?? null}::int,
+        ${opts.refNo ?? null}::text,
+        ${opts.note ?? null}::text,
+        ${CASHIER.id}::uuid,
+        ${opts.idempotencyKey ?? randomUUID()}::uuid
+      ) AS r
+    `,
+    "pay_stock_purchase",
+  );
+  return res.r as {
+    purchase_id: number;
+    amount_paid: number;
+    total_cost: number;
+    status: string;
+    cash_movement_id: number | null;
+  };
+}
+
+/** get_stock_purchases RPC — the cashier queue ('open') / history listing. */
+export async function getStockPurchases(
+  tx: Tx,
+  opts: { filter?: "open" | "paid" | "all"; limit?: number } = {},
+) {
+  await actAs(tx, CASHIER.id);
+  const res = only(
+    await tx`
+      SELECT get_stock_purchases(${BRAND}, ${opts.filter ?? "open"}, ${opts.limit ?? 200}) AS r
+    `,
+    "get_stock_purchases",
+  );
+  return res.r as Array<Record<string, unknown>>;
+}
+
+/** Read an item's stored weighted-average cost (avg_cost). */
+export async function getItemAvgCost(
+  tx: Tx,
+  itemType: "fabric" | "shelf",
+  itemId: number,
+): Promise<number | null> {
+  const table = itemType === "fabric" ? "fabrics" : "shelf";
+  const row = only(
+    await tx`SELECT avg_cost FROM ${tx(table)} WHERE id = ${itemId}`,
+    `${table} ${itemId} avg_cost`,
+  ) as unknown as { avg_cost: string | number | null };
+  return row.avg_cost == null ? null : Number(row.avg_cost);
+}
+
+export { SHELF_A_ID };
 
 /** get_eod_report RPC (triggers.sql:3183). */
 export async function getEodReport(

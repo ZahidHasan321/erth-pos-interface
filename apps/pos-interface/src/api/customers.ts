@@ -1,5 +1,5 @@
 import type { ApiResponse, UpsertApiResponse } from "../types/api";
-import type { Customer } from "@repo/database";
+import type { Customer, AccountType } from "@repo/database";
 import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import { sanitizeFilterValue } from "@/lib/utils";
 
@@ -100,19 +100,34 @@ export const fuzzySearchCustomers = async (
   return { status: 'success', data: (data || []) as Customer[] };
 };
 
-export const searchPrimaryAccountByPhone = async (
+// One account that already uses a phone number, as returned by the
+// find_accounts_by_phone RPC. resolved_primary_* points at the Primary this
+// account belongs to (itself if it is a Primary), so the form can offer to link
+// a new customer as a family member of that Primary.
+export type PhoneAccountMatch = {
+  id: number;
+  name: string;
+  phone: string | null;
+  account_type: AccountType | null;
+  primary_customer_id: number | null;
+  resolved_primary_id: number | null;
+  resolved_primary_name: string | null;
+};
+
+// Every account sharing a phone number, matched on the normalized national
+// number (so formatting / spaces / leading zero / country code still match).
+// Primary matches come first. Powers the demographics duplicate-phone guard.
+export const findAccountsByPhone = async (
   phone: string,
-): Promise<ApiResponse<Customer[]>> => {
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .select('*')
-    .eq('phone', phone)
-    .eq('account_type', 'Primary');
+): Promise<ApiResponse<PhoneAccountMatch[]>> => {
+  const { data, error } = await db.rpc('find_accounts_by_phone', {
+    p_phone: phone,
+  });
 
   if (error) {
     return { status: 'error', message: error.message, data: [] };
   }
-  return { status: 'success', data: data as Customer[] };
+  return { status: 'success', data: (data || []) as PhoneAccountMatch[] };
 };
 
 export const getCustomerById = async (

@@ -61,7 +61,6 @@ const PERMISSIONS: PermissionMatrix = {
   "/completed":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
   "/store":           { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
   "/store/transfers": { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/store/stocktake": { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "full", "staff:shop": "none" },
   "/store/reports":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
 
   // Inventory type permissions — controls create/edit visibility within the inventory page.
@@ -76,7 +75,6 @@ const PERMISSIONS: PermissionMatrix = {
   "inventory:adjust":      { admin: "full", "manager:workshop": "full" },
   // Waste is staff-allowed; over the cost threshold the RPC requires a manager.
   "inventory:waste":       { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
-  "inventory:stocktake":   { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
   "inventory:delete":      { admin: "full" },
   "suppliers:manage":      { admin: "full", "manager:workshop": "full" },
 

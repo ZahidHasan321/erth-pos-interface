@@ -31,6 +31,7 @@ export function mapCustomerToFormValues(customer: Customer): Partial<CustomerDem
         notes: customer.notes || "",
         whatsapp_alt: customer.whatsapp_alt || false,
         relation: customer.relation || undefined,
+        primary_customer_id: customer.primary_customer_id ?? null,
     };
 }
 
@@ -65,5 +66,8 @@ export function mapFormValuesToCustomer(formValues: CustomerDemographicsSchema):
         notes: cleanValue(formValues.notes),
         whatsapp_alt: formValues.whatsapp_alt,
         relation: cleanValue(formValues.relation),
+        // A Secondary keeps its linked Primary; a Primary never carries one.
+        primary_customer_id:
+            formValues.account_type === "Secondary" ? formValues.primary_customer_id ?? null : null,
     };
 }

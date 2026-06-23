@@ -2,18 +2,16 @@ import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowDownToLine, ImagePlus, Loader2, Minus, Plus, Store, Hammer, X } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 import { Textarea } from "@repo/ui/textarea";
 import { useAuth } from "@/context/auth";
 import { restockItem } from "@/api/stockMovements";
 import { uploadRestockInvoice } from "@/lib/storage";
 import { formatQty, getQtyStep, getUnitSuffix } from "@/lib/inventory";
-import { cn } from "@/lib/utils";
 import { SupplierCombobox } from "./SupplierCombobox";
+import { Field, LocationOption } from "./dialog-bits";
 import type { StockItemType, StockLocation, UnitOfMeasure } from "@repo/database";
 
 type Props = {
@@ -46,6 +44,11 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
   const suffix = getUnitSuffix(itemType, unit);
   const parsedQty = Number(qty || 0);
   const newTotal = currentStock + (Number.isFinite(parsedQty) ? parsedQty : 0);
+  // A shop fabric/shelf restock is a PURCHASE the cashier must settle (SPEC §3),
+  // so the unit cost is required. Accessories keep the old optional-cost path.
+  const costRequired = itemType !== "accessory";
+  const parsedCost = Number(unitCost || 0);
+  const totalCost = costRequired && parsedQty > 0 && parsedCost > 0 ? parsedQty * parsedCost : 0;
 
   const restockMut = useMutation({
     mutationFn: async () => {
@@ -111,6 +114,10 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
       toast.error("Enter a positive quantity to restock");
       return;
     }
+    if (costRequired && (!parsedCost || parsedCost <= 0)) {
+      toast.error("Enter the unit cost - this purchase goes to the cashier to pay");
+      return;
+    }
     restockMut.mutate();
   }
 
@@ -128,7 +135,7 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
           <div className="px-6 py-5 space-y-6">
             {/* Location toggle — accessories only (fabric/shelf are shop-only) */}
             {crossesSides && (
-              <Section label="Location">
+              <Field label="Location">
                 <div className="grid grid-cols-2 gap-2">
                   <LocationOption
                     icon={Store}
@@ -143,11 +150,11 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
                     onClick={() => setLocation("workshop")}
                   />
                 </div>
-              </Section>
+              </Field>
             )}
 
             {/* Quantity stepper */}
-            <Section label="Quantity received" hint={`Current at ${location}: ${formatQty(itemType, currentStock, unit)}`}>
+            <Field label="Quantity received" hint={`Current at ${location}: ${formatQty(itemType, currentStock, unit)}`}>
               <div className="flex items-stretch rounded-lg border border-input overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1">
                 <button
                   type="button"
@@ -190,50 +197,59 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
                   <span className="ml-2 text-green-600 font-medium">+{formatQty(itemType, parsedQty, unit)}</span>
                 </p>
               )}
-            </Section>
+            </Field>
 
             {/* Supplier */}
-            <Section label="Supplier" hint="Optional, skip if delivered internally">
+            <Field label="Supplier" hint="Optional, skip if delivered internally">
               <SupplierCombobox value={supplierId} onChange={setSupplierId} />
-            </Section>
+            </Field>
 
-            {/* Optional details */}
-            <Section label="Details" hint="Optional">
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="rs-cost" className="text-xs text-muted-foreground">Unit cost</Label>
-                  <div className="relative mt-1">
-                    <Input
-                      id="rs-cost"
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      value={unitCost}
-                      onChange={(e) => setUnitCost(e.target.value)}
-                      placeholder="0.000"
-                      className="pr-12"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
-                      / {suffix || "unit"}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="rs-notes" className="text-xs text-muted-foreground">Reference / notes</Label>
-                  <Textarea
-                    id="rs-notes"
-                    rows={2}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Invoice #, partial delivery, etc."
-                    className="mt-1 resize-none"
-                  />
-                </div>
+            {/* Cost — required for fabric/shelf (it creates a cashier payable) */}
+            <Field label="Unit cost" hint={costRequired ? "Required" : "Optional"}>
+              <div className="relative">
+                <Input
+                  id="rs-cost"
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  value={unitCost}
+                  onChange={(e) => setUnitCost(e.target.value)}
+                  placeholder="0.000"
+                  className="pr-12"
+                  required={costRequired}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                  / {suffix || "unit"}
+                </span>
               </div>
-            </Section>
+              {costRequired && (
+                <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                  {totalCost > 0 ? (
+                    <p className="tabular-nums">
+                      Purchase total <span className="font-semibold text-foreground">{totalCost.toFixed(3)} KWD</span>
+                    </p>
+                  ) : (
+                    <p>Enter the unit cost to compute the purchase total.</p>
+                  )}
+                  <p className="mt-0.5">Creates a pending payable for the cashier to settle. Updates the item's average cost.</p>
+                </div>
+              )}
+            </Field>
+
+            {/* Reference / notes */}
+            <Field label="Notes" hint="Optional">
+              <Textarea
+                id="rs-notes"
+                rows={2}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Invoice #, partial delivery, etc."
+                className="resize-none"
+              />
+            </Field>
 
             {/* Supplier invoice photo */}
-            <Section label="Supplier invoice" hint="Optional">
+            <Field label="Supplier invoice" hint="Optional">
               {invoicePreview ? (
                 <div className="relative inline-block">
                   <img
@@ -272,7 +288,7 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
                 className="hidden"
                 aria-hidden="true"
               />
-            </Section>
+            </Field>
           </div>
 
           <DialogFooter className="px-6 py-4 border-t bg-muted/30 gap-2">
@@ -285,35 +301,5 @@ export function RestockDialog({ open, onClose, itemType, itemId, itemName, defau
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Section({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between">
-        <Label className="text-sm font-semibold">{label}</Label>
-        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function LocationOption({ icon: Icon, label, active, onClick }: { icon: LucideIcon; label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors",
-        active
-          ? "border-primary bg-primary/5 text-primary"
-          : "border-input bg-card hover:bg-muted text-muted-foreground"
-      )}
-    >
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
   );
 }

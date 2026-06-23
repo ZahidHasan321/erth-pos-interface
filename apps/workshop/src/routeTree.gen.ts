@@ -40,7 +40,6 @@ import { Route as mainTerminalsFinishingRouteImport } from './routes/(main)/term
 import { Route as mainTerminalsCuttingRouteImport } from './routes/(main)/terminals/cutting'
 import { Route as mainStoreTransfersRouteImport } from './routes/(main)/store/transfers'
 import { Route as mainStoreSuppliersRouteImport } from './routes/(main)/store/suppliers'
-import { Route as mainStoreStocktakeRouteImport } from './routes/(main)/store/stocktake'
 import { Route as mainStoreReportsRouteImport } from './routes/(main)/store/reports'
 import { Route as mainStoreInventoryRouteImport } from './routes/(main)/store/inventory'
 import { Route as mainCompletedOrderIdRouteImport } from './routes/(main)/completed/$orderId'
@@ -50,11 +49,9 @@ import { Route as mainUsersUserIdEditRouteImport } from './routes/(main)/users/$
 import { Route as mainTerminalsGarmentGarmentIdRouteImport } from './routes/(main)/terminals/garment.$garmentId'
 import { Route as mainTerminalsStageHistoryRouteImport } from './routes/(main)/terminals/$stage.history'
 import { Route as mainStoreTransfersNewRouteImport } from './routes/(main)/store/transfers_.new'
-import { Route as mainStoreStocktakeHistoryRouteImport } from './routes/(main)/store/stocktake_.history'
 import { Route as mainPerformanceWorkerWorkerNameRouteImport } from './routes/(main)/performance/worker.$workerName'
 import { Route as mainAssignedGarmentGarmentIdRouteImport } from './routes/(main)/assigned/garment.$garmentId'
 import { Route as mainAssignedOrderIdAddGarmentRouteImport } from './routes/(main)/assigned/$orderId_.add-garment'
-import { Route as mainStoreStocktakeHistorySessionIdRouteImport } from './routes/(main)/store/stocktake_.history_.$sessionId'
 import { Route as mainStoreInventoryTypeIdRouteImport } from './routes/(main)/store/inventory_.$type.$id'
 
 const AccessDeniedRoute = AccessDeniedRouteImport.update({
@@ -213,11 +210,6 @@ const mainStoreSuppliersRoute = mainStoreSuppliersRouteImport.update({
   path: '/store/suppliers',
   getParentRoute: () => mainRouteRoute,
 } as any)
-const mainStoreStocktakeRoute = mainStoreStocktakeRouteImport.update({
-  id: '/store/stocktake',
-  path: '/store/stocktake',
-  getParentRoute: () => mainRouteRoute,
-} as any)
 const mainStoreReportsRoute = mainStoreReportsRouteImport.update({
   id: '/store/reports',
   path: '/store/reports',
@@ -265,12 +257,6 @@ const mainStoreTransfersNewRoute = mainStoreTransfersNewRouteImport.update({
   path: '/store/transfers/new',
   getParentRoute: () => mainRouteRoute,
 } as any)
-const mainStoreStocktakeHistoryRoute =
-  mainStoreStocktakeHistoryRouteImport.update({
-    id: '/store/stocktake_/history',
-    path: '/store/stocktake/history',
-    getParentRoute: () => mainRouteRoute,
-  } as any)
 const mainPerformanceWorkerWorkerNameRoute =
   mainPerformanceWorkerWorkerNameRouteImport.update({
     id: '/performance/worker/$workerName',
@@ -288,12 +274,6 @@ const mainAssignedOrderIdAddGarmentRoute =
     id: '/$orderId_/add-garment',
     path: '/$orderId/add-garment',
     getParentRoute: () => mainAssignedRouteRoute,
-  } as any)
-const mainStoreStocktakeHistorySessionIdRoute =
-  mainStoreStocktakeHistorySessionIdRouteImport.update({
-    id: '/store/stocktake_/history_/$sessionId',
-    path: '/store/stocktake/history/$sessionId',
-    getParentRoute: () => mainRouteRoute,
   } as any)
 const mainStoreInventoryTypeIdRoute =
   mainStoreInventoryTypeIdRouteImport.update({
@@ -323,7 +303,6 @@ export interface FileRoutesByFullPath {
   '/completed/$orderId': typeof mainCompletedOrderIdRoute
   '/store/inventory': typeof mainStoreInventoryRoute
   '/store/reports': typeof mainStoreReportsRoute
-  '/store/stocktake': typeof mainStoreStocktakeRoute
   '/store/suppliers': typeof mainStoreSuppliersRoute
   '/store/transfers': typeof mainStoreTransfersRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
@@ -341,14 +320,12 @@ export interface FileRoutesByFullPath {
   '/assigned/$orderId/add-garment': typeof mainAssignedOrderIdAddGarmentRoute
   '/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
   '/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
-  '/store/stocktake/history': typeof mainStoreStocktakeHistoryRoute
   '/store/transfers/new': typeof mainStoreTransfersNewRoute
   '/terminals/$stage/history': typeof mainTerminalsStageHistoryRoute
   '/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
   '/users/$userId/edit': typeof mainUsersUserIdEditRoute
   '/users/$userId/': typeof mainUsersUserIdIndexRoute
   '/store/inventory/$type/$id': typeof mainStoreInventoryTypeIdRoute
-  '/store/stocktake/history/$sessionId': typeof mainStoreStocktakeHistorySessionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -369,7 +346,6 @@ export interface FileRoutesByTo {
   '/completed/$orderId': typeof mainCompletedOrderIdRoute
   '/store/inventory': typeof mainStoreInventoryRoute
   '/store/reports': typeof mainStoreReportsRoute
-  '/store/stocktake': typeof mainStoreStocktakeRoute
   '/store/suppliers': typeof mainStoreSuppliersRoute
   '/store/transfers': typeof mainStoreTransfersRoute
   '/terminals/cutting': typeof mainTerminalsCuttingRoute
@@ -387,14 +363,12 @@ export interface FileRoutesByTo {
   '/assigned/$orderId/add-garment': typeof mainAssignedOrderIdAddGarmentRoute
   '/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
   '/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
-  '/store/stocktake/history': typeof mainStoreStocktakeHistoryRoute
   '/store/transfers/new': typeof mainStoreTransfersNewRoute
   '/terminals/$stage/history': typeof mainTerminalsStageHistoryRoute
   '/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
   '/users/$userId/edit': typeof mainUsersUserIdEditRoute
   '/users/$userId': typeof mainUsersUserIdIndexRoute
   '/store/inventory/$type/$id': typeof mainStoreInventoryTypeIdRoute
-  '/store/stocktake/history/$sessionId': typeof mainStoreStocktakeHistorySessionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -419,7 +393,6 @@ export interface FileRoutesById {
   '/(main)/completed/$orderId': typeof mainCompletedOrderIdRoute
   '/(main)/store/inventory': typeof mainStoreInventoryRoute
   '/(main)/store/reports': typeof mainStoreReportsRoute
-  '/(main)/store/stocktake': typeof mainStoreStocktakeRoute
   '/(main)/store/suppliers': typeof mainStoreSuppliersRoute
   '/(main)/store/transfers': typeof mainStoreTransfersRoute
   '/(main)/terminals/cutting': typeof mainTerminalsCuttingRoute
@@ -437,14 +410,12 @@ export interface FileRoutesById {
   '/(main)/assigned/$orderId_/add-garment': typeof mainAssignedOrderIdAddGarmentRoute
   '/(main)/assigned/garment/$garmentId': typeof mainAssignedGarmentGarmentIdRoute
   '/(main)/performance/worker/$workerName': typeof mainPerformanceWorkerWorkerNameRoute
-  '/(main)/store/stocktake_/history': typeof mainStoreStocktakeHistoryRoute
   '/(main)/store/transfers_/new': typeof mainStoreTransfersNewRoute
   '/(main)/terminals/$stage/history': typeof mainTerminalsStageHistoryRoute
   '/(main)/terminals/garment/$garmentId': typeof mainTerminalsGarmentGarmentIdRoute
   '/(main)/users/$userId/edit': typeof mainUsersUserIdEditRoute
   '/(main)/users/$userId/': typeof mainUsersUserIdIndexRoute
   '/(main)/store/inventory_/$type/$id': typeof mainStoreInventoryTypeIdRoute
-  '/(main)/store/stocktake_/history_/$sessionId': typeof mainStoreStocktakeHistorySessionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -469,7 +440,6 @@ export interface FileRouteTypes {
     | '/completed/$orderId'
     | '/store/inventory'
     | '/store/reports'
-    | '/store/stocktake'
     | '/store/suppliers'
     | '/store/transfers'
     | '/terminals/cutting'
@@ -487,14 +457,12 @@ export interface FileRouteTypes {
     | '/assigned/$orderId/add-garment'
     | '/assigned/garment/$garmentId'
     | '/performance/worker/$workerName'
-    | '/store/stocktake/history'
     | '/store/transfers/new'
     | '/terminals/$stage/history'
     | '/terminals/garment/$garmentId'
     | '/users/$userId/edit'
     | '/users/$userId/'
     | '/store/inventory/$type/$id'
-    | '/store/stocktake/history/$sessionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -515,7 +483,6 @@ export interface FileRouteTypes {
     | '/completed/$orderId'
     | '/store/inventory'
     | '/store/reports'
-    | '/store/stocktake'
     | '/store/suppliers'
     | '/store/transfers'
     | '/terminals/cutting'
@@ -533,14 +500,12 @@ export interface FileRouteTypes {
     | '/assigned/$orderId/add-garment'
     | '/assigned/garment/$garmentId'
     | '/performance/worker/$workerName'
-    | '/store/stocktake/history'
     | '/store/transfers/new'
     | '/terminals/$stage/history'
     | '/terminals/garment/$garmentId'
     | '/users/$userId/edit'
     | '/users/$userId'
     | '/store/inventory/$type/$id'
-    | '/store/stocktake/history/$sessionId'
   id:
     | '__root__'
     | '/'
@@ -564,7 +529,6 @@ export interface FileRouteTypes {
     | '/(main)/completed/$orderId'
     | '/(main)/store/inventory'
     | '/(main)/store/reports'
-    | '/(main)/store/stocktake'
     | '/(main)/store/suppliers'
     | '/(main)/store/transfers'
     | '/(main)/terminals/cutting'
@@ -582,14 +546,12 @@ export interface FileRouteTypes {
     | '/(main)/assigned/$orderId_/add-garment'
     | '/(main)/assigned/garment/$garmentId'
     | '/(main)/performance/worker/$workerName'
-    | '/(main)/store/stocktake_/history'
     | '/(main)/store/transfers_/new'
     | '/(main)/terminals/$stage/history'
     | '/(main)/terminals/garment/$garmentId'
     | '/(main)/users/$userId/edit'
     | '/(main)/users/$userId/'
     | '/(main)/store/inventory_/$type/$id'
-    | '/(main)/store/stocktake_/history_/$sessionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -818,13 +780,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainStoreSuppliersRouteImport
       parentRoute: typeof mainRouteRoute
     }
-    '/(main)/store/stocktake': {
-      id: '/(main)/store/stocktake'
-      path: '/store/stocktake'
-      fullPath: '/store/stocktake'
-      preLoaderRoute: typeof mainStoreStocktakeRouteImport
-      parentRoute: typeof mainRouteRoute
-    }
     '/(main)/store/reports': {
       id: '/(main)/store/reports'
       path: '/store/reports'
@@ -888,13 +843,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainStoreTransfersNewRouteImport
       parentRoute: typeof mainRouteRoute
     }
-    '/(main)/store/stocktake_/history': {
-      id: '/(main)/store/stocktake_/history'
-      path: '/store/stocktake/history'
-      fullPath: '/store/stocktake/history'
-      preLoaderRoute: typeof mainStoreStocktakeHistoryRouteImport
-      parentRoute: typeof mainRouteRoute
-    }
     '/(main)/performance/worker/$workerName': {
       id: '/(main)/performance/worker/$workerName'
       path: '/performance/worker/$workerName'
@@ -915,13 +863,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/assigned/$orderId/add-garment'
       preLoaderRoute: typeof mainAssignedOrderIdAddGarmentRouteImport
       parentRoute: typeof mainAssignedRouteRoute
-    }
-    '/(main)/store/stocktake_/history_/$sessionId': {
-      id: '/(main)/store/stocktake_/history_/$sessionId'
-      path: '/store/stocktake/history/$sessionId'
-      fullPath: '/store/stocktake/history/$sessionId'
-      preLoaderRoute: typeof mainStoreStocktakeHistorySessionIdRouteImport
-      parentRoute: typeof mainRouteRoute
     }
     '/(main)/store/inventory_/$type/$id': {
       id: '/(main)/store/inventory_/$type/$id'
@@ -979,7 +920,6 @@ interface mainRouteRouteChildren {
   mainTeamRoute: typeof mainTeamRoute
   mainStoreInventoryRoute: typeof mainStoreInventoryRoute
   mainStoreReportsRoute: typeof mainStoreReportsRoute
-  mainStoreStocktakeRoute: typeof mainStoreStocktakeRoute
   mainStoreSuppliersRoute: typeof mainStoreSuppliersRoute
   mainStoreTransfersRoute: typeof mainStoreTransfersRoute
   mainTerminalsCuttingRoute: typeof mainTerminalsCuttingRoute
@@ -993,14 +933,12 @@ interface mainRouteRouteChildren {
   mainPerformanceIndexRoute: typeof mainPerformanceIndexRoute
   mainUsersIndexRoute: typeof mainUsersIndexRoute
   mainPerformanceWorkerWorkerNameRoute: typeof mainPerformanceWorkerWorkerNameRoute
-  mainStoreStocktakeHistoryRoute: typeof mainStoreStocktakeHistoryRoute
   mainStoreTransfersNewRoute: typeof mainStoreTransfersNewRoute
   mainTerminalsStageHistoryRoute: typeof mainTerminalsStageHistoryRoute
   mainTerminalsGarmentGarmentIdRoute: typeof mainTerminalsGarmentGarmentIdRoute
   mainUsersUserIdEditRoute: typeof mainUsersUserIdEditRoute
   mainUsersUserIdIndexRoute: typeof mainUsersUserIdIndexRoute
   mainStoreInventoryTypeIdRoute: typeof mainStoreInventoryTypeIdRoute
-  mainStoreStocktakeHistorySessionIdRoute: typeof mainStoreStocktakeHistorySessionIdRoute
 }
 
 const mainRouteRouteChildren: mainRouteRouteChildren = {
@@ -1019,7 +957,6 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainTeamRoute: mainTeamRoute,
   mainStoreInventoryRoute: mainStoreInventoryRoute,
   mainStoreReportsRoute: mainStoreReportsRoute,
-  mainStoreStocktakeRoute: mainStoreStocktakeRoute,
   mainStoreSuppliersRoute: mainStoreSuppliersRoute,
   mainStoreTransfersRoute: mainStoreTransfersRoute,
   mainTerminalsCuttingRoute: mainTerminalsCuttingRoute,
@@ -1033,15 +970,12 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainPerformanceIndexRoute: mainPerformanceIndexRoute,
   mainUsersIndexRoute: mainUsersIndexRoute,
   mainPerformanceWorkerWorkerNameRoute: mainPerformanceWorkerWorkerNameRoute,
-  mainStoreStocktakeHistoryRoute: mainStoreStocktakeHistoryRoute,
   mainStoreTransfersNewRoute: mainStoreTransfersNewRoute,
   mainTerminalsStageHistoryRoute: mainTerminalsStageHistoryRoute,
   mainTerminalsGarmentGarmentIdRoute: mainTerminalsGarmentGarmentIdRoute,
   mainUsersUserIdEditRoute: mainUsersUserIdEditRoute,
   mainUsersUserIdIndexRoute: mainUsersUserIdIndexRoute,
   mainStoreInventoryTypeIdRoute: mainStoreInventoryTypeIdRoute,
-  mainStoreStocktakeHistorySessionIdRoute:
-    mainStoreStocktakeHistorySessionIdRoute,
 }
 
 const mainRouteRouteWithChildren = mainRouteRoute._addFileChildren(

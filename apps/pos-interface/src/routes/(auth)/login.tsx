@@ -98,10 +98,6 @@ function LoginComponent() {
   React.useEffect(() => {
     if (auth.isAuthenticated) {
       router.invalidate().then(() => {
-        if (auth.user?.role === "cashier") {
-          navigate({ to: "/cashier" });
-          return;
-        }
         if (userType === initialUserType && search.redirect) {
           navigate({ to: search.redirect });
         } else {

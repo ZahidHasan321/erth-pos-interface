@@ -189,6 +189,15 @@ export const cashMovementReasonCategoryEnum = pgEnum("cash_movement_reason_categ
     "other",
 ]);
 
+// --- STOCK-PURCHASE (non-customer expense) ENUMS ---
+// A restock of shop fabric/shelf is a purchase the cashier must settle (SPEC §3).
+// Status is derived from the payment ledger by a sync trigger (mirrors orders.paid).
+export const stockPurchaseStatusEnum = pgEnum("stock_purchase_status", ["unpaid", "partially_paid", "paid"]);
+// Settlement methods for a supplier purchase. Cash hits the drawer (reconciles
+// at EOD); knet/link/bank are non-drawer. Distinct from the customer-facing
+// paymentTypeEnum (no installments; adds bank_transfer).
+export const purchasePaymentTypeEnum = pgEnum("purchase_payment_type", ["cash", "knet", "link_payment", "bank_transfer", "others"]);
+
 export const appointmentStatusEnum = pgEnum("appointment_status", ["scheduled", "completed", "cancelled", "no_show"]);
 
 export const fabricTypeEnum = pgEnum("fabric_type", ["summer", "winter"]);
@@ -423,6 +432,9 @@ export const customers = pgTable("customers", {
     customer_segment: text("customer_segment"),
     account_type: accountTypeEnum("account_type"),
     relation: text("relation"),
+    // Secondary -> its Primary (SPEC §5). The link is this FK, not a shared
+    // phone; self-reference, cleared (not blocked) if a primary is deleted.
+    primary_customer_id: integer("primary_customer_id").references((): AnyPgColumn => customers.id, { onDelete: "set null" }),
 
     notes: text("notes"),
     created_at: timestamp("created_at").defaultNow(),
@@ -435,6 +447,14 @@ export const customers = pgTable("customers", {
     idempotencyIdx: uniqueIndex("customers_idempotency_key_idx")
         .on(t.idempotency_key)
         .where(sql`${t.idempotency_key} IS NOT NULL`),
+    primaryLinkIdx: index("customers_primary_customer_id_idx")
+        .on(t.primary_customer_id)
+        .where(sql`${t.primary_customer_id} IS NOT NULL`),
+    // Secondary <=> has a linked primary; Primary/NULL type carry none (SPEC §5).
+    secondaryRequiresPrimary: check(
+        "customers_secondary_requires_primary",
+        sql`(${t.account_type} = 'Secondary') = (${t.primary_customer_id} IS NOT NULL)`,
+    ),
 }));
 
 // --- 3. LOOKUPS ---
@@ -486,6 +506,10 @@ export const fabrics = pgTable("fabrics", {
     shop_stock: numeric("shop_stock", { precision: 10, scale: 2 }).default(0),
     workshop_stock: numeric("workshop_stock", { precision: 10, scale: 2 }).default(0),
     price_per_meter: numeric("price_per_meter", { precision: 10, scale: 3 }),
+    // Weighted-average COST basis (WAC), maintained by restock_item on every
+    // costed restock. Distinct from price_per_meter (the selling price). NULL
+    // until the first costed restock seeds it. SPEC §4 "Cost basis & purchases".
+    avg_cost: numeric("avg_cost", { precision: 10, scale: 3 }),
     supplier: text("supplier"),
     season: fabricTypeEnum("season"),
     image_url: text("image_url"),
@@ -504,6 +528,9 @@ export const shelf = pgTable("shelf", {
     shop_stock: integer("shop_stock").default(0),
     workshop_stock: integer("workshop_stock").default(0),
     price: numeric("price", { precision: 10, scale: 3 }),
+    // Weighted-average COST basis (WAC), maintained by restock_item. Distinct
+    // from `price` (selling price). NULL until first costed restock. SPEC §4.
+    avg_cost: numeric("avg_cost", { precision: 10, scale: 3 }),
     image_url: text("image_url"),
     description: text("description"),
     sku: text("sku"),
@@ -1521,6 +1548,63 @@ export const stockMovements = pgTable("stock_movements", {
     typeCreatedIdx: index("stock_movements_type_created_idx").on(t.movement_type, t.created_at),
 }));
 
+// --- 17b. STOCK PURCHASES (non-customer expense payables) ---
+// One payable per costed shop fabric/shelf restock (SPEC §3 cashier
+// "Stock-purchase settlement", §4 "Cost basis & purchases"). Created UNPAID by
+// restock_item, linked to the originating stock_movement; the cashier settles
+// it. status/amount_paid are owned by the sync trigger (see triggers.sql) —
+// never written directly, exactly like orders.paid.
+export const stockPurchases = pgTable("stock_purchases", {
+    id: serial("id").primaryKey(),
+    item_type: stockItemTypeEnum("item_type").notNull(),
+    item_id: integer("item_id").notNull(),
+    location: stockLocationEnum("location").notNull().default("shop"),
+    brand: brandEnum("brand").notNull().default("ERTH"),
+    qty: numeric("qty", { precision: 10, scale: 2 }).notNull(),
+    unit_cost: numeric("unit_cost", { precision: 10, scale: 3 }).notNull(),
+    total_cost: numeric("total_cost", { precision: 10, scale: 3 }).notNull(),  // qty * unit_cost, frozen
+    supplier_id: integer("supplier_id").references(() => suppliers.id),
+    invoice_image_url: text("invoice_image_url"),
+    stock_movement_id: integer("stock_movement_id").references(() => stockMovements.id),
+    amount_paid: numeric("amount_paid", { precision: 10, scale: 3 }).notNull().default(0),  // sync-trigger owned
+    status: stockPurchaseStatusEnum("status").notNull().default("unpaid"),                    // sync-trigger owned
+    notes: text("notes"),
+    created_by: uuid("created_by").references(() => users.id),
+    created_at: timestamp("created_at").defaultNow(),
+    idempotency_key: uuid("idempotency_key"),  // originating restock's key (traceability)
+}, (t) => ({
+    statusIdx: index("stock_purchases_status_idx").on(t.brand, t.status),
+    itemIdx: index("stock_purchases_item_idx").on(t.item_type, t.item_id),
+    createdIdx: index("stock_purchases_created_idx").on(t.created_at),
+    qtyPositive: check("stock_purchases_qty_positive", sql`${t.qty} > 0`),
+    totalNonNeg: check("stock_purchases_total_nonneg", sql`${t.total_cost} >= 0`),
+    paidNonNeg: check("stock_purchases_paid_nonneg", sql`${t.amount_paid} >= 0`),
+}));
+
+// --- 17c. STOCK PURCHASE PAYMENTS (settlement ledger) ---
+// Append-style ledger; a trigger sums it into stock_purchases.amount_paid/status.
+// A cash payment also posts a register_cash_movements cash_out so it reconciles
+// at EOD (register_cash_movement_id links the two); non-cash leaves it NULL.
+export const stockPurchasePayments = pgTable("stock_purchase_payments", {
+    id: serial("id").primaryKey(),
+    purchase_id: integer("purchase_id").references(() => stockPurchases.id, { onDelete: "cascade" }).notNull(),
+    amount: numeric("amount", { precision: 10, scale: 3 }).notNull(),
+    payment_type: purchasePaymentTypeEnum("payment_type").notNull(),
+    register_session_id: integer("register_session_id").references(() => registerSessions.id),
+    register_cash_movement_id: integer("register_cash_movement_id").references(() => registerCashMovements.id),
+    payment_ref_no: text("payment_ref_no"),
+    note: text("note"),
+    paid_by: uuid("paid_by").references(() => users.id),
+    paid_at: timestamp("paid_at").defaultNow(),
+    idempotency_key: uuid("idempotency_key"),
+}, (t) => ({
+    purchaseIdx: index("stock_purchase_payments_purchase_idx").on(t.purchase_id),
+    amountPositive: check("stock_purchase_payments_amount_positive", sql`${t.amount} > 0`),
+    idempotencyIdx: uniqueIndex("stock_purchase_payments_idempotency_key_idx")
+        .on(t.idempotency_key)
+        .where(sql`${t.idempotency_key} IS NOT NULL`),
+}));
+
 // --- 18. STOCKTAKE (periodic physical count, per side) ---
 // A controlled monthly recount run per side (shop counts its own holdings,
 // workshop its own). Counts are entered against the side's full item set; a
@@ -1763,3 +1847,9 @@ export type NewSupplier = InferInsertModel<typeof suppliers>;
 
 export type StockMovement = InferSelectModel<typeof stockMovements>;
 export type NewStockMovement = InferInsertModel<typeof stockMovements>;
+
+export type StockPurchase = InferSelectModel<typeof stockPurchases>;
+export type NewStockPurchase = InferInsertModel<typeof stockPurchases>;
+export type StockPurchasePayment = InferSelectModel<typeof stockPurchasePayments>;
+export type StockPurchaseStatus = (typeof stockPurchaseStatusEnum.enumValues)[number];
+export type PurchasePaymentType = (typeof purchasePaymentTypeEnum.enumValues)[number];

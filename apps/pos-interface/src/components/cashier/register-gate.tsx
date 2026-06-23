@@ -320,13 +320,146 @@ export function RegisterGate({ children }: RegisterGateProps) {
     return <>{children}</>;
 }
 
-// Renders the register menu in the global app header when an open session
-// exists. Non-cashier users have no session → returns null.
+// Renders the register control in the global app header. Available on every
+// cashier tab (Pending / All Orders / Purchases) so opening, reopening and
+// closing the drawer never depend on which tab the cashier is on. The full
+// in-content RegisterGate still fronts the money flows.
 export function RegisterHeaderMenu() {
-    const { data: sessionResult } = useRegisterSession();
+    const { data: sessionResult, isLoading } = useRegisterSession();
     const session = sessionResult?.data;
-    if (!session || session.status === "closed") return null;
+    if (isLoading) return null;
+    if (!session) return <HeaderOpenRegister />;
+    if (session.status === "closed") return <HeaderClosedRegister session={session} />;
     return <RegisterMenu session={session} />;
+}
+
+// Compact header affordance to open the drawer when no session exists today.
+// Mirrors OpenRegisterScreen so the action is reachable from any cashier tab.
+function HeaderOpenRegister() {
+    const { user } = useAuth();
+    const mutation = useOpenRegisterMutation();
+    const [open, setOpen] = useState(false);
+
+    const form = useForm<OpenFormValues>({
+        resolver: zodResolver(openSchema) as Resolver<OpenFormValues>,
+        defaultValues: { opening_float: undefined as unknown as number },
+    });
+
+    const onSubmit = (values: OpenFormValues) => {
+        if (!user) return;
+        mutation.mutate(
+            { userId: user.id, openingFloat: values.opening_float },
+            {
+                onSuccess: (res) => {
+                    if (res.status !== "error") {
+                        setOpen(false);
+                        form.reset();
+                    }
+                },
+            },
+        );
+    };
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-2 border-border text-foreground hover:bg-muted">
+                    <span className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+                    <span className="font-medium">Open Register</span>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-0">
+                <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                    <LockKeyhole className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold">Open Register</span>
+                </div>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="p-4 space-y-3">
+                    <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Opening Float (KWD)</Label>
+                        <Input
+                            type="number"
+                            step="0.001"
+                            min="0"
+                            {...form.register("opening_float")}
+                            placeholder="0.000"
+                            className="text-right font-bold tabular-nums h-10"
+                            autoFocus
+                        />
+                        {form.formState.errors.opening_float && (
+                            <p className="text-xs text-red-500">{form.formState.errors.opening_float.message}</p>
+                        )}
+                    </div>
+                    <Button type="submit" className="w-full h-9 text-xs font-semibold" disabled={mutation.isPending}>
+                        {mutation.isPending
+                            ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Opening...</>
+                            : "Open Register"}
+                    </Button>
+                </form>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+// Compact header affordance to reopen a closed drawer. Mirrors the Reopen
+// action on ClosedRegisterScreen so it is reachable from any cashier tab.
+function HeaderClosedRegister({ session }: { session: RegisterSessionData }) {
+    const { user } = useAuth();
+    const reopenMutation = useReopenRegisterMutation();
+    const [open, setOpen] = useState(false);
+
+    const handleReopen = () => {
+        if (!user) return;
+        reopenMutation.mutate(
+            { sessionId: session.id, userId: user.id },
+            { onSuccess: (res) => { if (res.status !== "error") setOpen(false); } },
+        );
+    };
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-2 border-border text-muted-foreground hover:bg-muted">
+                    <span className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+                    <span className="font-medium">Register Closed</span>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-0">
+                <div className="px-4 py-3 border-b border-border">
+                    <div className="flex items-center gap-2">
+                        <LockKeyhole className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-semibold">Register Closed</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Closed by {session.closed_by_name || "Unknown"} at{" "}
+                        {session.closed_at ? timeFmt.format(new Date(session.closed_at)) : "-"}
+                    </p>
+                </div>
+                <div className="px-4 py-3 space-y-1.5 text-xs">
+                    <div className="flex justify-between">
+                        <span className="text-muted-foreground">Opening float</span>
+                        <span className="tabular-nums font-medium">{fmtK(session.opening_float)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-muted-foreground">Counted cash</span>
+                        <span className="tabular-nums font-medium">{fmtK(session.closing_counted_cash ?? 0)}</span>
+                    </div>
+                </div>
+                <div className="px-3 pb-3 pt-1 border-t border-border">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full h-8 text-xs"
+                        onClick={handleReopen}
+                        disabled={reopenMutation.isPending}
+                    >
+                        {reopenMutation.isPending
+                            ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Reopening...</>
+                            : "Reopen Register"}
+                    </Button>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
 }
 
 // ── Stale Register Screen ─────────────────────────────────────────────────────

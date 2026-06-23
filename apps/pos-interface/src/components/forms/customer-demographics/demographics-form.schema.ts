@@ -29,7 +29,29 @@ export const customerDemographicsSchema = z.object({
   customer_segment: z.string().optional().nullable(),
   account_type: z.enum(['Primary', 'Secondary']).optional().nullable(),
   relation: z.string().optional().nullable(),
+  // The linked Primary for a Secondary account (SPEC §5). The link is this FK,
+  // not a shared phone number.
+  primary_customer_id: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
+}).superRefine((val, ctx) => {
+  // A Secondary must carry a linked Primary and a relation; a Primary carries
+  // neither (the mapper nulls primary_customer_id for a Primary).
+  if (val.account_type === 'Secondary') {
+    if (!val.primary_customer_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['primary_customer_id'],
+        message: 'Select the primary account this customer is linked to',
+      });
+    }
+    if (!val.relation) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['relation'],
+        message: 'Relation is required for a secondary account',
+      });
+    }
+  }
 });
 
 export type CustomerDemographicsSchema = z.infer<typeof customerDemographicsSchema>;
@@ -58,5 +80,6 @@ export const customerDemographicsDefaults: CustomerDemographicsSchema = {
   customer_segment: 'Low',
   account_type: 'Primary',
   relation: '',
+  primary_customer_id: null,
   notes: '',
 };

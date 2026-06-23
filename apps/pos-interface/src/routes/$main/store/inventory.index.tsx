@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Package, Search, AlertCircle, RefreshCw, AlertTriangle, Scissors, ArrowRight, Users, ArrowDownToLine, Settings2, Trash2, ArchiveRestore, ChevronDown } from "lucide-react";
+import { Loader2, Plus, Pencil, Package, Search, AlertCircle, RefreshCw, AlertTriangle, Scissors, Users, ArrowDownToLine, Settings2, Trash2, ArchiveRestore } from "lucide-react";
 import { IconStack2 } from "@tabler/icons-react";
 
 import { Button } from "@repo/ui/button";
@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { getPermission } from "@/lib/rbac";
-import { isLowStock, formatQty, getLowStockThreshold } from "@/lib/inventory";
+import { isLowStock, formatQty } from "@/lib/inventory";
 import { getFabrics, createFabric, updateFabric, deleteFabric, unarchiveFabric } from "@/api/fabrics";
 import { getShelf, createShelfItem, updateShelf, deleteShelfItem, unarchiveShelfItem } from "@/api/shelf";
 import { getAccessories, createAccessory, updateAccessory, deleteAccessory, unarchiveAccessory } from "@/api/accessories";
@@ -55,7 +55,6 @@ function InventoryPage() {
   const [sort, setSort] = useState<SortKey>("name");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [showArchived, setShowArchived] = useState(false);
-  const [restockOpen, setRestockOpen] = useState(true);
 
   const { data: fabrics = [], isLoading: fl, isError: fe, refetch: fr } = useQuery({ queryKey: ["fabrics", { archived: showArchived }], queryFn: () => getFabrics(showArchived), staleTime: 60_000 });
   const { data: shelfItems = [], isLoading: sl, isError: se, refetch: sr } = useQuery({ queryKey: ["shelf", { archived: showArchived }], queryFn: () => getShelf(showArchived), staleTime: 60_000 });
@@ -75,21 +74,6 @@ function InventoryPage() {
     for (const s of activeShelf) if (isLowStock("shelf", Number(s.shop_stock ?? 0), s.low_stock_threshold)) count++;
     for (const a of activeAccessories) if (isLowStock("accessory", Number(a.shop_stock ?? 0), a.low_stock_threshold)) count++;
     return count;
-  }, [activeFabrics, activeShelf, activeAccessories]);
-
-  // Itemized "Need to Restock" set: the side's own items below their threshold
-  // (incl. out-of-stock), most-depleted first.
-  const needRestock = useMemo(() => {
-    const out: { itemType: StockItemType; id: number; name: string; qty: number; threshold: number }[] = [];
-    const push = (itemType: StockItemType, id: number, name: string, stock: unknown, override: number | string | null) => {
-      const qty = Number(stock ?? 0);
-      const threshold = getLowStockThreshold(itemType, override);
-      if (qty < threshold) out.push({ itemType, id, name, qty, threshold });
-    };
-    for (const f of activeFabrics) push("fabric", f.id, f.name, f.shop_stock, f.low_stock_threshold);
-    for (const s of activeShelf) push("shelf", s.id, s.type ?? `Shelf #${s.id}`, s.shop_stock, s.low_stock_threshold);
-    for (const a of activeAccessories) push("accessory", a.id, a.name, a.shop_stock, a.low_stock_threshold);
-    return out.sort((a, b) => a.qty / a.threshold - b.qty / b.threshold);
   }, [activeFabrics, activeShelf, activeAccessories]);
 
   const stats = [
@@ -119,12 +103,8 @@ function InventoryPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-          {stats.map((s) => {
-            // The Low Stock KPI is the headline number for the same items the
-            // "Need to restock" list breaks down — clicking it reveals that list
-            // so the two read as overview → detail, not two rival counters.
-            const interactive = s.highlight && needRestock.length > 0;
-            const inner = (
+          {stats.map((s) => (
+            <Card key={s.label} className={cn("shadow-none rounded-xl border", s.highlight && "border-amber-200")}>
               <CardContent className="flex items-center gap-3 p-4">
                 <div className={cn("p-2 rounded-lg shrink-0", s.bg)}>
                   <s.icon className="h-4 w-4" />
@@ -134,82 +114,12 @@ function InventoryPage() {
                   <p className={cn("text-lg font-bold tabular-nums", s.highlight && "text-amber-700")}>{s.value}</p>
                 </div>
               </CardContent>
-            );
-            return interactive ? (
-              <Card key={s.label} className="shadow-none rounded-xl border border-amber-200 transition-colors motion-reduce:transition-none hover:bg-amber-50/50 focus-within:ring-2 focus-within:ring-amber-400">
-                <button
-                  type="button"
-                  onClick={() => setRestockOpen(true)}
-                  aria-label={`${s.value} items low on stock, show the restock list`}
-                  className="w-full text-left focus:outline-none"
-                >
-                  {inner}
-                </button>
-              </Card>
-            ) : (
-              <Card key={s.label} className={cn("shadow-none rounded-xl border", s.highlight && "border-amber-200")}>
-                {inner}
-              </Card>
-            );
-          })}
+            </Card>
+          ))}
         </div>
       )}
 
       <StocktakeBanner main={main} />
-
-      {!isLoading && needRestock.length > 0 && (
-        <section
-          aria-label="Items that need restocking"
-          className="rounded-xl border border-amber-200 bg-amber-50/30 mb-5 overflow-hidden"
-        >
-          <div className="flex items-center justify-between gap-3 px-4 py-2.5">
-            <button
-              type="button"
-              onClick={() => setRestockOpen((o) => !o)}
-              aria-expanded={restockOpen}
-              className="flex items-center gap-2 min-w-0 text-left text-sm font-semibold text-amber-900 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-            >
-              <ChevronDown className={cn("h-4 w-4 text-amber-600 shrink-0 transition-transform motion-reduce:transition-none", !restockOpen && "-rotate-90")} />
-              Need to restock
-              <span className="tabular-nums font-medium text-amber-700">({needRestock.length})</span>
-            </button>
-            {/* A transfer only replenishes accessories — fabric/shelf are shop-only
-                (SPEC §4), so don't offer it when nothing low is transferable. */}
-            {needRestock.some((r) => r.itemType === "accessory") && (
-              <Button size="sm" variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-100 shrink-0" asChild>
-                <Link to="/$main/store/transfers" params={{ main }}>
-                  Request transfer
-                  <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                </Link>
-              </Button>
-            )}
-          </div>
-          {restockOpen && (
-            <ul className="divide-y divide-amber-100 border-t border-amber-200 max-h-60 overflow-y-auto">
-              {needRestock.map((r) => (
-                <li key={`${r.itemType}-${r.id}`}>
-                  <Link
-                    to="/$main/store/inventory/$itemType/$itemId"
-                    params={{ main, itemType: r.itemType, itemId: String(r.id) }}
-                    className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-amber-100/50 transition-colors motion-reduce:transition-none"
-                  >
-                    <span className="flex items-center gap-2 min-w-0">
-                      <span className="truncate text-sm font-medium">{r.name}</span>
-                      <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{r.itemType}</span>
-                    </span>
-                    <span className="shrink-0 text-xs tabular-nums">
-                      <span className={cn("font-semibold", r.qty <= 0 ? "text-red-700" : "text-amber-700")}>
-                        {formatQty(r.itemType, r.qty)}
-                      </span>
-                      <span className="text-muted-foreground"> / {formatQty(r.itemType, r.threshold)} min</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
 
       {isError && !isLoading && (
         <Card className="shadow-none rounded-xl border border-destructive/20 mb-5">

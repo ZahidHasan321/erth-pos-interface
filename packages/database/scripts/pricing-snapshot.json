@@ -1,0 +1,1241 @@
+{
+  "prices": [
+    {
+      "key": "EXPRESS_SURCHARGE",
+      "brand": "ERTH",
+      "value": "5.000",
+      "description": "Express order surcharge",
+      "updated_at": "2026-06-19T11:03:51.518Z"
+    },
+    {
+      "key": "HOME_DELIVERY",
+      "brand": "ERTH",
+      "value": "2.000",
+      "description": "Home delivery charge",
+      "updated_at": "2026-03-26T02:07:34.873Z"
+    },
+    {
+      "key": "SOAKING_24H_CHARGE",
+      "brand": "ERTH",
+      "value": "1.000",
+      "description": "Soaking charge (24 hours)",
+      "updated_at": "2026-04-30T23:23:41.096Z"
+    },
+    {
+      "key": "SOAKING_8H_CHARGE",
+      "brand": "ERTH",
+      "value": "0.500",
+      "description": "Soaking charge (8 hours)",
+      "updated_at": "2026-04-30T23:23:40.963Z"
+    },
+    {
+      "key": "STITCHING_ADULT",
+      "brand": "ERTH",
+      "value": "9.000",
+      "description": "Adult stitching rate per garment",
+      "updated_at": "2026-03-26T02:07:34.873Z"
+    },
+    {
+      "key": "STITCHING_CHILD",
+      "brand": "ERTH",
+      "value": "7.000",
+      "description": "Child stitching rate per garment",
+      "updated_at": "2026-03-26T02:07:34.873Z"
+    },
+    {
+      "key": "EXPRESS_SURCHARGE",
+      "brand": "SAKKBA",
+      "value": "5.000",
+      "description": "Express order surcharge",
+      "updated_at": "2026-06-19T11:03:51.518Z"
+    },
+    {
+      "key": "HOME_DELIVERY",
+      "brand": "SAKKBA",
+      "value": "5.000",
+      "description": "Home delivery charge",
+      "updated_at": "2026-03-26T02:07:34.873Z"
+    },
+    {
+      "key": "SOAKING_24H_CHARGE",
+      "brand": "SAKKBA",
+      "value": "1.000",
+      "description": "Soaking charge (24 hours)",
+      "updated_at": "2026-04-30T23:23:41.198Z"
+    },
+    {
+      "key": "SOAKING_8H_CHARGE",
+      "brand": "SAKKBA",
+      "value": "0.500",
+      "description": "Soaking charge (8 hours)",
+      "updated_at": "2026-04-30T23:23:41.151Z"
+    },
+    {
+      "key": "STITCHING_ADULT",
+      "brand": "SAKKBA",
+      "value": "9.000",
+      "description": "Adult stitching rate per garment",
+      "updated_at": "2026-03-26T02:07:34.873Z"
+    },
+    {
+      "key": "STITCHING_CHILD",
+      "brand": "SAKKBA",
+      "value": "7.000",
+      "description": "Child stitching rate per garment",
+      "updated_at": "2026-03-26T02:07:34.873Z"
+    },
+    {
+      "key": "EXPRESS_SURCHARGE",
+      "brand": "QASS",
+      "value": "5.000",
+      "description": "Express order surcharge",
+      "updated_at": "2026-06-19T11:03:51.518Z"
+    },
+    {
+      "key": "HOME_DELIVERY",
+      "brand": "QASS",
+      "value": "5.000",
+      "description": "Home delivery charge",
+      "updated_at": "2026-03-26T02:07:34.873Z"
+    },
+    {
+      "key": "SOAKING_24H_CHARGE",
+      "brand": "QASS",
+      "value": "1.000",
+      "description": "Soaking charge (24 hours)",
+      "updated_at": "2026-04-30T23:23:41.296Z"
+    },
+    {
+      "key": "SOAKING_8H_CHARGE",
+      "brand": "QASS",
+      "value": "0.500",
+      "description": "Soaking charge (8 hours)",
+      "updated_at": "2026-04-30T23:23:41.248Z"
+    },
+    {
+      "key": "STITCHING_ADULT",
+      "brand": "QASS",
+      "value": "8.000",
+      "description": "Adult stitching rate per garment",
+      "updated_at": "2026-06-15T11:25:45.317Z"
+    },
+    {
+      "key": "STITCHING_CHILD",
+      "brand": "QASS",
+      "value": "6.000",
+      "description": "Child stitching rate per garment",
+      "updated_at": "2026-06-15T11:25:50.063Z"
+    }
+  ],
+  "styles": [
+    {
+      "name": "Down Collar",
+      "type": "Collar",
+      "rate_per_item": "0.000",
+      "image_url": "COL_DOWN_COLLAR",
+      "code": "COL_DOWN_COLLAR",
+      "component": "collar_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Japanese",
+      "type": "Collar",
+      "rate_per_item": "0.000",
+      "image_url": "COL_JAPANESE",
+      "code": "COL_JAPANESE",
+      "component": "collar_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Qallabi",
+      "type": "Collar",
+      "rate_per_item": "3.000",
+      "image_url": "COL_QALLABI",
+      "code": "COL_QALLABI",
+      "component": "collar_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Aravi Zarrar",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_ARAVI_ZARRAR",
+      "code": "COL_ARAVI_ZARRAR",
+      "component": "collar_button",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Small Tabbagi",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_SMALL_TABBAGI",
+      "code": "COL_SMALL_TABBAGI",
+      "component": "collar_accessory",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Tabbagi",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_TABBAGI",
+      "code": "COL_TABBAGI",
+      "component": "collar_button",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Zarrar + Tabbagi",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_ZARRAR__TABBAGI",
+      "code": "COL_ZARRAR__TABBAGI",
+      "component": "collar_button",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Strait Collar",
+      "type": "collar_type",
+      "rate_per_item": "0.000",
+      "image_url": "COL_STRAIT_COLLAR",
+      "code": "COL_STRAIT_COLLAR",
+      "component": "collar_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Double Gumsha",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_DOUBLE_GUMSHA",
+      "code": "CUF_DOUBLE_GUMSHA",
+      "component": "cuffs_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Mudawar Kabbak",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_MUDAWAR_KABBAK",
+      "code": "CUF_MUDAWAR_KABBAK",
+      "component": "cuffs_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Murabba Kabak",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_MURABBA_KABAK",
+      "code": "CUF_MURABBA_KABAK",
+      "component": "cuffs_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Musallas Kabbak",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_MUSALLAS_KABBAK",
+      "code": "CUF_MUSALLAS_KABBAK",
+      "component": "cuffs_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Cuffs - Double Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_DOUBLE",
+      "component": "cuffs_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Cuffs - No Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_NO_HASHWA",
+      "component": "cuffs_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Cuffs - Single Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_SINGLE",
+      "component": "cuffs_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Cuffs - Triple Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_TRIPLE",
+      "component": "cuffs_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Mudawwar Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MUDAWWAR_FRONT_POCKET",
+      "code": "FRO_MUDAWWAR_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Mudawwar Magfi Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MUDAWWAR_MAGFI_FRONT_POCKET",
+      "code": "FRO_MUDAWWAR_MAGFI_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Murabba Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MURABBA_FRONT_POCKET",
+      "code": "FRO_MURABBA_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Musallas Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MUSALLAS_FRONT_POCKET",
+      "code": "FRO_MUSALLAS_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Bain Murabba",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_BAIN_MURABBA",
+      "code": "JAB_BAIN_MURABBA",
+      "component": "jabzour_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Bain Musallas",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_BAIN_MUSALLAS",
+      "code": "JAB_BAIN_MUSALLAS",
+      "component": "jabzour_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Magfi Murabba",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_MAGFI_MURABBA",
+      "code": "JAB_MAGFI_MURABBA",
+      "component": "jabzour_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Magfi Musallas",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_MAGFI_MUSALLAS",
+      "code": "JAB_MAGFI_MUSALLAS",
+      "component": "jabzour_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Shaab",
+      "type": "Jabzour",
+      "rate_per_item": "1.000",
+      "image_url": "JAB_SHAAB",
+      "code": "JAB_SHAAB",
+      "component": "jabzour_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Jabzour - Double Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "1.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_DOUBLE",
+      "component": "jabzour_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Jabzour - No Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_NO_HASHWA",
+      "component": "jabzour_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Jabzour - Single Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "1.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_SINGLE",
+      "component": "jabzour_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Jabzour - Triple Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "1.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_TRIPLE",
+      "component": "jabzour_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Line 2",
+      "type": "lines",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "STY_LINE_2",
+      "component": "lines",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Pocket - Double Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_DOUBLE",
+      "component": "pocket_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Pocket - No Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_NO_HASHWA",
+      "component": "pocket_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Pocket - Single Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_SINGLE",
+      "component": "pocket_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Pocket - Triple Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_TRIPLE",
+      "component": "pocket_thickness",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Mudawwar Side Pocket",
+      "type": "Side Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "SID_MUDAWWAR_SIDE_POCKET",
+      "code": "SID_MUDAWWAR_SIDE_POCKET",
+      "component": "side_pocket_type",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Musallas Side Pocket",
+      "type": "Side Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "SID_MUSALLAS_SIDE_POCKET",
+      "code": null,
+      "component": null,
+      "brand": "ERTH"
+    },
+    {
+      "name": "Designer",
+      "type": "Style",
+      "rate_per_item": "6.000",
+      "image_url": "STY_DESIGNER",
+      "code": "STY_DESIGNER",
+      "component": "base",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Kuwaiti",
+      "type": "Style",
+      "rate_per_item": "0.000",
+      "image_url": "STY_KUWAITI",
+      "code": "STY_KUWAITI",
+      "component": "base",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Line",
+      "type": "Style",
+      "rate_per_item": "0.000",
+      "image_url": "STY_LINE",
+      "code": "STY_LINE",
+      "component": "lines",
+      "brand": "ERTH"
+    },
+    {
+      "name": "Down Collar",
+      "type": "Collar",
+      "rate_per_item": "0.000",
+      "image_url": "COL_DOWN_COLLAR",
+      "code": "COL_DOWN_COLLAR",
+      "component": "collar_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Japanese",
+      "type": "Collar",
+      "rate_per_item": "0.000",
+      "image_url": "COL_JAPANESE",
+      "code": "COL_JAPANESE",
+      "component": "collar_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Qallabi",
+      "type": "Collar",
+      "rate_per_item": "3.000",
+      "image_url": "COL_QALLABI",
+      "code": "COL_QALLABI",
+      "component": "collar_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Aravi Zarrar",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_ARAVI_ZARRAR",
+      "code": "COL_ARAVI_ZARRAR",
+      "component": "collar_button",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Small Tabbagi",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_SMALL_TABBAGI",
+      "code": "COL_SMALL_TABBAGI",
+      "component": "collar_accessory",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Tabbagi",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_TABBAGI",
+      "code": "COL_TABBAGI",
+      "component": "collar_button",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Zarrar + Tabbagi",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_ZARRAR__TABBAGI",
+      "code": "COL_ZARRAR__TABBAGI",
+      "component": "collar_button",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Strait Collar",
+      "type": "collar_type",
+      "rate_per_item": "0.000",
+      "image_url": "COL_STRAIT_COLLAR",
+      "code": "COL_STRAIT_COLLAR",
+      "component": "collar_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Double Gumsha",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_DOUBLE_GUMSHA",
+      "code": "CUF_DOUBLE_GUMSHA",
+      "component": "cuffs_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Mudawar Kabbak",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_MUDAWAR_KABBAK",
+      "code": "CUF_MUDAWAR_KABBAK",
+      "component": "cuffs_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Murabba Kabak",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_MURABBA_KABAK",
+      "code": "CUF_MURABBA_KABAK",
+      "component": "cuffs_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Musallas Kabbak",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_MUSALLAS_KABBAK",
+      "code": "CUF_MUSALLAS_KABBAK",
+      "component": "cuffs_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Cuffs - Double Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_DOUBLE",
+      "component": "cuffs_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Cuffs - No Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_NO_HASHWA",
+      "component": "cuffs_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Cuffs - Single Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_SINGLE",
+      "component": "cuffs_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Cuffs - Triple Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_TRIPLE",
+      "component": "cuffs_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Mudawwar Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MUDAWWAR_FRONT_POCKET",
+      "code": "FRO_MUDAWWAR_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Mudawwar Magfi Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MUDAWWAR_MAGFI_FRONT_POCKET",
+      "code": "FRO_MUDAWWAR_MAGFI_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Murabba Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MURABBA_FRONT_POCKET",
+      "code": "FRO_MURABBA_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Musallas Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MUSALLAS_FRONT_POCKET",
+      "code": "FRO_MUSALLAS_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Bain Murabba",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_BAIN_MURABBA",
+      "code": "JAB_BAIN_MURABBA",
+      "component": "jabzour_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Bain Musallas",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_BAIN_MUSALLAS",
+      "code": "JAB_BAIN_MUSALLAS",
+      "component": "jabzour_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Magfi Murabba",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_MAGFI_MURABBA",
+      "code": "JAB_MAGFI_MURABBA",
+      "component": "jabzour_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Magfi Musallas",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_MAGFI_MUSALLAS",
+      "code": "JAB_MAGFI_MUSALLAS",
+      "component": "jabzour_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Shaab",
+      "type": "Jabzour",
+      "rate_per_item": "1.000",
+      "image_url": "JAB_SHAAB",
+      "code": "JAB_SHAAB",
+      "component": "jabzour_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Jabzour - Double Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "1.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_DOUBLE",
+      "component": "jabzour_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Jabzour - No Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_NO_HASHWA",
+      "component": "jabzour_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Jabzour - Single Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "1.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_SINGLE",
+      "component": "jabzour_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Jabzour - Triple Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "1.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_TRIPLE",
+      "component": "jabzour_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Line 2",
+      "type": "lines",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "STY_LINE_2",
+      "component": "lines",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Pocket - Double Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_DOUBLE",
+      "component": "pocket_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Pocket - No Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_NO_HASHWA",
+      "component": "pocket_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Pocket - Single Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_SINGLE",
+      "component": "pocket_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Pocket - Triple Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_TRIPLE",
+      "component": "pocket_thickness",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Mudawwar Side Pocket",
+      "type": "Side Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "SID_MUDAWWAR_SIDE_POCKET",
+      "code": "SID_MUDAWWAR_SIDE_POCKET",
+      "component": "side_pocket_type",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Musallas Side Pocket",
+      "type": "Side Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "SID_MUSALLAS_SIDE_POCKET",
+      "code": null,
+      "component": null,
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Designer",
+      "type": "Style",
+      "rate_per_item": "6.000",
+      "image_url": "STY_DESIGNER",
+      "code": "STY_DESIGNER",
+      "component": "base",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Kuwaiti",
+      "type": "Style",
+      "rate_per_item": "0.000",
+      "image_url": "STY_KUWAITI",
+      "code": "STY_KUWAITI",
+      "component": "base",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Line",
+      "type": "Style",
+      "rate_per_item": "0.000",
+      "image_url": "STY_LINE",
+      "code": "STY_LINE",
+      "component": "lines",
+      "brand": "SAKKBA"
+    },
+    {
+      "name": "Down Collar",
+      "type": "Collar",
+      "rate_per_item": "0.000",
+      "image_url": "COL_DOWN_COLLAR",
+      "code": "COL_DOWN_COLLAR",
+      "component": "collar_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Japanese",
+      "type": "Collar",
+      "rate_per_item": "0.000",
+      "image_url": "COL_JAPANESE",
+      "code": "COL_JAPANESE",
+      "component": "collar_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Qallabi",
+      "type": "Collar",
+      "rate_per_item": "3.000",
+      "image_url": "COL_QALLABI",
+      "code": "COL_QALLABI",
+      "component": "collar_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Aravi Zarrar",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_ARAVI_ZARRAR",
+      "code": "COL_ARAVI_ZARRAR",
+      "component": "collar_button",
+      "brand": "QASS"
+    },
+    {
+      "name": "Small Tabbagi",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_SMALL_TABBAGI",
+      "code": "COL_SMALL_TABBAGI",
+      "component": "collar_accessory",
+      "brand": "QASS"
+    },
+    {
+      "name": "Tabbagi",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_TABBAGI",
+      "code": "COL_TABBAGI",
+      "component": "collar_button",
+      "brand": "QASS"
+    },
+    {
+      "name": "Zarrar + Tabbagi",
+      "type": "Collar Button",
+      "rate_per_item": "0.000",
+      "image_url": "COL_ZARRAR__TABBAGI",
+      "code": "COL_ZARRAR__TABBAGI",
+      "component": "collar_button",
+      "brand": "QASS"
+    },
+    {
+      "name": "Strait Collar",
+      "type": "collar_type",
+      "rate_per_item": "0.000",
+      "image_url": "COL_STRAIT_COLLAR",
+      "code": "COL_STRAIT_COLLAR",
+      "component": "collar_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Double Gumsha",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_DOUBLE_GUMSHA",
+      "code": "CUF_DOUBLE_GUMSHA",
+      "component": "cuffs_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Mudawar Kabbak",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_MUDAWAR_KABBAK",
+      "code": "CUF_MUDAWAR_KABBAK",
+      "component": "cuffs_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Murabba Kabak",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_MURABBA_KABAK",
+      "code": "CUF_MURABBA_KABAK",
+      "component": "cuffs_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Musallas Kabbak",
+      "type": "Cuff",
+      "rate_per_item": "3.000",
+      "image_url": "CUF_MUSALLAS_KABBAK",
+      "code": "CUF_MUSALLAS_KABBAK",
+      "component": "cuffs_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Cuffs - Double Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_DOUBLE",
+      "component": "cuffs_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Cuffs - No Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_NO_HASHWA",
+      "component": "cuffs_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Cuffs - Single Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_SINGLE",
+      "component": "cuffs_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Cuffs - Triple Hashwa",
+      "type": "cuffs_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "CUF_THICKNESS_TRIPLE",
+      "component": "cuffs_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Mudawwar Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MUDAWWAR_FRONT_POCKET",
+      "code": "FRO_MUDAWWAR_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Mudawwar Magfi Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MUDAWWAR_MAGFI_FRONT_POCKET",
+      "code": "FRO_MUDAWWAR_MAGFI_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Murabba Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MURABBA_FRONT_POCKET",
+      "code": "FRO_MURABBA_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Musallas Front Pocket",
+      "type": "Front Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "FRO_MUSALLAS_FRONT_POCKET",
+      "code": "FRO_MUSALLAS_FRONT_POCKET",
+      "component": "pocket_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Bain Murabba",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_BAIN_MURABBA",
+      "code": "JAB_BAIN_MURABBA",
+      "component": "jabzour_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Bain Musallas",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_BAIN_MUSALLAS",
+      "code": "JAB_BAIN_MUSALLAS",
+      "component": "jabzour_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Magfi Murabba",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_MAGFI_MURABBA",
+      "code": "JAB_MAGFI_MURABBA",
+      "component": "jabzour_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Magfi Musallas",
+      "type": "Jabzour",
+      "rate_per_item": "0.000",
+      "image_url": "JAB_MAGFI_MUSALLAS",
+      "code": "JAB_MAGFI_MUSALLAS",
+      "component": "jabzour_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Shaab",
+      "type": "Jabzour",
+      "rate_per_item": "1.000",
+      "image_url": "JAB_SHAAB",
+      "code": "JAB_SHAAB",
+      "component": "jabzour_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Jabzour - Double Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "1.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_DOUBLE",
+      "component": "jabzour_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Jabzour - No Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_NO_HASHWA",
+      "component": "jabzour_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Jabzour - Single Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "1.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_SINGLE",
+      "component": "jabzour_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Jabzour - Triple Hashwa",
+      "type": "jabzour_thickness",
+      "rate_per_item": "1.000",
+      "image_url": null,
+      "code": "JAB_THICKNESS_TRIPLE",
+      "component": "jabzour_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Line 2",
+      "type": "lines",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "STY_LINE_2",
+      "component": "lines",
+      "brand": "QASS"
+    },
+    {
+      "name": "Pocket - Double Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_DOUBLE",
+      "component": "pocket_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Pocket - No Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_NO_HASHWA",
+      "component": "pocket_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Pocket - Single Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_SINGLE",
+      "component": "pocket_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Pocket - Triple Hashwa",
+      "type": "pocket_thickness",
+      "rate_per_item": "0.000",
+      "image_url": null,
+      "code": "FRO_THICKNESS_TRIPLE",
+      "component": "pocket_thickness",
+      "brand": "QASS"
+    },
+    {
+      "name": "Mudawwar Side Pocket",
+      "type": "Side Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "SID_MUDAWWAR_SIDE_POCKET",
+      "code": "SID_MUDAWWAR_SIDE_POCKET",
+      "component": "side_pocket_type",
+      "brand": "QASS"
+    },
+    {
+      "name": "Musallas Side Pocket",
+      "type": "Side Pocket",
+      "rate_per_item": "0.000",
+      "image_url": "SID_MUSALLAS_SIDE_POCKET",
+      "code": null,
+      "component": null,
+      "brand": "QASS"
+    },
+    {
+      "name": "Designer",
+      "type": "Style",
+      "rate_per_item": "6.000",
+      "image_url": "STY_DESIGNER",
+      "code": "STY_DESIGNER",
+      "component": "base",
+      "brand": "QASS"
+    },
+    {
+      "name": "Kuwaiti",
+      "type": "Style",
+      "rate_per_item": "0.000",
+      "image_url": "STY_KUWAITI",
+      "code": "STY_KUWAITI",
+      "component": "base",
+      "brand": "QASS"
+    },
+    {
+      "name": "Line",
+      "type": "Style",
+      "rate_per_item": "0.000",
+      "image_url": "STY_LINE",
+      "code": "STY_LINE",
+      "component": "lines",
+      "brand": "QASS"
+    }
+  ],
+  "rules": [
+    {
+      "brand": "ERTH",
+      "style_code": "COL_QALLABI",
+      "rule_type": "flat_override",
+      "flat_rate": "3.000",
+      "priority": 0,
+      "active": true,
+      "description": "Qallabi collar: flat rate, overrides all style options"
+    },
+    {
+      "brand": "ERTH",
+      "style_code": "STY_DESIGNER",
+      "rule_type": "flat_override",
+      "flat_rate": "6.000",
+      "priority": 0,
+      "active": true,
+      "description": "Designer style: flat rate, overrides all style options"
+    },
+    {
+      "brand": "SAKKBA",
+      "style_code": "COL_QALLABI",
+      "rule_type": "flat_override",
+      "flat_rate": "3.000",
+      "priority": 0,
+      "active": true,
+      "description": "Qallabi collar: flat rate, overrides all style options"
+    },
+    {
+      "brand": "SAKKBA",
+      "style_code": "STY_DESIGNER",
+      "rule_type": "flat_override",
+      "flat_rate": "6.000",
+      "priority": 0,
+      "active": true,
+      "description": "Designer style: flat rate, overrides all style options"
+    },
+    {
+      "brand": "QASS",
+      "style_code": "COL_QALLABI",
+      "rule_type": "flat_override",
+      "flat_rate": "3.000",
+      "priority": 0,
+      "active": true,
+      "description": "Qallabi collar: flat rate, overrides all style options"
+    },
+    {
+      "brand": "QASS",
+      "style_code": "STY_DESIGNER",
+      "rule_type": "flat_override",
+      "flat_rate": "6.000",
+      "priority": 0,
+      "active": true,
+      "description": "Designer style: flat rate, overrides all style options"
+    }
+  ]
+}

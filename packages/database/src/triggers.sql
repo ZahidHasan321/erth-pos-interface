@@ -15,7 +15,9 @@ BEGIN
   LOOP
     BEGIN
       EXECUTE format('CREATE CAST (text AS %I) WITH INOUT AS IMPLICIT', enum_name);
-    EXCEPTION WHEN duplicate_object THEN NULL;
+    -- duplicate_object: cast already exists. undefined_object: the enum was
+    -- retired (e.g. accessory_category -> text in 0011) so no cast is needed.
+    EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL;
     END;
   END LOOP;
 END $$;
@@ -2616,6 +2618,44 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- 15b. RPC: find every account that already uses a phone number, matched on the
+-- normalized national number (exact equality, so formatting / spaces / leading
+-- zero / country-code differences still match). Powers the demographics form's
+-- duplicate-phone hard block (SPEC §5): entering a number already on file forces
+-- the staff to link as a family member or fix the number. For each match we also
+-- resolve the Primary it belongs to (itself if it is a Primary, else its
+-- primary_customer_id) and that primary's name, so the form can offer
+-- "link as family member of X". Primary matches are returned first.
+CREATE OR REPLACE FUNCTION find_accounts_by_phone(p_phone TEXT)
+RETURNS JSONB AS $$
+DECLARE
+  v_nat TEXT := normalize_phone(p_phone);
+  v_result JSONB;
+BEGIN
+  IF v_nat = '' THEN
+    RETURN '[]'::jsonb;
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(row_to_json(sub.*)), '[]'::jsonb) INTO v_result
+  FROM (
+    SELECT c.id,
+           c.name,
+           c.phone,
+           c.account_type,
+           c.primary_customer_id,
+           (CASE WHEN c.account_type = 'Primary' THEN c.id ELSE c.primary_customer_id END) AS resolved_primary_id,
+           p.name AS resolved_primary_name
+    FROM customers c
+    LEFT JOIN customers p
+      ON p.id = (CASE WHEN c.account_type = 'Primary' THEN c.id ELSE c.primary_customer_id END)
+    WHERE normalize_phone(c.phone) = v_nat
+    ORDER BY (c.account_type = 'Primary') DESC, c.id ASC
+  ) sub;
+
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
 -- 16. RPC: Paginated customer search with fuzzy matching
 -- Used by the customers list page. Returns page of results + total count.
 CREATE OR REPLACE FUNCTION search_customers_paginated(
@@ -3009,6 +3049,14 @@ RETURNS BOOLEAN AS $$
   SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role IN ('super_admin', 'admin'));
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
+-- The unconditional super-user of the app. Powers the blanket super-admin
+-- access policies (end of file) so a super_admin is never locked out of any
+-- RLS table, present or future.
+CREATE OR REPLACE FUNCTION is_super_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role = 'super_admin');
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
+
 -- Check if current user is admin or manager
 CREATE OR REPLACE FUNCTION is_manager_or_above()
 RETURNS BOOLEAN AS $$
@@ -3166,6 +3214,19 @@ CREATE POLICY "prices_modify" ON prices FOR ALL USING (
   is_admin() OR (get_my_role() = 'manager' AND get_my_department() = 'workshop')
 );
 
+-- ── Style pricing rules (flat-override / additive config) ───────────
+ALTER TABLE style_pricing_rules ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "style_pricing_rules_select" ON style_pricing_rules;
+CREATE POLICY "style_pricing_rules_select" ON style_pricing_rules FOR SELECT USING (
+  is_active_user() AND can_access_brand(brand::text)
+);
+
+DROP POLICY IF EXISTS "style_pricing_rules_modify" ON style_pricing_rules;
+CREATE POLICY "style_pricing_rules_modify" ON style_pricing_rules FOR ALL USING (
+  is_admin() OR (get_my_role() = 'manager' AND get_my_department() = 'workshop')
+);
+
 -- ── Lookups (campaigns, styles, fabrics, shelf) ─────────────────────
 ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE styles ENABLE ROW LEVEL SECURITY;
@@ -3222,6 +3283,21 @@ CREATE POLICY "orders_insert" ON orders FOR INSERT WITH CHECK (
 DROP POLICY IF EXISTS "orders_update" ON orders;
 CREATE POLICY "orders_update" ON orders FOR UPDATE USING (
   (is_manager_or_above() OR get_my_department() IN ('shop','workshop')) AND can_access_brand(brand::text)
+);
+
+-- ── Alteration Orders (ALTERATION extension of an orders row) ───────
+-- Inserted directly by the shop (api/alteration-orders.ts) and updated by
+-- dispatch_order (SECURITY INVOKER) when the alteration is dispatched, so the
+-- modify policy must admit both. No own brand column; the parent orders row
+-- already enforces brand on its own writes.
+ALTER TABLE alteration_orders ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "alteration_orders_select" ON alteration_orders;
+CREATE POLICY "alteration_orders_select" ON alteration_orders FOR SELECT USING (is_active_user());
+
+DROP POLICY IF EXISTS "alteration_orders_modify" ON alteration_orders;
+CREATE POLICY "alteration_orders_modify" ON alteration_orders FOR ALL USING (
+  is_manager_or_above() OR get_my_department() IN ('shop','workshop')
 );
 
 -- ── Work Orders ─────────────────────────────────────────────────────
@@ -3313,6 +3389,17 @@ CREATE POLICY "resources_select" ON resources FOR SELECT USING (
 
 DROP POLICY IF EXISTS "resources_modify" ON resources;
 CREATE POLICY "resources_modify" ON resources FOR ALL USING (
+  is_admin() OR (get_my_role() = 'manager' AND get_my_department() = 'workshop')
+);
+
+-- ── Units (workshop production teams; managed alongside resources) ──
+ALTER TABLE units ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "units_select" ON units;
+CREATE POLICY "units_select" ON units FOR SELECT USING (is_active_user());
+
+DROP POLICY IF EXISTS "units_modify" ON units;
+CREATE POLICY "units_modify" ON units FOR ALL USING (
   is_admin() OR (get_my_role() = 'manager' AND get_my_department() = 'workshop')
 );
 
@@ -3431,6 +3518,48 @@ CREATE POLICY "register_close_events_insert" ON register_close_events FOR INSERT
     SELECT 1 FROM register_sessions s
     WHERE s.id = register_close_events.register_session_id
       AND can_access_brand(s.brand::text)
+  )
+);
+
+-- ── Stock Purchases (non-customer expense payables) ─────────────────
+-- Brand-scoped. Writes go through restock_item (create) and pay_stock_purchase
+-- (settle), both SECURITY INVOKER, so these policies are the load-bearing check.
+ALTER TABLE stock_purchases ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "stock_purchases_select" ON stock_purchases;
+CREATE POLICY "stock_purchases_select" ON stock_purchases FOR SELECT USING (
+  is_active_user() AND can_access_brand(brand::text)
+);
+
+DROP POLICY IF EXISTS "stock_purchases_insert" ON stock_purchases;
+CREATE POLICY "stock_purchases_insert" ON stock_purchases FOR INSERT WITH CHECK (
+  (is_manager_or_above() OR get_my_department() = 'shop') AND can_access_brand(brand::text)
+);
+
+-- Updates come only from the sync trigger (amount_paid/status). Restrict direct
+-- updates to shop/managers of the brand as a second line of defense.
+DROP POLICY IF EXISTS "stock_purchases_update" ON stock_purchases;
+CREATE POLICY "stock_purchases_update" ON stock_purchases FOR UPDATE USING (
+  (is_manager_or_above() OR get_my_department() = 'shop') AND can_access_brand(brand::text)
+);
+
+-- ── Stock Purchase Payments (settlement ledger) ─────────────────────
+ALTER TABLE stock_purchase_payments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "stock_purchase_payments_select" ON stock_purchase_payments;
+CREATE POLICY "stock_purchase_payments_select" ON stock_purchase_payments FOR SELECT USING (
+  is_active_user() AND EXISTS (
+    SELECT 1 FROM stock_purchases sp
+    WHERE sp.id = stock_purchase_payments.purchase_id AND can_access_brand(sp.brand::text)
+  )
+);
+
+DROP POLICY IF EXISTS "stock_purchase_payments_insert" ON stock_purchase_payments;
+CREATE POLICY "stock_purchase_payments_insert" ON stock_purchase_payments FOR INSERT WITH CHECK (
+  (is_manager_or_above() OR get_my_department() = 'shop')
+  AND EXISTS (
+    SELECT 1 FROM stock_purchases sp
+    WHERE sp.id = stock_purchase_payments.purchase_id AND can_access_brand(sp.brand::text)
   )
 );
 
@@ -6118,6 +6247,30 @@ DROP POLICY IF EXISTS "accessories_update" ON accessories;
 CREATE POLICY "accessories_update" ON accessories
     FOR UPDATE USING (is_manager_or_above());
 
+-- ── Suppliers (shared inventory reference; created/edited from the store
+--    surfaces and inline during restock by inventory staff in both apps) ──
+ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "suppliers_select" ON suppliers;
+CREATE POLICY "suppliers_select" ON suppliers FOR SELECT USING (is_active_user());
+
+DROP POLICY IF EXISTS "suppliers_modify" ON suppliers;
+CREATE POLICY "suppliers_modify" ON suppliers FOR ALL USING (is_active_user());
+
+-- ── Stock movements (append-only ledger). Written only by the stamping
+--    inventory RPCs (restock_item / adjust_stock / record_waste /
+--    consume_for_order / transfers), which run SECURITY INVOKER, and read
+--    directly by history/report screens. Append-only: no update/delete. ──
+ALTER TABLE stock_movements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "stock_movements_select" ON stock_movements;
+CREATE POLICY "stock_movements_select" ON stock_movements FOR SELECT USING (
+  is_active_user() AND (brand IS NULL OR can_access_brand(brand::text))
+);
+
+DROP POLICY IF EXISTS "stock_movements_insert" ON stock_movements;
+CREATE POLICY "stock_movements_insert" ON stock_movements FOR INSERT WITH CHECK (is_active_user());
+
 -- ── Update delivery charge ────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION update_delivery_charge(
   p_order_id INT,
@@ -6356,6 +6509,13 @@ CREATE OR REPLACE FUNCTION restock_item(
 RETURNS JSONB AS $$
 DECLARE
   v_new_qty NUMERIC;
+  v_old_qty NUMERIC;
+  v_old_avg NUMERIC;
+  v_new_avg NUMERIC;
+  v_is_purchase BOOLEAN;
+  v_movement_id INT;
+  v_total_cost NUMERIC;
+  v_purchase_id INT;
   v_result JSONB;
 BEGIN
   -- Idempotency: a lost-response replay must not add stock twice.
@@ -6373,6 +6533,16 @@ BEGIN
     RAISE EXCEPTION 'Fabric and shelf stock lives only at the shop — % cannot be restocked at the workshop (SPEC §4)', p_item_type;
   END IF;
 
+  -- A shop fabric/shelf restock is a PURCHASE: it spends money, so it carries a
+  -- required unit cost, maintains the item's weighted-average cost, and creates
+  -- an unpaid payable for the cashier (SPEC §3 cashier / §4 cost basis).
+  -- Accessories are out of scope (workshop-owned, no cashier) — they keep the
+  -- old optional-cost, no-payable behaviour.
+  v_is_purchase := (p_item_type IN ('fabric', 'shelf') AND p_location = 'shop');
+  IF v_is_purchase AND p_unit_cost IS NULL THEN
+    RAISE EXCEPTION 'Unit cost is required when restocking shop % — it creates a cashier payable (SPEC §3/§4)', p_item_type;
+  END IF;
+
   PERFORM set_config('app.movement_type', 'restock', true);
   -- No restock/PO entity to reference: leave ref_type/ref_id empty so the
   -- ledger doesn't carry an orphan ref_type with a NULL ref_id. Attribution
@@ -6388,7 +6558,16 @@ BEGIN
 
   IF p_item_type = 'fabric' THEN
     IF p_location = 'shop' THEN
-      UPDATE fabrics SET shop_stock = COALESCE(shop_stock, 0) + p_qty
+      -- WAC: read prior qty+cost under lock, then blend in this delivery.
+      -- new_avg = (old_qty·old_avg + qty·unit_cost) / (old_qty + qty); seeds to
+      -- unit_cost when there's no prior costed stock (old_avg NULL or old_qty<=0).
+      SELECT COALESCE(shop_stock, 0), avg_cost INTO v_old_qty, v_old_avg
+        FROM fabrics WHERE id = p_item_id FOR UPDATE;
+      v_new_avg := CASE
+        WHEN v_old_qty <= 0 OR v_old_avg IS NULL THEN p_unit_cost
+        ELSE (v_old_qty * v_old_avg + p_qty * p_unit_cost) / (v_old_qty + p_qty)
+      END;
+      UPDATE fabrics SET shop_stock = COALESCE(shop_stock, 0) + p_qty, avg_cost = v_new_avg
         WHERE id = p_item_id RETURNING shop_stock INTO v_new_qty;
     ELSE
       UPDATE fabrics SET workshop_stock = COALESCE(workshop_stock, 0) + p_qty
@@ -6396,7 +6575,13 @@ BEGIN
     END IF;
   ELSIF p_item_type = 'shelf' THEN
     IF p_location = 'shop' THEN
-      UPDATE shelf SET shop_stock = COALESCE(shop_stock, 0) + p_qty::int
+      SELECT COALESCE(shop_stock, 0), avg_cost INTO v_old_qty, v_old_avg
+        FROM shelf WHERE id = p_item_id FOR UPDATE;
+      v_new_avg := CASE
+        WHEN v_old_qty <= 0 OR v_old_avg IS NULL THEN p_unit_cost
+        ELSE (v_old_qty * v_old_avg + p_qty * p_unit_cost) / (v_old_qty + p_qty)
+      END;
+      UPDATE shelf SET shop_stock = COALESCE(shop_stock, 0) + p_qty::int, avg_cost = v_new_avg
         WHERE id = p_item_id RETURNING shop_stock INTO v_new_qty;
     ELSE
       UPDATE shelf SET workshop_stock = COALESCE(workshop_stock, 0) + p_qty::int
@@ -6419,8 +6604,269 @@ BEGIN
   -- Don't let the invoice photo leak onto a later movement in this transaction.
   PERFORM set_config('app.movement_image_url', '', true);
 
-  v_result := jsonb_build_object('success', true, 'new_stock', v_new_qty);
+  -- Create the unpaid payable for the cashier (SPEC §3). Linked to the restock
+  -- movement just logged by the stock-change trigger: within this read-committed
+  -- transaction only our own just-inserted row is visible, so the latest matching
+  -- restock row is reliably ours. total_cost is frozen here (qty × unit_cost).
+  IF v_is_purchase THEN
+    SELECT id INTO v_movement_id
+      FROM stock_movements
+      WHERE item_type = p_item_type AND item_id = p_item_id
+        AND location = p_location AND movement_type = 'restock'
+      ORDER BY id DESC LIMIT 1;
+
+    v_total_cost := ROUND(p_qty * p_unit_cost, 3);
+
+    INSERT INTO stock_purchases (
+      item_type, item_id, location, brand, qty, unit_cost, total_cost,
+      supplier_id, invoice_image_url, stock_movement_id, notes, created_by,
+      idempotency_key
+    ) VALUES (
+      p_item_type, p_item_id, p_location, 'ERTH', p_qty, p_unit_cost, v_total_cost,
+      p_supplier_id, p_image_url, v_movement_id, p_notes, p_user_id,
+      p_idempotency_key
+    ) RETURNING id INTO v_purchase_id;
+  END IF;
+
+  v_result := jsonb_build_object(
+    'success', true,
+    'new_stock', v_new_qty,
+    'avg_cost', v_new_avg,
+    'purchase_id', v_purchase_id,
+    'total_cost', v_total_cost
+  );
   PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- STOCK-PURCHASE PAYABLES (SPEC §3 cashier "Stock-purchase settlement")
+-- A costed shop fabric/shelf restock creates an unpaid stock_purchases row
+-- (above, in restock_item). The cashier settles it from the Purchases queue:
+-- each settlement is a stock_purchase_payments row, summed back into the
+-- payable by the trigger below (mirrors orders.paid). A CASH settlement also
+-- posts a register_cash_movements cash_out so it reconciles at EOD.
+-- ═══════════════════════════════════════════════════════════════════════
+
+-- Roll the payment ledger up into the payable. status/amount_paid are owned
+-- here and never written directly — exactly like sync_order_paid_from_transactions.
+CREATE OR REPLACE FUNCTION sync_stock_purchase_paid()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_purchase_id INT;
+  v_paid NUMERIC;
+  v_total NUMERIC;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_purchase_id := OLD.purchase_id;
+  ELSE
+    v_purchase_id := NEW.purchase_id;
+  END IF;
+
+  SELECT COALESCE(SUM(amount), 0) INTO v_paid
+  FROM stock_purchase_payments WHERE purchase_id = v_purchase_id;
+
+  SELECT total_cost INTO v_total FROM stock_purchases WHERE id = v_purchase_id;
+
+  UPDATE stock_purchases SET
+    amount_paid = v_paid,
+    status = CASE
+      WHEN v_paid <= 0 THEN 'unpaid'::stock_purchase_status
+      WHEN v_paid >= v_total THEN 'paid'::stock_purchase_status
+      ELSE 'partially_paid'::stock_purchase_status
+    END
+  WHERE id = v_purchase_id;
+
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS stock_purchase_payments_sync_trigger ON stock_purchase_payments;
+CREATE TRIGGER stock_purchase_payments_sync_trigger
+AFTER INSERT OR UPDATE OR DELETE ON stock_purchase_payments
+FOR EACH ROW
+EXECUTE FUNCTION sync_stock_purchase_paid();
+
+-- RPC: settle (fully or partially) a stock purchase.
+-- Cash settlements require an open register and post a cash_out drawer movement
+-- (so EOD reconciliation sees the payout); non-cash settlements (knet/link/bank)
+-- just record the payment. Idempotent; no overpayment past the remaining balance.
+DROP FUNCTION IF EXISTS pay_stock_purchase(INT, NUMERIC, TEXT, INT, TEXT, TEXT, UUID, UUID);
+CREATE OR REPLACE FUNCTION pay_stock_purchase(
+  p_purchase_id INT,
+  p_amount NUMERIC,
+  p_payment_type TEXT,
+  p_register_session_id INT DEFAULT NULL,
+  p_payment_ref_no TEXT DEFAULT NULL,
+  p_note TEXT DEFAULT NULL,
+  p_user_id UUID DEFAULT NULL,
+  p_idempotency_key UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_purchase RECORD;
+  v_remaining NUMERIC;
+  v_session RECORD;
+  v_drawer_balance NUMERIC;
+  v_cash_payments NUMERIC;
+  v_cash_refunds NUMERIC;
+  v_cash_in NUMERIC;
+  v_cash_out NUMERIC;
+  v_cash_movement_id INT;
+  v_result JSONB;
+BEGIN
+  -- Idempotency: a lost-response replay must not record a duplicate settlement.
+  IF NOT idem_claim(p_idempotency_key, 'pay_stock_purchase') THEN
+    RETURN idem_replay(p_idempotency_key);
+  END IF;
+
+  PERFORM assert_active_user();
+
+  IF p_amount IS NULL OR p_amount <= 0 THEN
+    RAISE EXCEPTION 'Payment amount must be positive (got %)', p_amount;
+  END IF;
+
+  -- Lock the payable so two concurrent settlements can't both pass the
+  -- remaining-balance check and overpay.
+  SELECT * INTO v_purchase FROM stock_purchases WHERE id = p_purchase_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Stock purchase % not found', p_purchase_id;
+  END IF;
+
+  IF NOT can_access_brand(v_purchase.brand::text) THEN
+    RAISE EXCEPTION 'You do not have access to this purchase';
+  END IF;
+
+  v_remaining := v_purchase.total_cost - v_purchase.amount_paid;
+  IF p_amount > v_remaining THEN
+    RAISE EXCEPTION 'Payment (%) exceeds the remaining balance (%) on purchase %', p_amount, v_remaining, p_purchase_id;
+  END IF;
+
+  -- Cash leaves the drawer → must go through an open register and reconcile at EOD.
+  IF p_payment_type = 'cash' THEN
+    IF p_register_session_id IS NULL THEN
+      RAISE EXCEPTION 'A cash purchase payment requires an open register session';
+    END IF;
+
+    SELECT * INTO v_session FROM register_sessions
+      WHERE id = p_register_session_id AND status = 'open'
+      FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Register session not found or not open';
+    END IF;
+    IF NOT can_access_brand(v_session.brand::text) THEN
+      RAISE EXCEPTION 'You do not have access to this register session';
+    END IF;
+
+    -- Drawer sufficiency (same identity as add_cash_movement's cash_out check).
+    SELECT
+      COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'payment'), 0),
+      COALESCE(SUM(ABS(amount)) FILTER (WHERE transaction_type = 'refund'), 0)
+    INTO v_cash_payments, v_cash_refunds
+    FROM payment_transactions
+    WHERE register_session_id = p_register_session_id AND payment_type = 'cash';
+
+    SELECT
+      COALESCE(SUM(amount) FILTER (WHERE type = 'cash_in'), 0),
+      COALESCE(SUM(amount) FILTER (WHERE type = 'cash_out'), 0)
+    INTO v_cash_in, v_cash_out
+    FROM register_cash_movements
+    WHERE register_session_id = p_register_session_id;
+
+    v_drawer_balance := v_session.opening_float + v_cash_payments - v_cash_refunds + v_cash_in - v_cash_out;
+    IF p_amount > v_drawer_balance THEN
+      RAISE EXCEPTION 'Cash purchase payment (%) exceeds drawer balance (%)', p_amount, v_drawer_balance;
+    END IF;
+
+    -- petty_cash = out-of-drawer business expense (no dedicated enum value; the
+    -- reason text + the linked stock_purchase_payments row carry the detail).
+    INSERT INTO register_cash_movements (register_session_id, type, reason_category, amount, reason, performed_by)
+    VALUES (
+      p_register_session_id, 'cash_out', 'petty_cash', p_amount,
+      'Stock purchase #' || p_purchase_id || COALESCE(': ' || p_note, ''),
+      p_user_id
+    ) RETURNING id INTO v_cash_movement_id;
+  END IF;
+
+  INSERT INTO stock_purchase_payments (
+    purchase_id, amount, payment_type, register_session_id,
+    register_cash_movement_id, payment_ref_no, note, paid_by, idempotency_key
+  ) VALUES (
+    p_purchase_id, p_amount, p_payment_type::purchase_payment_type, p_register_session_id,
+    v_cash_movement_id, p_payment_ref_no, p_note, p_user_id, p_idempotency_key
+  );
+  -- The sync trigger has now updated amount_paid/status.
+
+  SELECT amount_paid, total_cost, status INTO v_purchase.amount_paid, v_purchase.total_cost, v_purchase.status
+  FROM stock_purchases WHERE id = p_purchase_id;
+
+  v_result := jsonb_build_object(
+    'purchase_id', p_purchase_id,
+    'amount_paid', v_purchase.amount_paid,
+    'total_cost', v_purchase.total_cost,
+    'status', v_purchase.status,
+    'cash_movement_id', v_cash_movement_id
+  );
+  PERFORM idem_store(p_idempotency_key, v_result);
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC: list stock purchases for the cashier queue / history. p_filter:
+-- 'open' (unpaid + partially_paid, the settlement queue), 'paid', or 'all'.
+-- Resolves each item's display name from its source table.
+DROP FUNCTION IF EXISTS get_stock_purchases(TEXT, TEXT, INT);
+CREATE OR REPLACE FUNCTION get_stock_purchases(
+  p_brand TEXT DEFAULT NULL,
+  p_filter TEXT DEFAULT 'open',
+  p_limit INT DEFAULT 200
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_result JSONB;
+BEGIN
+  PERFORM assert_active_user();
+
+  SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb) INTO v_result
+  FROM (
+    SELECT
+      sp.id,
+      sp.item_type,
+      sp.item_id,
+      CASE sp.item_type
+        WHEN 'fabric'    THEN (SELECT name FROM fabrics WHERE id = sp.item_id)
+        WHEN 'shelf'     THEN (SELECT type FROM shelf WHERE id = sp.item_id)
+        WHEN 'accessory' THEN (SELECT name FROM accessories WHERE id = sp.item_id)
+      END AS item_name,
+      sp.brand,
+      sp.qty,
+      sp.unit_cost,
+      sp.total_cost,
+      sp.amount_paid,
+      (sp.total_cost - sp.amount_paid) AS remaining,
+      sp.status,
+      sp.supplier_id,
+      s.name AS supplier_name,
+      sp.invoice_image_url,
+      sp.notes,
+      sp.created_at,
+      cu.name AS created_by_name
+    FROM stock_purchases sp
+    LEFT JOIN suppliers s ON s.id = sp.supplier_id
+    LEFT JOIN users cu ON cu.id = sp.created_by
+    WHERE can_access_brand(sp.brand::text)
+      AND (p_brand IS NULL OR sp.brand = p_brand::brand)
+      AND (
+        (p_filter = 'open' AND sp.status IN ('unpaid', 'partially_paid'))
+        OR (p_filter = 'paid' AND sp.status = 'paid')
+        OR (p_filter = 'all')
+      )
+    ORDER BY sp.created_at DESC
+    LIMIT p_limit
+  ) t;
+
   RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
@@ -7882,3 +8328,32 @@ RETURNS JSONB AS $$
     GROUP BY brand
   ) t;
 $$ LANGUAGE sql STABLE;
+
+-- ════════════════════════════════════════════════════════════════════
+-- Super-admin blanket access (defense in depth — keep at end of file)
+-- ════════════════════════════════════════════════════════════════════
+-- A super_admin must be able to read and write every RLS-enabled table.
+-- Rather than depend on each policy remembering an is_admin() escape, attach
+-- one blanket PERMISSIVE FOR ALL policy per table. Every other policy in this
+-- file is PERMISSIVE, so policies are OR'd: this can only ADD access for a
+-- super_admin and never restricts anyone else (is_super_admin() is false for
+-- all other users). The loop covers whatever tables have RLS enabled at this
+-- point, so it must run last; re-running db:triggers re-covers tables added
+-- later.
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT c.relname
+    FROM pg_class c
+    WHERE c.relnamespace = 'public'::regnamespace
+      AND c.relkind = 'r'
+      AND c.relrowsecurity
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', r.relname || '_super_admin_all', r.relname);
+    EXECUTE format(
+      'CREATE POLICY %I ON public.%I AS PERMISSIVE FOR ALL TO public USING (public.is_super_admin()) WITH CHECK (public.is_super_admin())',
+      r.relname || '_super_admin_all', r.relname
+    );
+  END LOOP;
+END $$;

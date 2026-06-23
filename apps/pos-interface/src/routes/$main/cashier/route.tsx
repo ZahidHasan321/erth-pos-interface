@@ -1,5 +1,5 @@
 import { createFileRoute, redirect, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Inbox, ListOrdered } from "lucide-react";
+import { Inbox, ListOrdered, Receipt } from "lucide-react";
 import { brandUsesCashier } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -18,23 +18,30 @@ export const Route = createFileRoute("/$main/cashier")({
 });
 
 const TABS = [
-    { to: "/$main/cashier", label: "Pending", icon: Inbox, isOrdersTab: false },
-    { to: "/$main/cashier/orders", label: "All Orders", icon: ListOrdered, isOrdersTab: true },
+    { to: "/$main/cashier", label: "Pending", icon: Inbox, section: "pending" as const },
+    { to: "/$main/cashier/orders", label: "All Orders", icon: ListOrdered, section: "orders" as const },
+    { to: "/$main/cashier/purchases", label: "Purchases", icon: Receipt, section: "purchases" as const },
 ] as const;
 
 function CashierShell() {
     const { main } = Route.useParams();
     const pathname = useRouterState({ select: (s) => s.location.pathname });
-    // Order detail (/cashier/<id>) is reached from All Orders, so it counts as
-    // the orders section; Pending owns everything else (incl. /process).
-    const isOrders = pathname.includes("/cashier/orders") || /\/cashier\/\d+/.test(pathname);
+    // Resolve the active section from the path. Order detail (/cashier/<id>) is
+    // reached from All Orders, so it counts as the orders section; Purchases owns
+    // its own path; Pending owns everything else (incl. /process).
+    const activeSection: "pending" | "orders" | "purchases" =
+        pathname.includes("/cashier/purchases")
+            ? "purchases"
+            : pathname.includes("/cashier/orders") || /\/cashier\/\d+/.test(pathname)
+                ? "orders"
+                : "pending";
 
     return (
         <div className="h-full flex flex-col">
             <nav className="flex items-center gap-1 px-4 py-2 border-b bg-card shrink-0">
                 {TABS.map((t) => {
                     const Icon = t.icon;
-                    const isActive = t.isOrdersTab ? isOrders : !isOrders;
+                    const isActive = activeSection === t.section;
                     return (
                         <Link
                             key={t.to}

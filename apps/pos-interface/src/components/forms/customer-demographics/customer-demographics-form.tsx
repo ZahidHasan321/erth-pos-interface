@@ -1,5 +1,5 @@
 import { debounce, cn } from "@/lib/utils";
-import { searchPrimaryAccountByPhone, updateCustomer, createCustomer } from "@/api/customers";
+import { findAccountsByPhone, getCustomerById, updateCustomer, createCustomer, type PhoneAccountMatch } from "@/api/customers";
 import { Button } from "@repo/ui/button";
 import { Combobox } from "@repo/ui/combobox";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
@@ -23,7 +23,7 @@ import {
 } from "@repo/ui/select";
 import { Textarea } from "@repo/ui/textarea";
 import { getSortedCountries } from "@/lib/countries";
-import type { Customer } from "@repo/database";
+import type { Customer, AccountType } from "@repo/database";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import * as React from "react";
@@ -42,7 +42,7 @@ import { IoLogoWhatsapp } from "react-icons/io5";
 
 import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FlagIcon } from "@repo/ui/flag-icon";
-import { Pencil, X, Save, Check, Users, Info, Eye, Copy, MapPin } from "lucide-react";
+import { Pencil, X, Save, Check, Users, Info, Eye, Copy, MapPin, AlertTriangle } from "lucide-react";
 import { SearchCustomer } from "./search-customer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@repo/ui/dialog";
 
@@ -84,6 +84,10 @@ export function CustomerDemographicsForm({
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [isPrimaryDetailsOpen, setIsPrimaryDetailsOpen] = useState(false);
   const [primaryAccount, setPrimaryAccount] = useState<Customer | null>(null);
+  // Duplicate-phone guard (SPEC §5): a phone already on file forces a choice.
+  const [duplicateMatch, setDuplicateMatch] = useState<PhoneAccountMatch | null>(null);
+  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
+  const [isPrimaryPickerOpen, setIsPrimaryPickerOpen] = useState(false);
   const [confirmationDialog, setConfirmationDialog] = useState({
     isOpen: false,
     title: "",
@@ -94,9 +98,9 @@ export function CustomerDemographicsForm({
     [K in keyof CustomerDemographicsSchema]?: string;
   }>({});
 
-  const [AccountType, phone, id] = useWatch({
+  const [AccountType, phone, id, primaryCustomerId] = useWatch({
     control: form.control,
-    name: ["account_type", "phone", "id"],
+    name: ["account_type", "phone", "id", "primary_customer_id"],
   });
   const countries = getSortedCountries();
 
@@ -116,67 +120,138 @@ export function CustomerDemographicsForm({
   }, [id, initialIsEditing]);
 
   const {
-    data: existingUsers,
-    isSuccess,
-    refetch: accountRefetch,
+    data: phoneMatches,
+    refetch: phoneRefetch,
     isFetching,
   } = useQuery({
-    queryKey: ["existingUsers", phone],
-    queryFn: async () => {
-      return searchPrimaryAccountByPhone(phone);
-    },
+    queryKey: ["phoneMatches", phone],
+    queryFn: async () => findAccountsByPhone(phone),
     enabled: false,
   });
 
-  const debouncedRefetch = debounce(() => {
-    accountRefetch();
-  }, 500);
+  // Stable debounced trigger (recreating it every render would reset the timer).
+  const debouncedRefetch = React.useMemo(
+    () => debounce(() => phoneRefetch(), 500),
+    [phoneRefetch],
+  );
 
   function handleMobileChange(value: string) {
     if (value.trim() === "" || !isEditing) {
       setWarnings((prev) => ({ ...prev, phone: undefined }));
-      setPrimaryAccount(null);
-      form.setValue("account_type", undefined);
+      setDuplicateMatch(null);
       return;
     }
     debouncedRefetch();
   }
 
+  // A phone already on file forces a choice (SPEC §5) — never a silent flip to
+  // Secondary. Open the duplicate dialog unless this entry is already linked to
+  // the family it shares the number with. Primary matches come first (RPC order).
   React.useEffect(() => {
-    if (isSuccess && existingUsers) {
-      const currentAccountType = form.getValues().account_type;
-      if (
-        existingUsers.data &&
-        existingUsers.data.length > 0 &&
-        existingUsers.count &&
-        existingUsers.count > 0 &&
-        existingUsers.data[0].id !== id
-      ) {
-        const primary = existingUsers.data[0];
-        setPrimaryAccount(primary);
-        setWarnings((prev) => ({
-          ...prev,
-          phone:
-            `This mobile number is already used by Primary account: ${primary.name}.`,
-        }));
-        if (currentAccountType !== "Secondary") {
-          form.setValue("account_type", "Secondary");
-        }
-      } else {
-        setWarnings((prev) => ({ ...prev, phone: undefined }));
-        setPrimaryAccount(null);
-        if (currentAccountType !== "Primary") {
-          form.setValue("account_type", "Primary");
-        }
-      }
+    const others = (phoneMatches?.data ?? []).filter((m) => m.id !== id);
+    if (others.length === 0) {
+      setWarnings((prev) => ({ ...prev, phone: undefined }));
+      setDuplicateMatch(null);
+      return;
     }
-  }, [existingUsers, isSuccess, phone, form, id]);
+    const top = others[0];
+    const current = form.getValues();
+    const alreadyLinkedHere =
+      current.account_type === "Secondary" &&
+      !!current.primary_customer_id &&
+      current.primary_customer_id === top.resolved_primary_id;
+    if (alreadyLinkedHere) {
+      setWarnings((prev) => ({ ...prev, phone: undefined }));
+      setDuplicateMatch(null);
+      return;
+    }
+    const primaryName =
+      top.account_type === "Primary" ? top.name : top.resolved_primary_name ?? top.name;
+    setWarnings((prev) => ({
+      ...prev,
+      phone: `This mobile number is already used by Primary account: ${primaryName}.`,
+    }));
+    setDuplicateMatch(top);
+    setIsDuplicateDialogOpen(true);
+  }, [phoneMatches, id, form]);
 
+  // A Primary carries no link or relation (mapper enforces this on save too).
   React.useEffect(() => {
     if (AccountType === "Primary") {
       form.setValue("relation", undefined);
+      if (form.getValues().primary_customer_id) {
+        form.setValue("primary_customer_id", null);
+      }
     }
   }, [AccountType, form]);
+
+  // Keep the linked-primary panel (card / copy-address / details) in sync with
+  // the stored FK: fetch the primary when linked, drop it otherwise.
+  React.useEffect(() => {
+    if (AccountType === "Secondary" && primaryCustomerId) {
+      if (!primaryAccount || primaryAccount.id !== primaryCustomerId) {
+        getCustomerById(primaryCustomerId).then((r) => {
+          if (r.status === "success" && r.data) setPrimaryAccount(r.data);
+        });
+      }
+    } else if (primaryAccount) {
+      setPrimaryAccount(null);
+    }
+  }, [AccountType, primaryCustomerId, primaryAccount]);
+
+  const unresolvedDuplicate =
+    !!duplicateMatch &&
+    !(
+      AccountType === "Secondary" &&
+      !!primaryCustomerId &&
+      primaryCustomerId === duplicateMatch.resolved_primary_id
+    );
+
+  // Account type is an explicit choice. Primary clears any link; Secondary needs
+  // a linked Primary, so open the picker when none is set yet.
+  const handleAccountTypeChange = (value: AccountType) => {
+    form.setValue("account_type", value);
+    if (value === "Primary") {
+      form.setValue("primary_customer_id", null);
+      form.setValue("relation", undefined);
+    } else if (!form.getValues().primary_customer_id) {
+      setIsPrimaryPickerOpen(true);
+    }
+  };
+
+  // "Link as family member" from the duplicate dialog: become a Secondary of the
+  // matched account's Primary. The linked-primary panel is filled by the sync effect.
+  const handleLinkAsFamily = () => {
+    if (!duplicateMatch) return;
+    const primaryId = duplicateMatch.resolved_primary_id;
+    if (!primaryId) {
+      toast.error("That account has no primary on file. Search for a primary account to link.");
+      setIsDuplicateDialogOpen(false);
+      setIsPrimaryPickerOpen(true);
+      return;
+    }
+    form.setValue("account_type", "Secondary");
+    form.setValue("primary_customer_id", primaryId);
+    setWarnings((prev) => ({ ...prev, phone: undefined }));
+    setDuplicateMatch(null);
+    setIsDuplicateDialogOpen(false);
+  };
+
+  // Picking a primary from the search dialog. If a Secondary is picked, resolve
+  // to the Primary it belongs to (the link target must be a Primary).
+  const handlePrimaryPicked = async (picked: Customer) => {
+    const targetId = picked.account_type === "Primary" ? picked.id : picked.primary_customer_id;
+    if (!targetId) {
+      toast.error("That account has no primary on file. Search for a primary account.");
+      return;
+    }
+    form.setValue("account_type", "Secondary");
+    form.setValue("primary_customer_id", targetId);
+    if (picked.account_type === "Primary") {
+      setPrimaryAccount(picked);
+    }
+    setIsPrimaryPickerOpen(false);
+  };
 
   const queryClient = useQueryClient();
 
@@ -241,6 +316,12 @@ export function CustomerDemographicsForm({
   const handleFormSubmit = (
     values: z.infer<typeof customerDemographicsSchema>
   ) => {
+    if (unresolvedDuplicate) {
+      toast.error(
+        "This mobile number is already in use. Link this customer as a family member of the existing account, or change the number.",
+      );
+      return;
+    }
     const onConfirm = () => {
       const customerToSave = mapFormValuesToCustomer(values);
       if (id) {
@@ -274,6 +355,8 @@ export function CustomerDemographicsForm({
   const handleCancelCreation = () => {
     form.reset(customerDemographicsDefaults);
     setWarnings({});
+    setPrimaryAccount(null);
+    setDuplicateMatch(null);
     onClear?.();
   };
 
@@ -464,12 +547,7 @@ export function CustomerDemographicsForm({
                           isFetching ? "Checking existing accounts..." : undefined
                         }
                         warning={
-                          warnings.phone &&
-                          !isFetching &&
-                          existingUsers?.count &&
-                          existingUsers.count > 0
-                            ? warnings.phone
-                            : undefined
+                          warnings.phone && !isFetching ? warnings.phone : undefined
                         }
                       />
                     </FormItem>
@@ -729,9 +807,9 @@ export function CustomerDemographicsForm({
                       <FormItem className="w-full">
                         <FormLabel className="font-medium">Account Type</FormLabel>
                         <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                          disabled={true}
+                          onValueChange={(v) => handleAccountTypeChange(v as AccountType)}
+                          value={field.value ?? undefined}
+                          disabled={isReadOnly}
                         >
                           <FormControl>
                             <SelectTrigger className="bg-background border-border/60">
@@ -743,6 +821,34 @@ export function CustomerDemographicsForm({
                             <SelectItem value="Secondary">Secondary</SelectItem>
                           </SelectContent>
                         </Select>
+                        {field.value === "Secondary" && (
+                          <div className="flex items-center justify-between gap-2 mt-1.5 p-2 rounded-md bg-muted/50 border border-border/50">
+                            <span className="text-sm">
+                              {primaryCustomerId ? (
+                                <>
+                                  Linked to:{" "}
+                                  <span className="font-semibold text-foreground">
+                                    {primaryAccount?.name ?? `#${primaryCustomerId}`}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-destructive font-medium">
+                                  No primary linked
+                                </span>
+                              )}
+                            </span>
+                            {!isReadOnly && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setIsPrimaryPickerOpen(true)}
+                              >
+                                {primaryCustomerId ? "Change" : "Select primary"}
+                              </Button>
+                            )}
+                          </div>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1007,7 +1113,7 @@ export function CustomerDemographicsForm({
                   <X className="w-4 h-4 mr-2" />
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isUpdating}>
+                <Button type="submit" disabled={isUpdating || unresolvedDuplicate}>
                   <Save className="w-4 h-4 mr-2" />
                   {isUpdating ? "Saving..." : "Save Changes"}
                 </Button>
@@ -1021,7 +1127,7 @@ export function CustomerDemographicsForm({
                   <X className="w-4 h-4 mr-2" />
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isCreating}>
+                <Button type="submit" disabled={isCreating || unresolvedDuplicate}>
                   <Check className="w-4 h-4 mr-2" />
                   {isCreating ? "Creating..." : "Confirm Customer"}
                 </Button>
@@ -1029,7 +1135,74 @@ export function CustomerDemographicsForm({
             )}
           </ErrorBoundary>
         </div>
-                                    
+
+        {/* Duplicate-phone hard block (SPEC §5): link as family member or fix the number. */}
+        <Dialog open={isDuplicateDialogOpen} onOpenChange={setIsDuplicateDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="size-5 text-amber-500" />
+                Mobile number already in use
+              </DialogTitle>
+              <DialogDescription>
+                {duplicateMatch && (
+                  <>
+                    This number already belongs to{" "}
+                    <span className="font-semibold text-foreground">
+                      {duplicateMatch.account_type === "Primary"
+                        ? duplicateMatch.name
+                        : duplicateMatch.resolved_primary_name ?? duplicateMatch.name}
+                    </span>
+                    . Is this a family member sharing the number, or a typo?
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsDuplicateDialogOpen(false)}
+              >
+                It's a typo, fix the number
+              </Button>
+              <Button type="button" onClick={handleLinkAsFamily}>
+                <Users className="size-4 mr-2" />
+                Link as family member
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Pick the Primary a Secondary is linked to (SPEC §5) — different number case. */}
+        <Dialog
+          open={isPrimaryPickerOpen}
+          onOpenChange={(open) => {
+            setIsPrimaryPickerOpen(open);
+            // Closed without picking a primary -> not a valid Secondary; revert.
+            if (!open && !form.getValues().primary_customer_id) {
+              form.setValue("account_type", "Primary");
+            }
+          }}
+        >
+          <DialogContent className="max-w-3xl p-0 overflow-visible border-none">
+            <DialogHeader className="p-4 pb-0">
+              <DialogTitle className="text-lg font-bold">Link to Primary Account</DialogTitle>
+              <DialogDescription>
+                Select the primary account this secondary customer is linked to.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="p-4 pt-3">
+              <SearchCustomer
+                onCustomerFound={handlePrimaryPicked}
+                onHandleClear={() => {}}
+                checkPendingOrders={false}
+                clearOnSelect
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+
                                         <Dialog open={isSearchDialogOpen} onOpenChange={setIsSearchDialogOpen}>
                                           <DialogContent className="max-w-3xl p-0 overflow-visible border-none">
                                             <DialogHeader className="p-4 pb-0">

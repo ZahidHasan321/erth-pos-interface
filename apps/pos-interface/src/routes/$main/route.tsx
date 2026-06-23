@@ -89,11 +89,6 @@ export const Route = createFileRoute("/$main")<{
         search: { redirect: undefined, error: "terminal_user_on_pos" },
       });
     }
-    // Cashier role lives in the standalone /cashier shell. They have no
-    // business in any $main-scoped page — bounce them there.
-    if (user && user.role === "cashier") {
-      throw redirect({ to: "/cashier" });
-    }
   },
   notFoundComponent: NotFoundPage,
   head: ({ params }) => ({

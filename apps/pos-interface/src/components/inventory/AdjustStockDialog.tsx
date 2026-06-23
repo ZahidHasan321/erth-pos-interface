@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowRight, Hammer, Loader2, Minus, Plus, Settings2, Store, type LucideIcon } from "lucide-react";
+import { ArrowRight, Hammer, Loader2, Minus, Plus, Settings2, Store } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { Textarea } from "@repo/ui/textarea";
@@ -19,6 +18,7 @@ import {
   getUnitSuffix,
 } from "@/lib/inventory";
 import { cn } from "@/lib/utils";
+import { Field, LocationOption } from "./dialog-bits";
 import type { StockItemType, StockLocation, UnitOfMeasure } from "@repo/database";
 
 type Props = {
@@ -135,15 +135,15 @@ export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, d
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-5 space-y-6">
             {crossesSides && (
-              <Section label="Location">
+              <Field label="Location">
                 <div className="grid grid-cols-2 gap-2">
                   <LocationOption icon={Store} label="Shop" active={location === "shop"} onClick={() => setLocation("shop")} />
                   <LocationOption icon={Hammer} label="Workshop" active={location === "workshop"} onClick={() => setLocation("workshop")} />
                 </div>
-              </Section>
+              </Field>
             )}
 
-            <Section label="Change" hint={`Current: ${formatQty(itemType, currentStock, unit)}`}>
+            <Field label="Change" hint={`Current: ${formatQty(itemType, currentStock, unit)}`}>
               <div className="flex items-stretch rounded-lg border border-input overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1">
                 <button
                   type="button"
@@ -200,9 +200,9 @@ export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, d
                   </span>
                 )}
               </div>
-            </Section>
+            </Field>
 
-            <Section label="Reason" hint={direction === "none" ? "Set a change first" : "Required"}>
+            <Field label="Reason" hint={direction === "none" ? "Set a change first" : "Required"}>
               <Select value={reasonValue} onValueChange={setReasonValue} disabled={direction === "none"}>
                 <SelectTrigger>
                   <SelectValue placeholder={direction === "none" ? "-" : "Choose a reason"} />
@@ -213,9 +213,9 @@ export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, d
                   ))}
                 </SelectContent>
               </Select>
-            </Section>
+            </Field>
 
-            <Section label={isOtherReason ? "Describe reason" : "Notes"} hint={isOtherReason ? "Required" : "Optional"}>
+            <Field label={isOtherReason ? "Describe reason" : "Notes"} hint={isOtherReason ? "Required" : "Optional"}>
               <Textarea
                 rows={2}
                 value={notes}
@@ -224,7 +224,7 @@ export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, d
                 className="resize-none"
                 required={isOtherReason}
               />
-            </Section>
+            </Field>
           </div>
 
           <DialogFooter className="px-6 py-4 border-t bg-muted/30 gap-2">
@@ -246,33 +246,5 @@ export function AdjustStockDialog({ open, onClose, itemType, itemId, itemName, d
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Section({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between">
-        <Label className="text-sm font-semibold">{label}</Label>
-        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function LocationOption({ icon: Icon, label, active, onClick }: { icon: LucideIcon; label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors",
-        active ? "border-primary bg-primary/5 text-primary" : "border-input bg-card hover:bg-muted text-muted-foreground",
-      )}
-    >
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
   );
 }
