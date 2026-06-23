@@ -625,6 +625,11 @@ export const getOrdersForDispatch = async (): Promise<ApiResponse<Order[]>> => {
         .eq('checkout_status', 'confirmed')
         .in('order_type', ['WORK', 'ALTERATION'])
         .eq('garments.trip_number', 0)
+        // A terminal garment is never dispatchable. trip_number=0 alone is not a
+        // safe "never sent" signal: imported historical garments land completed
+        // at trip 0 (they were never dispatched through this system), so without
+        // this guard the settled archive floods the queue.
+        .not('garments.piece_stage', 'in', '("completed","discarded")')
         .limit(2000);
 
     if (error) {

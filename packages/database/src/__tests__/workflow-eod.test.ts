@@ -334,4 +334,93 @@ describe("EOD report sanity (CLAUDE.md §EOD; net = collected − refunded ident
       expect(refunded).toBeGreaterThanOrEqual(20);
     });
   });
+
+  it("SPEC: stock-purchase settlements (cash + non-cash) roll up into report.purchases", async () => {
+    await inRolledBackTx(async (tx) => {
+      // A costed fabric restock mints a payable (total_cost = qty × unit_cost =
+      // 10 × 5 = 50). Settle it in two steps: 20 cash + 15 knet.
+      const r = await wf.restock(tx, { itemType: "fabric", qty: 10, unitCost: 5 });
+      expect(r.purchase_id).not.toBeNull();
+      expect(Number(r.total_cost)).toBe(50);
+
+      // Fund the drawer first — a cash purchase posts a cash_out that can't
+      // exceed the drawer balance, and the seeded session opens at float 0.
+      const { orderId } = await wf.createWorkOrder(tx, [{ garment_type: "final" }]);
+      await wf.recordPayment(tx, orderId, 40);
+
+      const id = await sessionId(tx); // cash settlement needs an open session
+      await wf.payStockPurchase(tx, r.purchase_id!, 20, { paymentType: "cash", sessionId: id });
+      await wf.payStockPurchase(tx, r.purchase_id!, 15, { paymentType: "knet" });
+
+      const today = only(
+        await tx`SELECT (now() AT TIME ZONE 'Asia/Kuwait')::date::text AS d`,
+        "today",
+      ) as unknown as { d: string };
+
+      const rep = await wf.getEodReport(tx, { from: today.d, to: today.d });
+
+      // SPEC §3: the report exposes a purchases summary of settlements in range.
+      expect(rep).toHaveProperty("purchases");
+      const p = rep.purchases as {
+        total_paid: number | string;
+        payment_count: number | string;
+        by_payment_method: { payment_type: string; total: number | string; count: number | string }[];
+      };
+
+      // SPEC: universal sum identity — purchases.total_paid = Σ settlements in
+      // range, including non-cash. Both the 20 cash and the 15 knet are settled
+      // "now" against THIS brand's payable, so the total is monotonically ≥ 35
+      // across two records. (≥, not ==, because the seed may carry other ERTH
+      // purchases; this scenario contributes exactly +35 over 2 records.)
+      expect(Number(p.total_paid)).toBeGreaterThanOrEqual(35);
+      expect(Number(p.payment_count)).toBeGreaterThanOrEqual(2);
+
+      // SPEC: the non-cash settlement (knet) MUST appear — it never touches the
+      // cash drawer, so if the report only mirrored cash_out it would be lost.
+      const knet = p.by_payment_method.find((m) => m.payment_type === "knet");
+      const cash = p.by_payment_method.find((m) => m.payment_type === "cash");
+      expect(knet).toBeDefined();
+      expect(Number(knet!.total)).toBeGreaterThanOrEqual(15);
+      expect(cash).toBeDefined();
+      expect(Number(cash!.total)).toBeGreaterThanOrEqual(20);
+    });
+  });
+
+  it("SPEC: manual drawer cash movements (paid in/out) roll up into report.cash_flow", async () => {
+    await inRolledBackTx(async (tx) => {
+      // Fund the drawer first — a cash_out can't exceed the drawer balance.
+      const { orderId } = await wf.createWorkOrder(tx, [{ garment_type: "final" }]);
+      await wf.recordPayment(tx, orderId, 60);
+
+      const id = await sessionId(tx);
+      await wf.addCashMovement(tx, id, "cash_in", 10, { reasonCategory: "pickup" });
+      await wf.addCashMovement(tx, id, "cash_out", 25, { reasonCategory: "bank_deposit" });
+
+      const today = only(
+        await tx`SELECT (now() AT TIME ZONE 'Asia/Kuwait')::date::text AS d`,
+        "today",
+      ) as unknown as { d: string };
+
+      const rep = await wf.getEodReport(tx, { from: today.d, to: today.d });
+      expect(rep).toHaveProperty("cash_flow");
+      const cf = rep.cash_flow as {
+        cash_in_total: number | string;
+        cash_out_total: number | string;
+        by_category: { type: string; reason_category: string; total: number | string; count: number | string }[];
+      };
+
+      // SPEC: definitional — cash_flow totals = Σ register_cash_movements by type
+      // in range. The pickup (10 in) and bank deposit (25 out) MUST appear; this
+      // is the only place a multi-day EOD surfaces drawer movements. (≥, not ==,
+      // because the seed/other activity can only add.)
+      expect(Number(cf.cash_in_total)).toBeGreaterThanOrEqual(10);
+      expect(Number(cf.cash_out_total)).toBeGreaterThanOrEqual(25);
+      const pickup = cf.by_category.find((c) => c.type === "cash_in" && c.reason_category === "pickup");
+      const deposit = cf.by_category.find((c) => c.type === "cash_out" && c.reason_category === "bank_deposit");
+      expect(pickup).toBeDefined();
+      expect(Number(pickup!.total)).toBeGreaterThanOrEqual(10);
+      expect(deposit).toBeDefined();
+      expect(Number(deposit!.total)).toBeGreaterThanOrEqual(25);
+    });
+  });
 });

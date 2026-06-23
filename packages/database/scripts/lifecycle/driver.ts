@@ -1223,6 +1223,38 @@ export async function payStockPurchase(
   };
 }
 
+/** add_cash_movement RPC — a manual drawer cash_in/out (drop/deposit/petty-cash/tip-out). */
+export async function addCashMovement(
+  tx: Tx,
+  sessionId: number,
+  type: "cash_in" | "cash_out",
+  amount: number,
+  opts: {
+    reasonCategory?:
+      | "drop" | "pickup" | "petty_cash" | "bank_deposit" | "change_refill" | "tip_out" | "other";
+    reason?: string;
+    idempotencyKey?: string;
+  } = {},
+) {
+  await actAs(tx, CASHIER.id);
+  const res = only(
+    await tx`
+      SELECT add_cash_movement(
+        ${sessionId},
+        ${type},
+        ${amount},
+        ${opts.reason ?? "test movement"},
+        ${CASHIER.id}::uuid,
+        180,
+        ${opts.reasonCategory ?? "other"},
+        ${opts.idempotencyKey ?? randomUUID()}::uuid
+      ) AS r
+    `,
+    "add_cash_movement",
+  );
+  return res.r as { id: number };
+}
+
 /** get_stock_purchases RPC — the cashier queue ('open') / history listing. */
 export async function getStockPurchases(
   tx: Tx,

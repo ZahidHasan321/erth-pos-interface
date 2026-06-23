@@ -1,7 +1,6 @@
 import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import * as React from "react";
 import {
-  ChevronDown,
   LayoutDashboard,
   ShoppingCart,
   Users,
@@ -34,11 +33,7 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarRail,
-  useSidebar,
 } from "@repo/ui/sidebar";
 import { BRAND_NAMES, brandUsesCashier, isHomeBasedBrand } from "@/lib/constants";
 import { useTransferBadgeCounts } from "@/hooks/useTransfers";
@@ -88,10 +83,10 @@ const data = {
           icon: History,
         },
         {
-          title: "Cashier",
-          url: "cashier",
-          icon: Banknote,
-          cashierBrandOnly: true,
+          title: "Appointments",
+          url: "appointments-list",
+          icon: CalendarDays,
+          allowedBrands: ["erth"] as const,
         },
         {
           title: "Delivery",
@@ -100,31 +95,36 @@ const data = {
           homeBrandOnly: true,
         },
         {
-          title: "Order Management",
-          isCollapsible: true,
-          icon: ClipboardList,
-          items: [
-            {
-              title: "Dispatch Orders",
-              url: "orders/order-management/dispatch",
-              icon: ArrowUpFromLine,
-            },
-            {
-              title: "Link Orders",
-              url: "orders/order-management/link",
-              icon: Link2,
-            },
-            {
-              title: "Unlink Orders",
-              url: "orders/order-management/unlink",
-              icon: Unlink,
-            },
-            {
-              title: "Receiving Brova / Final",
-              url: "orders/order-management/receiving-brova-final",
-              icon: PackageCheck,
-            },
-          ],
+          title: "Dispatch Orders",
+          url: "orders/order-management/dispatch",
+          icon: ArrowUpFromLine,
+        },
+        {
+          title: "Link Orders",
+          url: "orders/order-management/link",
+          icon: Link2,
+        },
+        {
+          title: "Unlink Orders",
+          url: "orders/order-management/unlink",
+          icon: Unlink,
+        },
+        {
+          title: "Receiving Brova / Final",
+          url: "orders/order-management/receiving-brova-final",
+          icon: PackageCheck,
+        },
+      ],
+    },
+    {
+      title: "Cashier",
+      url: "",
+      items: [
+        {
+          title: "Cashier",
+          url: "cashier",
+          icon: Banknote,
+          cashierBrandOnly: true,
         },
       ],
     },
@@ -174,9 +174,7 @@ type NavSubItem = {
   cashierBrandOnly?: boolean;
   homeBrandOnly?: boolean;
   allowedBrands?: readonly string[];
-  isCollapsible?: boolean;
   count?: number;
-  items?: Array<{ title: string; url: string; icon?: React.ComponentType<{ className?: string }>; count?: number }>;
 };
 
 type IsPathActive = (to: string, exact?: boolean) => boolean;
@@ -234,114 +232,6 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({
           {count}
         </SidebarMenuBadge>
       )}
-    </SidebarMenuItem>
-  );
-};
-
-type CollapsibleMenuItemProps = {
-  title: string;
-  icon?: React.ComponentType<{ className?: string }>;
-  items: Array<{ title: string; url: string; icon?: React.ComponentType<{ className?: string }>; count?: number }>;
-  mainSegment: string;
-  isPathActive: IsPathActive;
-};
-
-const CollapsibleMenuItem: React.FC<CollapsibleMenuItemProps> = ({
-  title,
-  icon: Icon,
-  items,
-  mainSegment,
-  isPathActive,
-}) => {
-  const { setOpen } = useSidebar();
-  const totalCount = items.reduce((sum, item) => sum + (item.count ?? 0), 0);
-
-  const hasActiveChild = items.some((item) =>
-    isPathActive(`${mainSegment}/${item.url}`)
-  );
-
-  const storageKey = `sidebar-collapsible:${title}`;
-  const [isOpen, setIsOpen] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return hasActiveChild;
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored !== null) return stored === "true";
-    return hasActiveChild;
-  });
-
-  React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(storageKey, String(isOpen));
-    }
-  }, [isOpen, storageKey]);
-
-  // Auto-open on transition into the section, but don't override a manual collapse.
-  const prevActiveRef = React.useRef(hasActiveChild);
-  React.useEffect(() => {
-    if (!prevActiveRef.current && hasActiveChild) {
-      setIsOpen(true);
-    }
-    prevActiveRef.current = hasActiveChild;
-  }, [hasActiveChild]);
-
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        onClick={() => {
-          setIsOpen(!isOpen);
-          setOpen(true);
-        }}
-        isActive={hasActiveChild}
-        tooltip={title}
-      >
-        {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
-        <span>{title}</span>
-        {!isOpen && totalCount > 0 && (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-blue-100 px-1 text-[10px] font-bold tabular-nums text-blue-700">
-            {totalCount}
-          </span>
-        )}
-        <ChevronDown
-          className={`ml-auto h-4 w-4 shrink-0 transition-transform duration-200 ${
-            isOpen ? "rotate-180" : ""
-          }`}
-        />
-      </SidebarMenuButton>
-      <div
-        className="grid transition-[grid-template-rows] duration-200 ease-in-out"
-        style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
-      >
-        <div className="overflow-hidden">
-          <SidebarMenuSub className="mt-1 space-y-0.5 border-l-2 border-primary/15">
-            {items.map((subItem) => {
-              const match = isPathActive(`${mainSegment}/${subItem.url}`);
-              const isNewOrderPage =
-                typeof window !== "undefined" &&
-                /^\/orders\/new-/.test(window.location.pathname);
-
-              return (
-                <SidebarMenuSubItem key={subItem.title}>
-                  <SidebarMenuSubButton asChild isActive={match}>
-                    <Link
-                      to={`${mainSegment}/${subItem.url}`}
-                      {...(isNewOrderPage
-                        ? { target: "_blank", rel: "noopener noreferrer" }
-                        : {})}
-                    >
-                      {subItem.icon && <subItem.icon className="h-3.5 w-3.5" aria-hidden="true" />}
-                      <span className="flex-1">{subItem.title}</span>
-                      {!!subItem.count && (
-                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-md bg-blue-100 px-1 text-[10px] font-bold tabular-nums text-blue-700">
-                          {subItem.count}
-                        </span>
-                      )}
-                    </Link>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              );
-            })}
-          </SidebarMenuSub>
-        </div>
-      </div>
     </SidebarMenuItem>
   );
 };
@@ -437,50 +327,45 @@ export function AppSidebar({
         )}
 
         {/* Nav groups */}
-        {data.navMain.filter(item => isErth || item.title !== "Store Management").map((item) => (
-          <SidebarGroup key={item.title}>
-            <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">
-              {item.title}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {(item.items as NavSubItem[]).filter((subItem) => {
-                  if (subItem.cashierBrandOnly && !brandUsesCashier(main)) return false;
-                  if (subItem.homeBrandOnly && !isHomeBasedBrand(main)) return false;
-                  if (subItem.allowedBrands && !subItem.allowedBrands.includes(main)) return false;
-                  return true;
-                }).map((subItem) => {
-                  if (subItem.isCollapsible && subItem.items) {
-                    return (
-                      <CollapsibleMenuItem
-                        key={subItem.title}
-                        title={subItem.title}
-                        icon={subItem.icon}
-                        items={subItem.items}
-                        mainSegment={mainSegment}
-                        isPathActive={isPathActive}
-                      />
-                    );
-                  }
+        {data.navMain
+          .filter((item) => isErth || item.title !== "Store Management")
+          .map((item) => {
+            const visibleItems = (item.items as NavSubItem[]).filter((subItem) => {
+              if (subItem.cashierBrandOnly && !brandUsesCashier(main)) return false;
+              if (subItem.homeBrandOnly && !isHomeBasedBrand(main)) return false;
+              if (subItem.allowedBrands && !subItem.allowedBrands.includes(main)) return false;
+              return true;
+            });
 
-                  const countInfo = subItem.url ? storeCounts[subItem.url] : undefined;
-                  return (
-                    <SidebarLink
-                      key={subItem.title}
-                      to={`${mainSegment}/${item.url ? `${item.url}/` : ""}${subItem.url}`}
-                      title={subItem.title}
-                      icon={subItem.icon}
-                      disabled={false}
-                      count={countInfo?.count}
-                      badgeColor={countInfo?.badgeColor}
-                      isPathActive={isPathActive}
-                    />
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <SidebarGroup key={item.title}>
+                <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">
+                  {item.title}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {visibleItems.map((subItem) => {
+                      const countInfo = subItem.url ? storeCounts[subItem.url] : undefined;
+                      return (
+                        <SidebarLink
+                          key={subItem.title}
+                          to={`${mainSegment}/${item.url ? `${item.url}/` : ""}${subItem.url}`}
+                          title={subItem.title}
+                          icon={subItem.icon}
+                          disabled={false}
+                          count={countInfo?.count}
+                          badgeColor={countInfo?.badgeColor}
+                          isPathActive={isPathActive}
+                        />
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            );
+          })}
       </SidebarContent>
 
       <SidebarFooter className="border-t px-3 py-2 group-data-[collapsible=icon]:hidden">

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart, ArrowDownToLine, ArrowDownLeft, Send, AlertTriangle, Settings2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shared/table";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateStr, getKuwaitDayRange } from "@/lib/utils";
 import { getMovements, getMovementAggregates } from "@/api/stockMovements";
 import { MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_COLORS, getWasteReasonLabel } from "@/lib/inventory";
 import { PageHeader, SectionCard, EmptyState } from "@/components/shared/PageShell";
@@ -18,18 +18,20 @@ export const Route = createFileRoute("/(main)/store/reports")({
 type Range = "7d" | "30d" | "90d" | "ytd";
 
 function rangeToDates(range: Range): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date();
-  if (range === "7d") from.setDate(to.getDate() - 7);
-  else if (range === "30d") from.setDate(to.getDate() - 30);
-  else if (range === "90d") from.setDate(to.getDate() - 90);
-  else from.setMonth(0, 1);
-  // Anchor the lower bound to local start-of-day so the window is "since the
-  // start of that calendar day" — otherwise YTD/Nd start at the current
-  // time-of-day and silently drop that day's earlier movements. toISOString()
-  // then converts this local instant to the correct absolute UTC bound.
-  from.setHours(0, 0, 0, 0);
-  return { from: from.toISOString(), to: to.toISOString() };
+  // Anchor the lower bound to the start of a Kuwait business day so the window
+  // is "since the start of that calendar day" in Kuwait, not in the viewer's
+  // browser timezone — otherwise a non-Kuwait user gets a window shifted by
+  // their UTC offset. getKuwaitDayRange().start yields the correct UTC bound.
+  const [y, m, d] = getLocalDateStr().split("-").map(Number) as [number, number, number];
+  let fromStr: string;
+  if (range === "ytd") {
+    fromStr = `${y}-01-01`;
+  } else {
+    const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
+    const dt = new Date(Date.UTC(y, m - 1, d) - days * 86_400_000);
+    fromStr = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+  }
+  return { from: getKuwaitDayRange(fromStr).start, to: new Date().toISOString() };
 }
 
 // Bar accent maps to the same semantic tone as the chip — keeps the row

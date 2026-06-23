@@ -598,6 +598,31 @@ export interface EodCashierData {
     transaction_count: number;
 }
 
+export interface EodPurchaseMethodBreakdown {
+    payment_type: string;
+    total: number;
+    count: number;
+}
+
+export interface EodPurchasesSummary {
+    total_paid: number;        // Stock-purchase settlements in range (cash + non-cash)
+    payment_count: number;
+    by_payment_method: EodPurchaseMethodBreakdown[];
+}
+
+export interface EodCashFlowCategory {
+    type: "cash_in" | "cash_out";
+    reason_category: CashMovementReasonCategory;
+    total: number;
+    count: number;
+}
+
+export interface EodCashFlowSummary {
+    cash_in_total: number;     // Manual paid-in movements in range (excl. order payments)
+    cash_out_total: number;    // Manual paid-out movements in range (excl. order refunds)
+    by_category: EodCashFlowCategory[];
+}
+
 export interface EodReportSummary {
     // Cash basis — money that actually moved in the range
     total_collected: number;
@@ -634,6 +659,12 @@ export interface EodReportSummary {
     by_payment_method: EodPaymentMethodBreakdown[];
     daily: EodDailyData[];
     by_cashier: EodCashierData[];
+
+    // Stock-purchase settlements (non-customer expense payables, §3 Purchases tab)
+    purchases: EodPurchasesSummary;
+
+    // Manual drawer cash movements (drops/deposits/petty-cash/tip-outs) in range
+    cash_flow: EodCashFlowSummary;
 }
 
 export interface EodTransaction {
@@ -698,6 +729,8 @@ export const getEodReport = async (
                 invoice_first: null, invoice_last: null,
                 ar_outstanding: 0, delivered_count: 0,
                 by_payment_method: [], daily: [], by_cashier: [],
+                purchases: { total_paid: 0, payment_count: 0, by_payment_method: [] },
+                cash_flow: { cash_in_total: 0, cash_out_total: 0, by_category: [] },
             },
         };
     }

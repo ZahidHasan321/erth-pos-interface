@@ -3616,9 +3616,15 @@ DROP POLICY IF EXISTS "transfer_request_items_delete" ON transfer_request_items;
 -- ── Appointments ────────────────────────────────────────────────────
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 
+-- Shop department coordinates appointments for EVERY brand (SPEC §5): the
+-- showroom (ERTH) staff hold the cross-brand appointments list and resolve
+-- them, so shop users see and update all brands' appointments — mirroring how
+-- the workshop department already sees every brand in can_access_brand().
 DROP POLICY IF EXISTS "appointments_select" ON appointments;
 CREATE POLICY "appointments_select" ON appointments FOR SELECT USING (
-  is_active_user() AND (brand IS NULL OR can_access_brand(brand::text))
+  is_active_user() AND (
+    get_my_department() = 'shop' OR brand IS NULL OR can_access_brand(brand::text)
+  )
 );
 
 DROP POLICY IF EXISTS "appointments_insert" ON appointments;
@@ -3628,7 +3634,11 @@ CREATE POLICY "appointments_insert" ON appointments FOR INSERT WITH CHECK (
 
 DROP POLICY IF EXISTS "appointments_update" ON appointments;
 CREATE POLICY "appointments_update" ON appointments FOR UPDATE USING (
-  (is_manager_or_above() OR assigned_to = get_my_user_id()) AND (brand IS NULL OR can_access_brand(brand::text))
+  get_my_department() = 'shop'
+  OR (
+    (is_manager_or_above() OR assigned_to = get_my_user_id())
+    AND (brand IS NULL OR can_access_brand(brand::text))
+  )
 );
 
 -- ═══════════════════════════════════════════════════════════════════════
@@ -3653,6 +3663,12 @@ DECLARE
   v_by_method JSONB;
   v_daily JSONB;
   v_by_cashier JSONB;
+  v_purchases_total NUMERIC;
+  v_purchases_count INT;
+  v_purchases_by_method JSONB;
+  v_cash_in_total NUMERIC;
+  v_cash_out_total NUMERIC;
+  v_cash_flow_by_category JSONB;
   v_tz_interval INTERVAL;
   v_tx_start TIMESTAMP;
   v_tx_end TIMESTAMP;
@@ -3843,12 +3859,79 @@ BEGIN
     ORDER BY collected DESC
   ) sub;
 
+  -- 6. Stock-purchase settlements (non-customer expense payables — SPEC §3).
+  --    Scoped by the payable's brand; paid_at is UTC like payment_transactions,
+  --    so reuse the timezone-corrected boundaries. Surfaces ALL settlements,
+  --    including non-cash (knet/link/bank) which never touch the cash drawer.
+  SELECT
+    COALESCE(SUM(spp.amount), 0),
+    COUNT(*)
+  INTO v_purchases_total, v_purchases_count
+  FROM stock_purchase_payments spp
+  JOIN stock_purchases sp ON sp.id = spp.purchase_id
+  WHERE sp.brand = p_brand::brand
+    AND spp.paid_at >= v_tx_start
+    AND spp.paid_at < v_tx_end;
+
+  SELECT COALESCE(jsonb_agg(row_to_json(sub.*) ORDER BY sub.total DESC), '[]'::jsonb)
+  INTO v_purchases_by_method
+  FROM (
+    SELECT
+      spp.payment_type,
+      COALESCE(SUM(spp.amount), 0) AS total,
+      COUNT(*) AS count
+    FROM stock_purchase_payments spp
+    JOIN stock_purchases sp ON sp.id = spp.purchase_id
+    WHERE sp.brand = p_brand::brand
+      AND spp.paid_at >= v_tx_start
+      AND spp.paid_at < v_tx_end
+    GROUP BY spp.payment_type
+  ) sub;
+
+  -- 7. Cash flow — ALL drawer cash movements (register_cash_movements) in range,
+  --    so a multi-day report (no single drawer to reconcile) still shows every
+  --    drop / bank deposit / petty-cash / tip-out. Scoped by the session's brand;
+  --    created_at is UTC like payment_transactions → tz-corrected boundaries.
+  SELECT
+    COALESCE(SUM(cm.amount) FILTER (WHERE cm.type = 'cash_in'), 0),
+    COALESCE(SUM(cm.amount) FILTER (WHERE cm.type = 'cash_out'), 0)
+  INTO v_cash_in_total, v_cash_out_total
+  FROM register_cash_movements cm
+  JOIN register_sessions rs ON rs.id = cm.register_session_id
+  WHERE rs.brand = p_brand::brand
+    AND cm.created_at >= v_tx_start
+    AND cm.created_at < v_tx_end;
+
+  SELECT COALESCE(jsonb_agg(row_to_json(sub.*) ORDER BY sub.type, sub.total DESC), '[]'::jsonb)
+  INTO v_cash_flow_by_category
+  FROM (
+    SELECT
+      cm.type,
+      cm.reason_category::text AS reason_category,
+      COALESCE(SUM(cm.amount), 0) AS total,
+      COUNT(*) AS count
+    FROM register_cash_movements cm
+    JOIN register_sessions rs ON rs.id = cm.register_session_id
+    WHERE rs.brand = p_brand::brand
+      AND cm.created_at >= v_tx_start
+      AND cm.created_at < v_tx_end
+    GROUP BY cm.type, cm.reason_category
+  ) sub;
+
   RETURN v_order_stats || v_tx_stats || v_deposit_stats || v_cancel_stats || v_invoice_stats
     || jsonb_build_object('ar_outstanding', v_ar_outstanding)
     || jsonb_build_object('delivered_count', v_delivered_count)
     || jsonb_build_object('by_payment_method', v_by_method)
     || jsonb_build_object('daily', v_daily)
-    || jsonb_build_object('by_cashier', v_by_cashier);
+    || jsonb_build_object('by_cashier', v_by_cashier)
+    || jsonb_build_object('purchases', jsonb_build_object(
+         'total_paid', v_purchases_total,
+         'payment_count', v_purchases_count,
+         'by_payment_method', v_purchases_by_method))
+    || jsonb_build_object('cash_flow', jsonb_build_object(
+         'cash_in_total', v_cash_in_total,
+         'cash_out_total', v_cash_out_total,
+         'by_category', v_cash_flow_by_category));
 END;
 $$ LANGUAGE plpgsql;
 

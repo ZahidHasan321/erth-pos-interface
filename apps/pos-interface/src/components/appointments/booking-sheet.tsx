@@ -33,9 +33,19 @@ import type { AppointmentWithRelations } from "@/api/appointments";
 import { Phone, User, X, UserPlus, MapPin, Check, Users, Shirt } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateStr } from "@/lib/utils";
 
 const INPUT_CLS = "bg-background border-border";
+
+/**
+ * Today as a local Date whose Y/M/D match the Kuwait business day, so the
+ * default selected day and the past-day guard track Kuwait, not the viewer's
+ * browser timezone. format(date, "yyyy-MM-dd") then yields the Kuwait date.
+ */
+function kuwaitToday(): Date {
+  const [y, m, d] = getLocalDateStr().split("-").map(Number) as [number, number, number];
+  return new Date(y, m - 1, d);
+}
 
 const bookingSchema = z.object({
   customer_name: z.string().min(1, "Name is required"),
@@ -138,7 +148,7 @@ export function BookingSheet({
     resolver: zodResolver(bookingSchema) as never,
     defaultValues: {
       ...NEW_DEFAULTS,
-      appointment_date: defaultDate ?? new Date(),
+      appointment_date: defaultDate ?? kuwaitToday(),
       start_time: defaultStartTime ?? "09:00",
       end_time: defaultStartTime ? incrementTime(defaultStartTime) : "10:00",
     },
@@ -180,7 +190,7 @@ export function BookingSheet({
         setSelectedCustomer(null);
         form.reset({
           ...NEW_DEFAULTS,
-          appointment_date: defaultDate ?? new Date(),
+          appointment_date: defaultDate ?? kuwaitToday(),
           start_time: defaultStartTime ?? "09:00",
           end_time: defaultStartTime ? incrementTime(defaultStartTime) : "10:00",
         });
@@ -646,7 +656,7 @@ export function BookingSheet({
                           onSelect={(date) => date && field.onChange(date)}
                           weekStartsOn={6}
                           defaultMonth={field.value}
-                          disabled={{ before: new Date() }}
+                          disabled={{ before: kuwaitToday() }}
                           className="[--cell-size:--spacing(8)]"
                         />
                       </div>

@@ -1,13 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getAppointmentsByDateRange,
+  getAllBrandsAppointmentsByDateRange,
   createAppointment,
   updateAppointment,
+  updateAppointmentStatus,
   deleteAppointment,
 } from "@/api/appointments";
 import { getEmployees } from "@/api/employees";
 import type { Appointment } from "@repo/database";
 import { getBrand } from "@/api/orders";
+import { getLocalDateStr } from "@/lib/utils";
 
 const APPOINTMENTS_KEY = "appointments";
 
@@ -24,9 +27,23 @@ export function useAppointments(
   });
 }
 
+/** Cross-brand appointments for the ERTH shop coordination list (SPEC §5). */
+export function useAllBrandsAppointments(
+  startDate: string,
+  endDate: string,
+  assignedTo?: string,
+) {
+  return useQuery({
+    queryKey: [APPOINTMENTS_KEY, "all-brands", startDate, endDate, assignedTo],
+    queryFn: () => getAllBrandsAppointmentsByDateRange(startDate, endDate, assignedTo),
+    select: (res) => res.data ?? [],
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export function useTodayAppointments() {
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  // "Today" is the Kuwait business day, not the viewer's browser day.
+  const todayStr = getLocalDateStr();
 
   return useQuery({
     queryKey: [APPOINTMENTS_KEY, "today", todayStr],
@@ -70,6 +87,18 @@ export function useUpdateAppointment() {
   return useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Appointment> }) =>
       updateAppointment(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
+    },
+  });
+}
+
+export function useUpdateAppointmentStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: Appointment["status"] }) =>
+      updateAppointmentStatus(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
     },

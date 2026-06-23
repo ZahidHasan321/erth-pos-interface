@@ -1,4 +1,5 @@
 import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
+import { getKuwaitMidnight } from "@/lib/utils";
 import type { StockMovement, StockMovementType, StockItemType, StockLocation } from "@repo/database";
 
 export type MovementWithJoins = StockMovement & {
@@ -212,25 +213,18 @@ export type UsageStats = {
  * Sum of consumption movements (qty_delta < 0 with movement_type='consumption')
  * for an item across yesterday, last 7 days, and last 30 days.
  *
- * Yesterday = the prior calendar day in the user's local timezone.
+ * Yesterday = the prior calendar day in the Kuwait business timezone.
  */
 export async function getItemUsageStats(
   itemType: StockItemType,
   itemId: number,
 ): Promise<UsageStats> {
-  const now = new Date();
-  const startOf = (d: Date) => {
-    const x = new Date(d);
-    x.setHours(0, 0, 0, 0);
-    return x;
-  };
-  const todayStart = startOf(now);
-  const yesterdayStart = new Date(todayStart);
-  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
-  const sevenStart = new Date(todayStart);
-  sevenStart.setDate(sevenStart.getDate() - 7);
-  const thirtyStart = new Date(todayStart);
-  thirtyStart.setDate(thirtyStart.getDate() - 30);
+  // Day boundaries anchor to Kuwait midnight (the business day), not the
+  // viewer's browser timezone. Kuwait has no DST, so each day is exactly 24h.
+  const todayStart = getKuwaitMidnight();
+  const yesterdayStart = new Date(todayStart.getTime() - 86_400_000);
+  const sevenStart = new Date(todayStart.getTime() - 7 * 86_400_000);
+  const thirtyStart = new Date(todayStart.getTime() - 30 * 86_400_000);
 
   const { data, error } = await db
     .from("stock_movements")

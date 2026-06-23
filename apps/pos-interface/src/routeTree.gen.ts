@@ -23,6 +23,7 @@ import { Route as MainDeliveryIndexRouteImport } from './routes/$main/delivery/i
 import { Route as MainCustomersIndexRouteImport } from './routes/$main/customers/index'
 import { Route as MainCashierIndexRouteImport } from './routes/$main/cashier/index'
 import { Route as MainAppointmentsIndexRouteImport } from './routes/$main/appointments/index'
+import { Route as MainAppointmentsListIndexRouteImport } from './routes/$main/appointments-list/index'
 import { Route as authSakkbaLoginRouteImport } from './routes/(auth)/sakkba/login'
 import { Route as authQassLoginRouteImport } from './routes/(auth)/qass/login'
 import { Route as authErthLoginRouteImport } from './routes/(auth)/erth/login'
@@ -129,6 +130,12 @@ const MainAppointmentsIndexRoute = MainAppointmentsIndexRouteImport.update({
   path: '/appointments/',
   getParentRoute: () => MainRouteRoute,
 } as any)
+const MainAppointmentsListIndexRoute =
+  MainAppointmentsListIndexRouteImport.update({
+    id: '/appointments-list/',
+    path: '/appointments-list/',
+    getParentRoute: () => MainRouteRoute,
+  } as any)
 const authSakkbaLoginRoute = authSakkbaLoginRouteImport.update({
   id: '/(auth)/sakkba/login',
   path: '/sakkba/login',
@@ -352,6 +359,7 @@ export interface FileRoutesByFullPath {
   '/erth/login': typeof authErthLoginRoute
   '/qass/login': typeof authQassLoginRoute
   '/sakkba/login': typeof authSakkbaLoginRoute
+  '/$main/appointments-list/': typeof MainAppointmentsListIndexRoute
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/cashier/': typeof MainCashierIndexRoute
   '/$main/customers/': typeof MainCustomersIndexRoute
@@ -400,6 +408,7 @@ export interface FileRoutesByTo {
   '/erth/login': typeof authErthLoginRoute
   '/qass/login': typeof authQassLoginRoute
   '/sakkba/login': typeof authSakkbaLoginRoute
+  '/$main/appointments-list': typeof MainAppointmentsListIndexRoute
   '/$main/appointments': typeof MainAppointmentsIndexRoute
   '/$main/cashier': typeof MainCashierIndexRoute
   '/$main/customers': typeof MainCustomersIndexRoute
@@ -452,6 +461,7 @@ export interface FileRoutesById {
   '/(auth)/erth/login': typeof authErthLoginRoute
   '/(auth)/qass/login': typeof authQassLoginRoute
   '/(auth)/sakkba/login': typeof authSakkbaLoginRoute
+  '/$main/appointments-list/': typeof MainAppointmentsListIndexRoute
   '/$main/appointments/': typeof MainAppointmentsIndexRoute
   '/$main/cashier/': typeof MainCashierIndexRoute
   '/$main/customers/': typeof MainCustomersIndexRoute
@@ -505,6 +515,7 @@ export interface FileRouteTypes {
     | '/erth/login'
     | '/qass/login'
     | '/sakkba/login'
+    | '/$main/appointments-list/'
     | '/$main/appointments/'
     | '/$main/cashier/'
     | '/$main/customers/'
@@ -553,6 +564,7 @@ export interface FileRouteTypes {
     | '/erth/login'
     | '/qass/login'
     | '/sakkba/login'
+    | '/$main/appointments-list'
     | '/$main/appointments'
     | '/$main/cashier'
     | '/$main/customers'
@@ -604,6 +616,7 @@ export interface FileRouteTypes {
     | '/(auth)/erth/login'
     | '/(auth)/qass/login'
     | '/(auth)/sakkba/login'
+    | '/$main/appointments-list/'
     | '/$main/appointments/'
     | '/$main/cashier/'
     | '/$main/customers/'
@@ -733,6 +746,13 @@ declare module '@tanstack/react-router' {
       path: '/appointments'
       fullPath: '/$main/appointments/'
       preLoaderRoute: typeof MainAppointmentsIndexRouteImport
+      parentRoute: typeof MainRouteRoute
+    }
+    '/$main/appointments-list/': {
+      id: '/$main/appointments-list/'
+      path: '/appointments-list'
+      fullPath: '/$main/appointments-list/'
+      preLoaderRoute: typeof MainAppointmentsListIndexRouteImport
       parentRoute: typeof MainRouteRoute
     }
     '/(auth)/sakkba/login': {
@@ -1058,6 +1078,7 @@ interface MainRouteRouteChildren {
   MainOrdersOrderHistoryRoute: typeof MainOrdersOrderHistoryRoute
   MainOrdersOrdersAtShowroomRoute: typeof MainOrdersOrdersAtShowroomRoute
   MainOrdersViewWorkOrderRoute: typeof MainOrdersViewWorkOrderRoute
+  MainAppointmentsListIndexRoute: typeof MainAppointmentsListIndexRoute
   MainAppointmentsIndexRoute: typeof MainAppointmentsIndexRoute
   MainCustomersIndexRoute: typeof MainCustomersIndexRoute
   MainDeliveryIndexRoute: typeof MainDeliveryIndexRoute
@@ -1086,6 +1107,7 @@ const MainRouteRouteChildren: MainRouteRouteChildren = {
   MainOrdersOrderHistoryRoute: MainOrdersOrderHistoryRoute,
   MainOrdersOrdersAtShowroomRoute: MainOrdersOrdersAtShowroomRoute,
   MainOrdersViewWorkOrderRoute: MainOrdersViewWorkOrderRoute,
+  MainAppointmentsListIndexRoute: MainAppointmentsListIndexRoute,
   MainAppointmentsIndexRoute: MainAppointmentsIndexRoute,
   MainCustomersIndexRoute: MainCustomersIndexRoute,
   MainDeliveryIndexRoute: MainDeliveryIndexRoute,

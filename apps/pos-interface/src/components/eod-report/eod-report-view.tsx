@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Button } from "@repo/ui/button";
 import { Card, CardContent } from "@repo/ui/card";
 import { Skeleton } from "@repo/ui/skeleton";
-import { Printer, FileText, Loader2, AlertCircle, RefreshCw, ReceiptText } from "lucide-react";
+import { FileText, Loader2, AlertCircle, RefreshCw, ReceiptText } from "lucide-react";
 import { useEodReport } from "@/hooks/useCashier";
 import { getEodTransactions, getRegisterSession } from "@/api/cashier";
 import { EodDateFilter, type DatePreset } from "@/components/eod-report/eod-date-filter";
@@ -13,14 +13,26 @@ import { EodTransactionTable } from "@/components/eod-report/eod-transaction-tab
 import { RevenueTrendChart, CollectionsVsRefundsChart, CashierLeaderboard } from "@/components/eod-report/eod-charts";
 import { EodCashDrawer } from "@/components/eod-report/eod-cash-drawer";
 import { EodSalesSummary } from "@/components/eod-report/eod-sales-summary";
+import { EodPurchases } from "@/components/eod-report/eod-purchases";
+import { EodCashFlow } from "@/components/eod-report/eod-cash-flow";
+import { getLocalDateStr } from "@/lib/utils";
 
 function toDateStr(d: Date): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/**
+ * "Today" anchored to the Kuwait business day, not the browser's timezone.
+ * Returns a local Date whose Y/M/D match Kuwait's current calendar date, so it
+ * flows through toDateStr() and the date picker identically to a custom pick.
+ */
+function kuwaitToday(): Date {
+    const [y, m, d] = getLocalDateStr().split("-").map(Number);
+    return new Date(y, m - 1, d);
+}
+
 function getPresetDates(preset: DatePreset): { from: Date; to: Date } {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const today = kuwaitToday();
 
     switch (preset) {
         case "yesterday": {
@@ -49,14 +61,8 @@ function getPresetDates(preset: DatePreset): { from: Date; to: Date } {
 
 export function EodReportView({ hideCashReconciliation = false }: { hideCashReconciliation?: boolean } = {}) {
     const [preset, setPreset] = useState<DatePreset>("today");
-    const [dateFrom, setDateFrom] = useState<Date>(() => {
-        const now = new Date();
-        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    });
-    const [dateTo, setDateTo] = useState<Date>(() => {
-        const now = new Date();
-        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    });
+    const [dateFrom, setDateFrom] = useState<Date>(kuwaitToday);
+    const [dateTo, setDateTo] = useState<Date>(kuwaitToday);
     const [printLoading, setPrintLoading] = useState(false);
 
     const dateFromStr = toDateStr(dateFrom);
@@ -85,7 +91,7 @@ export function EodReportView({ hideCashReconciliation = false }: { hideCashReco
         if (d < dateFrom) setDateFrom(d);
     }
 
-    const fetchAndGenerate = useCallback(async (action: "view" | "print") => {
+    const fetchAndGenerate = useCallback(async () => {
         if (!summary) return;
         setPrintLoading(true);
         try {
@@ -94,18 +100,16 @@ export function EodReportView({ hideCashReconciliation = false }: { hideCashReco
                 isMultiDay ? Promise.resolve({ data: null }) : getRegisterSession(undefined, dateFromStr),
                 import("@/components/eod-report/eod-print-view"),
             ]);
-            const params = {
+            await printMod.viewEodReport({
                 summary,
                 transactions: txRes.data,
                 dateFrom: dateFromStr,
                 dateTo: dateToStr,
                 registerSession: sessionRes.data,
                 hideCashReconciliation,
-            };
-            if (action === "view") await printMod.viewEodReport(params);
-            else await printMod.printEodReport(params);
+            });
         } catch (err) {
-            toast.error(`Could not ${action} end-of-day report: ${err instanceof Error ? err.message : String(err)}`);
+            toast.error(`Could not open end-of-day report: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
             setPrintLoading(false);
         }
@@ -129,19 +133,11 @@ export function EodReportView({ hideCashReconciliation = false }: { hideCashReco
                 <div className="flex items-center gap-2">
                     <Button
                         variant="outline"
-                        onClick={() => fetchAndGenerate("view")}
+                        onClick={() => fetchAndGenerate()}
                         disabled={!summary || reportLoading || printLoading}
                     >
                         {printLoading ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <FileText className="h-5 w-5 mr-2" />}
                         View Report
-                    </Button>
-                    <Button
-                        variant="outline"
-                        onClick={() => fetchAndGenerate("print")}
-                        disabled={!summary || reportLoading || printLoading}
-                    >
-                        {printLoading ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Printer className="h-5 w-5 mr-2" />}
-                        Print
                     </Button>
                 </div>
             </div>
@@ -184,7 +180,7 @@ export function EodReportView({ hideCashReconciliation = false }: { hideCashReco
                         <Skeleton className="h-72 rounded-lg lg:col-span-2" />
                     </div>
                 </div>
-            ) : summary && summary.transaction_count === 0 && summary.order_count === 0 ? (
+            ) : summary && summary.transaction_count === 0 && summary.order_count === 0 && summary.purchases.payment_count === 0 && summary.cash_flow.by_category.length === 0 ? (
                 <Card className="shadow-none">
                     <CardContent className="py-14 text-center text-muted-foreground">
                         <ReceiptText className="h-8 w-8 mx-auto mb-3 opacity-40" />
@@ -203,7 +199,11 @@ export function EodReportView({ hideCashReconciliation = false }: { hideCashReco
                         <EodCashDrawer date={dateFromStr} report={summary} hideReconciliation={hideCashReconciliation} />
                     )}
 
+                    <EodCashFlow data={summary} />
+
                     <EodSalesSummary data={summary} />
+
+                    <EodPurchases data={summary} />
 
                     <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
                         <div className="lg:col-span-3">

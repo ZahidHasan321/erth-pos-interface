@@ -7,6 +7,7 @@ import type {
   Card2SidePocketCarryItem,
 } from './types'
 import type { GarmentSchema } from '@/components/forms/fabric-selection-and-options/fabric-selection/garment-form.schema'
+import { getLocalDateStr } from '@/lib/utils'
 
 export interface MapToCard2Input {
   invoiceNumber?: string | number | null
@@ -63,7 +64,9 @@ const toDateString = (value?: string | null): string | undefined => {
   if (!value) return undefined
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value
-  return d.toISOString().slice(0, 10)
+  // Kuwait calendar date, not UTC: a timestamp in the early-Kuwait-morning hours
+  // (00:00-03:00 Kuwait = prior UTC day) must still print as the Kuwait day.
+  return getLocalDateStr(d)
 }
 
 const truncate = (value: string, max: number): string =>
