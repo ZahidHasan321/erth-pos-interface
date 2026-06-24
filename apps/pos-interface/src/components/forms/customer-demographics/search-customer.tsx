@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { PendingOrdersDialog } from "./pending-orders-dialog";
 import { cn } from "@/lib/utils";
 import { FullScreenLoader } from "@/components/global/full-screen-loader";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 
 const RECENT_CUSTOMERS_KEY = "recent_customer_searches";
 const MAX_RECENT_CUSTOMERS = 4;
@@ -240,12 +241,16 @@ export function SearchCustomer({
   
   const showSkeleton = isFetching && customers.length === 0;
 
+  // Delay-gate so a fast pending-orders check doesn't flash the overlay between
+  // selecting a customer and the next step's loader.
+  const showProfileLoader = useDelayedLoading(isLoadingPendingOrders);
+
   return (
     <>
-      {isLoadingPendingOrders && (
-        <FullScreenLoader 
-          title="Loading Profile" 
-          subtitle="Checking for pending orders..." 
+      {showProfileLoader && (
+        <FullScreenLoader
+          title="Loading Profile"
+          subtitle="Checking for pending orders..."
         />
       )}
       <div ref={containerRef} className="bg-muted/40 px-5 py-4 rounded-lg space-y-3 border border-border/50 shadow-sm relative z-10 h-full flex flex-col justify-center">

@@ -40,6 +40,7 @@ import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { HorizontalStepper } from "@repo/ui/horizontal-stepper";
 import { ScrollProgress } from "@repo/ui/scroll-progress";
 import { useConfirmationDialog } from "@/hooks/useConfirmationDialog";
+import { useDelayedLoading } from "@/hooks/useDelayedLoading";
 import { useOrderMutations, mapOrderToSchema } from "@/hooks/useOrderMutations";
 import { useStepNavigation } from "@/hooks/useStepNavigation";
 import { useFormDraft, workOrderDraftKey, readFormDraft, clearFormDraft } from "@/hooks/useFormDraft";
@@ -1201,18 +1202,27 @@ function NewWorkOrder() {
     // ============================================================================
     // RENDER
     // ============================================================================
+    // Delay-gate the overlay so quick create/load/complete steps don't flash a
+    // loader on then off (the source of the back-to-back stutter). Latch the
+    // phase title so the min-duration tail doesn't flip text to "Loading Order".
+    const rawOverlayLoading =
+        isLoadingOrderData || isRedirecting || createOrderMutation.isPending || completeWorkOrderMutation.isPending;
+    const showOverlayLoading = useDelayedLoading(rawOverlayLoading);
+    const overlayTitleRef = React.useRef("Loading Order");
+    if (rawOverlayLoading) {
+        overlayTitleRef.current = createOrderMutation.isPending
+            ? "Creating Order"
+            : completeWorkOrderMutation.isPending
+                ? "Completing Order"
+                : "Loading Order";
+    }
+
     return (
         <>
             <ScrollProgress />
-            {(isLoadingOrderData || isRedirecting || createOrderMutation.isPending || completeWorkOrderMutation.isPending) && (
+            {showOverlayLoading && (
                 <FullScreenLoader
-                    title={
-                        createOrderMutation.isPending
-                            ? "Creating Order"
-                            : completeWorkOrderMutation.isPending
-                                ? "Completing Order"
-                                : "Loading Order"
-                    }
+                    title={overlayTitleRef.current}
                     subtitle="Please wait while we process your request..."
                 />
             )}
