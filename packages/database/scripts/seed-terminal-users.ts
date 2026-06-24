@@ -1,6 +1,6 @@
 /**
  * Seed one dummy terminal user per production stage (+ a matching resources
- * row so scheduler / PlanDialog can pick them). PIN is 1234 for every account.
+ * row so scheduler / PlanDialog can pick them). PIN is the shared dev PIN below for every account.
  *
  * Idempotent — safe to re-run. Updates existing rows on username conflict.
  *
@@ -40,7 +40,8 @@ const USERS: Seed[] = [
   { username: "qc",          name: "Test QC",          job_function: "qc",          stage: "quality_check" },
 ];
 
-const PIN = "1234";
+// 6-digit, non-trivial: satisfies the set_user_pin policy (>=6 digits, not all-same, not a sequence).
+const PIN = "246813";
 
 async function main() {
   console.log(`\nSeeding ${USERS.length} terminal users (PIN=${PIN})...`);
@@ -51,7 +52,7 @@ async function main() {
       VALUES (
         ${u.username}, ${u.name}, 'staff', 'workshop',
         ARRAY[${u.job_function}]::job_function[], true,
-        crypt(${PIN}, gen_salt('bf', 8))
+        crypt(${PIN}, gen_salt('bf', 10))
       )
       ON CONFLICT (username) DO UPDATE SET
         name          = EXCLUDED.name,
@@ -59,7 +60,7 @@ async function main() {
         department    = EXCLUDED.department,
         job_functions = EXCLUDED.job_functions,
         is_active     = true,
-        pin           = crypt(${PIN}, gen_salt('bf', 8)),
+        pin           = crypt(${PIN}, gen_salt('bf', 10)),
         failed_login_attempts = 0,
         locked_until  = NULL,
         updated_at    = now()
@@ -128,7 +129,7 @@ async function main() {
   }
 
   await sql.end();
-  console.log("\nDone. Login with any of the above usernames + PIN 1234.\n");
+  console.log(`\nDone. Login with any of the above usernames + PIN ${PIN}.\n`);
 }
 
 main().catch((e) => {

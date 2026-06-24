@@ -421,11 +421,11 @@ export function UserForm({
                 <Hash className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
                 <Input
                   className="pl-8 font-mono tracking-[0.3em]"
-                  placeholder={mode === "add" ? "4-digit" : "••••"}
-                  maxLength={4}
+                  placeholder={mode === "add" ? "6-10 digits" : "••••••"}
+                  maxLength={10}
                   value={form.pin}
                   onChange={(e) => {
-                    const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+                    const v = e.target.value.replace(/\D/g, "").slice(0, 10);
                     setForm((p) => ({ ...p, pin: v }));
                   }}
                 />
@@ -487,7 +487,7 @@ export function isUserFormValid(form: UserFormState, mode: "add" | "edit"): bool
   if (!form.username || !form.name) return false;
   if (!form.role || !form.department) return false;
   if (form.department === "shop" && form.brands.length === 0) return false;
-  if (mode === "add" && (!form.pin || form.pin.length !== 4)) return false;
+  if (mode === "add" && (!form.pin || form.pin.length < 6)) return false;
   // Every operational station the worker runs needs an explicit team (Q4 / §6).
   if (form.role === "staff" && form.department === "workshop") {
     for (const job of form.job_functions) {

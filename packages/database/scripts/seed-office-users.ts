@@ -1,6 +1,6 @@
 /**
- * Seed office users (admin + managers + office staff). PIN is 1234 for every
- * account. Idempotent — updates on username conflict.
+ * Seed office users (admin + managers + office staff). PIN is the shared dev
+ * PIN below for every account. Idempotent — updates on username conflict.
  *
  * Run: pnpm --filter @repo/database db:seed-office-users
  */
@@ -34,7 +34,8 @@ const USERS: Seed[] = [
   { username: "cashier",      name: "Cashier",           role: "cashier",     department: "shop", brands: ["erth"] },
 ];
 
-const PIN = "1234";
+// 6-digit, non-trivial: satisfies the set_user_pin policy (>=6 digits, not all-same, not a sequence).
+const PIN = "246813";
 
 async function main() {
   console.log(`\nSeeding ${USERS.length} office users (PIN=${PIN})...`);
@@ -47,7 +48,7 @@ async function main() {
         ${u.username}, ${u.name}, ${u.role}::role, ${u.department}::department,
         '{}'::job_function[], ${brandsArr as any},
         true,
-        crypt(${PIN}, gen_salt('bf', 8))
+        crypt(${PIN}, gen_salt('bf', 10))
       )
       ON CONFLICT (username) DO UPDATE SET
         name          = EXCLUDED.name,
@@ -56,7 +57,7 @@ async function main() {
         job_functions = EXCLUDED.job_functions,
         brands        = EXCLUDED.brands,
         is_active     = true,
-        pin           = crypt(${PIN}, gen_salt('bf', 8)),
+        pin           = crypt(${PIN}, gen_salt('bf', 10)),
         failed_login_attempts = 0,
         locked_until  = NULL,
         updated_at    = now()
@@ -69,7 +70,7 @@ async function main() {
   }
 
   await sql.end();
-  console.log("\nDone. Login with any of the above usernames + PIN 1234.\n");
+  console.log(`\nDone. Login with any of the above usernames + PIN ${PIN}.\n`);
 }
 
 main().catch((e) => {
