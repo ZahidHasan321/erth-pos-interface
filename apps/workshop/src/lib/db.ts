@@ -79,12 +79,28 @@ export async function withWriteRetry<T>(
 // Holder set after createClient returns. Used by the fetch wrapper to force
 // signOut when the server rejects our JWT (deactivated/wiped user, revoked
 // session). Indirection avoids referencing `db` before it's assigned.
-let dbRef: { auth: { signOut: () => Promise<unknown> } } | null = null;
+let dbRef: {
+  auth: {
+    signOut: () => Promise<unknown>;
+    refreshSession: () => Promise<{
+      data: { session: { access_token: string } | null };
+      error: unknown;
+    }>;
+  };
+} | null = null;
 
 function getReqUrl(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
   if (input instanceof URL) return input.href;
   return input.url;
+}
+
+// Swap the Authorization bearer on a request init for a freshly refreshed
+// access token, normalising whatever header shape supabase-js passed in.
+function withAuthHeader(init: RequestInit | undefined, token: string): RequestInit {
+  const headers = new Headers(init?.headers);
+  headers.set('Authorization', `Bearer ${token}`);
+  return { ...init, headers };
 }
 
 async function timeoutFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -94,6 +110,9 @@ async function timeoutFetch(input: RequestInfo | URL, init?: RequestInit): Promi
   const upstream = init?.signal;
   const method = (init?.method ?? 'GET').toUpperCase();
   const retryable = IDEMPOTENT_METHODS.has(method);
+  const isAuthEndpoint = getReqUrl(input).includes('/auth/v1/');
+  // One-shot guard for the 401 branch below: refresh + replay at most once.
+  let didRefresh = false;
 
   for (let attempt = 0; ; attempt++) {
     const controller = new AbortController();
@@ -105,12 +124,24 @@ async function timeoutFetch(input: RequestInfo | URL, init?: RequestInit): Promi
     }
     try {
       const res = await fetch(input, { ...init, signal: controller.signal });
-      // 401 from any non-auth endpoint means our JWT no longer satisfies the
-      // server (gotrue revoked, user wiped, RLS rejected with PGRST301). Force
-      // signOut so the UI bounces to login instead of looping on stale auth.
-      // /auth/v1/* is skipped — login/refresh failures legitimately return 401
-      // and signing out there would clobber the in-flight login attempt.
-      if (res.status === 401 && !getReqUrl(input).includes('/auth/v1/')) {
+      // 401 from a non-auth endpoint means the server rejected our JWT. The
+      // common, RECOVERABLE cause is an expired access token whose auto-refresh
+      // hasn't landed (tab was backgrounded, or a refresh round-trip failed on
+      // a flaky edge) — so try ONE refresh + replay with the new token before
+      // giving up. Only if the refresh itself fails, or the replay is still
+      // 401, is the session genuinely gone (gotrue revoked, user wiped) and we
+      // force signOut to bounce to login. /auth/v1/* is skipped — login/refresh
+      // 401s are legitimate and signing out there would clobber them.
+      if (res.status === 401 && !isAuthEndpoint && dbRef) {
+        if (!didRefresh) {
+          didRefresh = true;
+          const { data, error } = await dbRef.auth.refreshSession();
+          const newToken = data?.session?.access_token;
+          if (!error && newToken) {
+            init = withAuthHeader(init, newToken);
+            continue; // replay the original request with the refreshed token
+          }
+        }
         setTimeout(() => { dbRef?.auth.signOut().catch(() => {}); }, 0);
       }
       return res;
