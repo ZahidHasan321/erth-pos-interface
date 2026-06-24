@@ -14,7 +14,7 @@ import { mapCustomerToFormValues } from "@/components/forms/customer-demographic
 import { CustomerDemographicsForm } from "@/components/forms/customer-demographics";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
 import { ErrorBoundary } from "@/components/global/error-boundary";
-import { TIMEZONE, pickedDayKuwaitMidnight } from "@/lib/utils";
+import { TIMEZONE, pickedDayKuwaitMidnight, parseUtcTimestamp } from "@/lib/utils";
 import { DatePicker } from "@repo/ui/date-picker";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -98,7 +98,7 @@ function NewAlterationOrder() {
                 source: g.original_garment_id || g.bufi_ext === "Internal" ? "internal" : "external",
                 original_garment_id: g.original_garment_id,
                 bufi_ext: g.bufi_ext,
-                delivery_date: g.delivery_date ? new Date(g.delivery_date).toISOString() : null,
+                delivery_date: g.delivery_date ? parseUtcTimestamp(g.delivery_date).toISOString() : null,
                 notes: g.notes,
                 alteration_measurements: (g.alteration_measurements ?? {}) as Record<string, number>,
                 alteration_styles: (g.alteration_styles ?? {}) as Record<string, string | boolean | number>,

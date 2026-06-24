@@ -1,6 +1,7 @@
 import type { Measurement } from "@repo/database";
 import { MEASUREMENTS_SPEC } from "@repo/database";
 import { type CustomerMeasurementsSchema } from "./measurement-form.schema";
+import { parseUtcTimestamp } from "@/lib/utils";
 
 /**
  * DB row → form values. Required numeric fields fall back to 0 (matches the
@@ -27,7 +28,7 @@ export function mapMeasurementToFormValues(
     reference: measurement.reference || "Other",
     measurer_id: measurement.measurer_id || "",
     measurement_date: measurement.measurement_date
-      ? new Date(measurement.measurement_date).toISOString()
+      ? parseUtcTimestamp(measurement.measurement_date).toISOString()
       : new Date().toISOString(),
     notes: measurement.notes || "",
     // Categorical — pass through as-is; absent legacy rows stay undefined so the

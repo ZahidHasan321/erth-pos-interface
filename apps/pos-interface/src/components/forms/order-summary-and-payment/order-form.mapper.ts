@@ -1,5 +1,6 @@
 import type { Order, CheckoutStatus, OrderPhase, OrderType, PaymentType, DiscountType } from "@repo/database";
 import { type OrderSchema } from "./order-form.schema";
+import { parseUtcTimestamp } from "@/lib/utils";
 
 /**
  * Safely parse numeric values (Supabase may return numbers as strings)
@@ -15,7 +16,9 @@ const parseNumeric = (val: unknown): number | undefined => {
  */
 const toISOString = (date: Date | string | null | undefined): string | undefined => {
     if (!date) return undefined;
-    return new Date(date).toISOString();
+    // parseUtcTimestamp (not new Date): a no-Z DB timestamp is UTC, so parsing it
+    // as local would shift the instant and corrupt the day on edit-reload.
+    return parseUtcTimestamp(date).toISOString();
 };
 
 /**

@@ -1,5 +1,6 @@
 import type { Customer, AccountType } from "@repo/database";
 import { type CustomerDemographicsSchema } from "./demographics-form.schema";
+import { parseUtcTimestamp } from "@/lib/utils";
 
 /**
  * Direct mapping from Customer (DB) to Form Values
@@ -25,7 +26,7 @@ export function mapCustomerToFormValues(customer: Customer): Partial<CustomerDem
         street: customer.street || "",
         house_no: customer.house_no || "",
         address_note: customer.address_note || "",
-        dob: customer.dob ? new Date(customer.dob).toISOString() : undefined,
+        dob: customer.dob ? parseUtcTimestamp(customer.dob).toISOString() : undefined,
         account_type: (customer.account_type as AccountType) || "Primary",
         customer_segment: customer.customer_segment || "",
         notes: customer.notes || "",

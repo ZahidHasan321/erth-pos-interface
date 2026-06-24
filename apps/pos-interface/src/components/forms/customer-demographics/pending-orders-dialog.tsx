@@ -110,7 +110,7 @@ const OrderCard = React.memo<OrderCardProps>(
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Calendar className="size-3" />
-                            {formatDate(order.order_date ? new Date(order.order_date).toISOString() : undefined)}
+                            {formatDate(order.order_date ? parseUtcTimestamp(order.order_date).toISOString() : undefined)}
                         </div>
                     </div>
 

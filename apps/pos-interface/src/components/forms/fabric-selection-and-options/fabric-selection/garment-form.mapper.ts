@@ -1,5 +1,6 @@
 import type { Garment, JabzourType } from "@repo/database";
 import { type GarmentSchema } from "./garment-form.schema";
+import { parseUtcTimestamp } from "@/lib/utils";
 
 /**
  * Direct mapping from Garment (DB) to Form Values
@@ -60,7 +61,7 @@ export function mapGarmentToFormValues(g: Garment): GarmentSchema {
         // survive an edit round-trip, otherwise re-saving a pre-dispatch garment
         // would silently mark it as dispatched.
         trip_number: g.trip_number ?? 0,
-        delivery_date: g.delivery_date ? new Date(g.delivery_date).toISOString() : null,
+        delivery_date: g.delivery_date ? parseUtcTimestamp(g.delivery_date).toISOString() : null,
         lines: g.lines ?? 1,
         color: g.color || "",
         shop_name: g.shop_name || "",
