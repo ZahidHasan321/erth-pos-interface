@@ -23,7 +23,7 @@ import { useShowroomOrders } from "@/hooks/useShowroomOrders";
 import { OrderDataTable } from "@/components/orders-at-showroom/order-data-tables";
 import { OrderFilters, type FilterState } from "@/components/orders-at-showroom/order-filters";
 import { TableSkeleton } from "@/components/orders-at-showroom/table-skeleton";
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { Button } from "@repo/ui/button";
 import { Card } from "@repo/ui/card";
 import { Badge } from "@repo/ui/badge";
@@ -86,10 +86,10 @@ const CompactStat = ({
   </div>
 );
 
-const dateFormatter = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" });
+const dateFormatter = new Intl.DateTimeFormat("en-IN", { timeZone: TIMEZONE, day: "numeric", month: "short" });
 function fmtDate(v?: string | null) {
     if (!v) return null;
-    const d = new Date(v);
+    const d = parseUtcTimestamp(v);
     return Number.isNaN(d.getTime()) ? null : dateFormatter.format(d);
 }
 

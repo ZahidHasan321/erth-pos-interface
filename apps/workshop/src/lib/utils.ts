@@ -45,7 +45,7 @@ export function parseUtcTimestamp(value: string | Date): Date {
 export function toLocalDateStr(value: string | Date | null | undefined): string | null {
   if (!value) return null;
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const d = new Date(value);
+  const d = parseUtcTimestamp(value);
   return isNaN(d.getTime()) ? null : getLocalDateStr(d);
 }
 
@@ -70,7 +70,7 @@ export function getKuwaitDayRange(dateStr?: string): { start: string; end: strin
 /** Format an ISO date/timestamp to a readable short date like "Mar 22" or "Mar 22, 2025" (if not current year) */
 export function formatDate(value?: string | null): string {
   if (!value) return "";
-  const d = new Date(value);
+  const d = parseUtcTimestamp(value);
   if (isNaN(d.getTime())) return value;
   const now = new Date();
   const sameYear = d.getFullYear() === now.getFullYear();

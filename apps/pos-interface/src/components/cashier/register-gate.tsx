@@ -12,13 +12,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/popover";
 import { useRegisterSession, useOpenRegisterMutation, useReopenRegisterMutation } from "@/hooks/useCashier";
 import { useAuth } from "@/context/auth";
 import type { RegisterSessionData } from "@/api/cashier";
-import { getLocalDateStr } from "@/lib/utils";
+import { getLocalDateStr, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { CashMovementDialog } from "./cash-movement-dialog";
 import { CloseRegisterDialog } from "./close-register-dialog";
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const fmtK = (n: number): string => `${fmt(n)} KWD`;
-const timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
+const timeFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: true });
 const sessionDateFmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short" });
 
 // ── Open Register Form ────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
                     <h2 className="text-xl font-bold font-[Marcellus]">Register Closed</h2>
                     <p className="text-sm text-muted-foreground mt-1">
                         Closed by {session.closed_by_name || "Unknown"} at{" "}
-                        {session.closed_at ? timeFmt.format(new Date(session.closed_at)) : "-"}
+                        {session.closed_at ? timeFmt.format(parseUtcTimestamp(session.closed_at)) : "-"}
                     </p>
                 </div>
 
@@ -139,7 +139,7 @@ function ClosedRegisterScreen({ session }: { session: RegisterSessionData }) {
                             {priorCloses.map((ev) => (
                                 <li key={ev.id} className="border-t border-amber-200/60 pt-2 first:border-t-0 first:pt-0">
                                     <div className="flex justify-between tabular-nums">
-                                        <span>{timeFmt.format(new Date(ev.closed_at))} · {ev.closed_by_name}</span>
+                                        <span>{timeFmt.format(parseUtcTimestamp(ev.closed_at))} · {ev.closed_by_name}</span>
                                         <span className="font-semibold">counted {fmtK(ev.counted_cash)}</span>
                                     </div>
                                     {ev.notes && (
@@ -431,7 +431,7 @@ function HeaderClosedRegister({ session }: { session: RegisterSessionData }) {
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                         Closed by {session.closed_by_name || "Unknown"} at{" "}
-                        {session.closed_at ? timeFmt.format(new Date(session.closed_at)) : "-"}
+                        {session.closed_at ? timeFmt.format(parseUtcTimestamp(session.closed_at)) : "-"}
                     </p>
                 </div>
                 <div className="px-4 py-3 space-y-1.5 text-xs">

@@ -37,16 +37,17 @@ import {
 
 import { updateOrder } from "@/api/orders";
 import type { Order } from "@repo/database";
-import { cn, getLocalDateStr } from "@/lib/utils";
+import { cn, getLocalDateStr, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
-const dateFormatter = new Intl.DateTimeFormat("en-IN", { 
-  day: "numeric", 
-  month: "short" 
+const dateFormatter = new Intl.DateTimeFormat("en-IN", {
+  timeZone: TIMEZONE,
+  day: "numeric",
+  month: "short"
 });
 
 function formatDate(value?: string | null) {
   if (!value) return null;
-  const parsed = new Date(value);
+  const parsed = parseUtcTimestamp(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return dateFormatter.format(parsed);
 }

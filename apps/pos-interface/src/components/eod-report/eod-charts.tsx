@@ -4,11 +4,12 @@ import {
     Tooltip, ResponsiveContainer,
 } from "recharts";
 import type { EodDailyData, EodCashierData } from "@/api/cashier";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const fmtK = (n: number): string => `${fmt(n)} KWD`;
 const fmtKSafe = (v: string | number | undefined): string => fmtK(Number(v) || 0);
-const shortDate = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
+const shortDate = new Intl.DateTimeFormat("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short" });
 
 // Restrained neutral chart palette — collected uses primary tone, refunds use destructive.
 const COLLECTED_COLOR = "#1f2937";  // slate-800 — single dark neutral (brand primary is too varied per brand to hardcode)
@@ -55,7 +56,7 @@ export function RevenueTrendChart({ data }: RevenueTrendChartProps) {
     if (data.length < 2) return null;
 
     const chartData = data.map(d => ({
-        date: shortDate.format(new Date(d.date + "T00:00:00")),
+        date: shortDate.format(parseUtcTimestamp(d.date + "T00:00:00")),
         collected: Number(d.collected),
         refunded: Number(d.refunded),
     }));
@@ -111,7 +112,7 @@ export function CollectionsVsRefundsChart({ data }: CollectionsVsRefundsChartPro
     const hasRefunds = data.some(d => Number(d.refunded) > 0);
 
     const chartData = data.map(d => ({
-        date: shortDate.format(new Date(d.date + "T00:00:00")),
+        date: shortDate.format(parseUtcTimestamp(d.date + "T00:00:00")),
         collected: Number(d.collected),
         refunded: Number(d.refunded),
     }));

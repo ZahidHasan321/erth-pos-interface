@@ -6,6 +6,7 @@ import { Button } from "@repo/ui/button";
 import { Skeleton } from "@repo/ui/skeleton";
 
 import { getStocktakeHistory } from "@/api/stocktake";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 export const Route = createFileRoute("/$main/store/stocktake_/history")({
   component: StocktakeHistoryPage,
@@ -53,7 +54,7 @@ function StocktakeHistoryPage() {
               >
                 <span className="font-medium">
                   {h.validated_at
-                    ? new Date(h.validated_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+                    ? parseUtcTimestamp(h.validated_at).toLocaleDateString(undefined, { timeZone: TIMEZONE, day: "numeric", month: "short", year: "numeric" })
                     : "-"}
                 </span>
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">

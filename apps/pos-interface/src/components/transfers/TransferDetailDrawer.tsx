@@ -12,6 +12,7 @@ import { useDispatchTransfer, useReceiveTransfer, useCancelTransfer } from "@/ho
 import { primaryActionFor, personalAwaitingLabel, sourceSideOf, destinationSideOf, sourceStockOf } from "@/lib/transfers";
 import { TransferStatusBadge, ItemTypeBadge } from "@/components/store/transfer-status-badge";
 import type { TransferRequestWithItems } from "@/api/transfers";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 type Props = {
   open: boolean;
@@ -344,7 +345,7 @@ function AuditLine({ label, who, ts }: { label: string; who?: string | null; ts?
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-muted-foreground">{label}{who && <span className="text-foreground"> · {who}</span>}</span>
-      <span className="tabular-nums text-muted-foreground">{new Date(ts).toLocaleString()}</span>
+      <span className="tabular-nums text-muted-foreground">{parseUtcTimestamp(ts).toLocaleString("en-GB", { timeZone: TIMEZONE })}</span>
     </div>
   );
 }

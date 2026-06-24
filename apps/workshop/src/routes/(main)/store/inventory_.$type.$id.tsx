@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@repo/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { getPermission } from "@/lib/rbac";
 import {
@@ -828,7 +828,7 @@ function MovementsPanel({ itemType, itemId, unit }: { itemType: StockItemType; i
                       </a>
                     )}
                   </span>
-                  <span className="shrink-0">{new Date(m.created_at).toLocaleDateString()}</span>
+                  <span className="shrink-0">{parseUtcTimestamp(m.created_at).toLocaleDateString("en-GB", { timeZone: TIMEZONE })}</span>
                 </div>
               </div>
             ))}

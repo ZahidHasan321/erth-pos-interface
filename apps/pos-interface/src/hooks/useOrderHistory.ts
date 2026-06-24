@@ -100,10 +100,27 @@ export function useOrderHistory({
 
       if (searchTerm) {
         const term = sanitizeFilterValue(searchTerm.toLowerCase().trim());
+
+        // invoice_number lives on the work_orders / alteration_orders child tables,
+        // not on orders. PostgREST can't filter an embedded column inside a top-level
+        // .or(), so resolve invoice numbers to order ids first, then OR on orders.id.
+        const resolveInvoiceOrderIds = async (n: string): Promise<number[]> => {
+          const [wo, ao] = await Promise.all([
+            db.from('work_orders').select('order_id').eq('invoice_number', n),
+            db.from('alteration_orders').select('order_id').eq('invoice_number', n),
+          ]);
+          return [...(wo.data || []), ...(ao.data || [])]
+            .map((r: { order_id: number | null }) => r.order_id)
+            .filter((id): id is number => id != null);
+        };
+
         if (term.startsWith('#')) {
           const idQuery = term.slice(1);
           if (idQuery && !isNaN(parseInt(idQuery))) {
-            query = query.or(`id.eq.${idQuery},workOrder.invoice_number.eq.${idQuery}`);
+            const invoiceIds = await resolveInvoiceOrderIds(idQuery);
+            const ors = [`id.eq.${idQuery}`];
+            if (invoiceIds.length) ors.push(`id.in.(${invoiceIds.join(',')})`);
+            query = query.or(ors.join(','));
           }
         } else if (term) {
           // Use fuzzy search RPC to find matching customer IDs, then filter orders
@@ -113,10 +130,12 @@ export function useOrderHistory({
           });
           const customerIds = (fuzzyCustomers || []).map((c: { id: number }) => c.id);
 
-          if (!isNaN(parseInt(term)) && customerIds.length > 0) {
-            query = query.or(`id.eq.${term},workOrder.invoice_number.eq.${term},customer_id.in.(${customerIds.join(',')})`);
-          } else if (!isNaN(parseInt(term))) {
-            query = query.or(`id.eq.${term},workOrder.invoice_number.eq.${term}`);
+          if (!isNaN(parseInt(term))) {
+            const invoiceIds = await resolveInvoiceOrderIds(term);
+            const ors = [`id.eq.${term}`];
+            if (invoiceIds.length) ors.push(`id.in.(${invoiceIds.join(',')})`);
+            if (customerIds.length) ors.push(`customer_id.in.(${customerIds.join(',')})`);
+            query = query.or(ors.join(','));
           } else if (customerIds.length > 0) {
             query = query.in('customer_id', customerIds);
           } else {

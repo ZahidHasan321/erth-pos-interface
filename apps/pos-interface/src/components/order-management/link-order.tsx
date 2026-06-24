@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
 import {
   ArrowUp,
   Check,
@@ -33,7 +32,7 @@ import {
 } from "@/api/orders";
 import { fuzzySearchCustomers } from "@/api/customers";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
-import { cn, parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { ErrorBoundary } from "../global/error-boundary";
 import { LinkConfigurationPanel } from "./link-configuration-panel";
 
@@ -451,7 +450,7 @@ export default function LinkOrder() {
                           </td>
                           <td className="p-3 whitespace-nowrap text-sm">
                             {order.delivery_date ? (
-                              format(parseUtcTimestamp(order.delivery_date), "d MMM yyyy")
+                              parseUtcTimestamp(order.delivery_date).toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "numeric", month: "short", year: "numeric" })
                             ) : (
                               <span className="text-muted-foreground">Not set</span>
                             )}
@@ -510,7 +509,7 @@ function OrderMeta({ order }: { order: SelectedOrder }) {
       </span>
       {order.customerPhone && <span>{order.customerPhone}</span>}
       {order.deliveryDate && (
-        <span>Due {format(parseUtcTimestamp(order.deliveryDate), "d MMM")}</span>
+        <span>Due {parseUtcTimestamp(order.deliveryDate).toLocaleDateString("en-GB", { timeZone: TIMEZONE, day: "numeric", month: "short" })}</span>
       )}
       {order.orderPhase && (
         <span>

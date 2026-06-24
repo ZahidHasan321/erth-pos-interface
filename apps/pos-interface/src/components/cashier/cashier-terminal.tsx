@@ -17,6 +17,7 @@ import {
 import type { CashierOrderListItem, CashierSummary, CashierPeriod, CashierFilter } from "@/api/cashier";
 import { EMPTY_CASHIER_SUMMARY } from "@/api/cashier";
 import { clusterByGroup, groupSizes, groupKeyOf, relationLabel } from "@/lib/cashier-grouping";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
 import { DonutChart } from "@/components/charts/donut-chart";
 import { OrderDetailShell } from "./order-detail-shell";
@@ -26,7 +27,7 @@ import "./cashier-keyframes";
 const PAGE_SIZE = 15;
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const fmtK = (n: number): string => `${fmt(n)} KWD`;
-const shortDateFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
+const shortDateFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short" });
 
 // ── Order List Row ──────────────────────────────────────────────────────────
 /** Linked-group + family-relation chips, shared by the card and table rows. */
@@ -80,8 +81,8 @@ function OrderRow({ item, onSelect, isLinked, groupSize }: { item: CashierOrderL
         completed: "bg-primary/10 text-primary",
     };
 
-    const orderDateStr = item.order_date ? shortDateFmt.format(new Date(item.order_date)) : "-";
-    const deliveryDateStr = item.delivery_date ? shortDateFmt.format(new Date(item.delivery_date)) : null;
+    const orderDateStr = item.order_date ? shortDateFmt.format(parseUtcTimestamp(item.order_date)) : "-";
+    const deliveryDateStr = item.delivery_date ? shortDateFmt.format(parseUtcTimestamp(item.delivery_date)) : null;
 
     return (
         <button
@@ -161,8 +162,8 @@ function OrderTableRow({ item, onSelect, isLinked, groupSize }: { item: CashierO
         completed: "bg-primary/10 text-primary",
     };
 
-    const orderDateStr = item.order_date ? shortDateFmt.format(new Date(item.order_date)) : "-";
-    const deliveryDateStr = item.delivery_date ? shortDateFmt.format(new Date(item.delivery_date)) : "-";
+    const orderDateStr = item.order_date ? shortDateFmt.format(parseUtcTimestamp(item.order_date)) : "-";
+    const deliveryDateStr = item.delivery_date ? shortDateFmt.format(parseUtcTimestamp(item.delivery_date)) : "-";
 
     const rowTint = isNew
         ? "bg-primary/[0.04] hover:bg-primary/[0.07]"

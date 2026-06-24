@@ -12,6 +12,7 @@ import { useTransferRequests } from "@/hooks/useTransfers";
 import { primaryActionFor, personalAwaitingLabel, itemNamesPreview, isStale, staleDays, lastEventAt, sourceSideOf, destinationSideOf } from "@/lib/transfers";
 import { TransferStatusBadge, ItemTypeBadge } from "@/components/store/transfer-status-badge";
 import { TransferDetailDrawer } from "@/components/transfers/TransferDetailDrawer";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { PageHeader, StatusBanner, EmptyState as SharedEmptyState } from "@/components/shared/PageShell";
 import type { TransferRequestWithItems } from "@/api/transfers";
 import type { AuthUser } from "@/lib/rbac";
@@ -278,7 +279,7 @@ function TransferRowDesktop({
       <TableCell><TransferStatusBadge status={t.status} /></TableCell>
       <TableCell className="text-xs">
         <span className={action ? "text-[var(--status-warn)] font-medium" : "text-muted-foreground"}>{personalAwaitingLabel(user, t)}</span>
-        {at && <span className="block text-[11px] text-muted-foreground/70 mt-0.5">{new Date(at).toLocaleDateString()}</span>}
+        {at && <span className="block text-[11px] text-muted-foreground/70 mt-0.5">{parseUtcTimestamp(at).toLocaleDateString("en-GB", { timeZone: TIMEZONE })}</span>}
       </TableCell>
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
         {action ? (

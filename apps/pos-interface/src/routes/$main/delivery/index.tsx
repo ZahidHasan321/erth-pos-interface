@@ -6,7 +6,7 @@ import { Input } from "@repo/ui/input";
 import { Badge } from "@repo/ui/badge";
 import { Skeleton } from "@repo/ui/skeleton";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
-import { toLocalDateStr, parseUtcTimestamp } from "@/lib/utils";
+import { toLocalDateStr, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { useDeliveryOrders, useDeliverOrderMutation } from "@/hooks/useDelivery";
 import type { DeliveryOrder, DeliveryStatus } from "@/api/delivery";
 
@@ -28,6 +28,7 @@ function fmtDateTime(value: string | null): string | null {
     return isNaN(d.getTime())
         ? null
         : d.toLocaleString("en-GB", {
+              timeZone: TIMEZONE,
               day: "2-digit",
               month: "short",
               year: "numeric",

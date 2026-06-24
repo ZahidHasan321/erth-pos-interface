@@ -11,7 +11,7 @@ import { Skeleton } from "@repo/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
 
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { isAdmin, isManager } from "@/lib/rbac";
 import { formatQty } from "@/lib/inventory";
@@ -234,7 +234,7 @@ function StocktakePage() {
       {statusQ.data && (
         <p className="text-xs text-muted-foreground">
           {statusQ.data.last_validated_at
-            ? `Last validated ${new Date(statusQ.data.last_validated_at).toLocaleDateString()}`
+            ? `Last validated ${parseUtcTimestamp(statusQ.data.last_validated_at).toLocaleDateString("en-GB", { timeZone: TIMEZONE })}`
             : "No stocktake on record yet."}
           {statusQ.data.overdue && (
             <span className="text-red-700 font-medium"> · {statusQ.data.days_overdue} day{statusQ.data.days_overdue !== 1 ? "s" : ""} overdue</span>
@@ -430,7 +430,7 @@ function StocktakePage() {
                   params={{ main, sessionId: String(h.id) }}
                   className="flex items-center justify-between px-4 py-2 text-sm hover:bg-muted/50 transition-colors motion-reduce:transition-none"
                 >
-                  <span>{h.validated_at ? new Date(h.validated_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "-"}</span>
+                  <span>{h.validated_at ? parseUtcTimestamp(h.validated_at).toLocaleDateString(undefined, { timeZone: TIMEZONE, day: "numeric", month: "short", year: "numeric" }) : "-"}</span>
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">Validated <ChevronRight className="h-3.5 w-3.5" /></span>
                 </Link>
               </li>

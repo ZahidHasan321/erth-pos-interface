@@ -3735,7 +3735,9 @@ BEGIN
   v_tx_end := (p_date_to + INTERVAL '1 day')::timestamp - v_tz_interval;
 
   -- 1. Order-level aggregates for confirmed orders in range
-  --    order_date is stored as local date, so direct comparison is correct
+  --    order_date is stored as a UTC instant (set to NOW() at confirmation), so use
+  --    the same timezone-corrected boundaries as the transaction aggregates below —
+  --    otherwise the order counts and the money counts use different day edges.
   SELECT jsonb_build_object(
     'order_count',     COUNT(*),
     'work_count',      COUNT(*) FILTER (WHERE order_type = 'WORK'),
@@ -3752,8 +3754,8 @@ BEGIN
   FROM orders
   WHERE brand = p_brand::brand
     AND checkout_status = 'confirmed'
-    AND order_date >= p_date_from::timestamp
-    AND order_date < (p_date_to + INTERVAL '1 day')::timestamp;
+    AND order_date >= v_tx_start
+    AND order_date < v_tx_end;
 
   -- 1b. Cancellation aggregates (separate because they're excluded from confirmed filter)
   SELECT jsonb_build_object(
@@ -3763,8 +3765,8 @@ BEGIN
   FROM orders
   WHERE brand = p_brand::brand
     AND checkout_status = 'cancelled'
-    AND order_date >= p_date_from::timestamp
-    AND order_date < (p_date_to + INTERVAL '1 day')::timestamp;
+    AND order_date >= v_tx_start
+    AND order_date < v_tx_end;
 
   -- 1c. Invoice number range (WORK orders only — SALES don't carry invoice_number)
   SELECT jsonb_build_object(
@@ -3776,8 +3778,8 @@ BEGIN
   WHERE o.brand = p_brand::brand
     AND o.checkout_status = 'confirmed'
     AND wo.invoice_number IS NOT NULL
-    AND o.order_date >= p_date_from::timestamp
-    AND o.order_date < (p_date_to + INTERVAL '1 day')::timestamp;
+    AND o.order_date >= v_tx_start
+    AND o.order_date < v_tx_end;
 
   -- 1d. AR Outstanding (all-time, not date-scoped — total customer balances owed)
   SELECT COALESCE(SUM(GREATEST(order_total::decimal - paid::decimal, 0)), 0)

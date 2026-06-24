@@ -19,6 +19,7 @@ import { PaymentMode } from "@/components/cashier/payment-mode";
 import { HandoverMode } from "@/components/cashier/handover-mode";
 import { RefundMode } from "@/components/cashier/refund-mode";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import type { Order, Garment, OrderShelfItem } from "@repo/database";
 import "./cashier-keyframes";
 
@@ -32,7 +33,7 @@ type ShelfItemWithShelf = OrderShelfItem & { shelf?: { type: string; brand: stri
 type Mode = "payment" | "handover" | "refund";
 
 
-const shortDateFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
+const shortDateFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short" });
 
 export function OrderDetailShell({ orderId, onBack, canTakeMoney = true }: { orderId: string; onBack: () => void; canTakeMoney?: boolean }) {
     const { data: searchResult, isFetching: isOrderLoading } = useCashierOrderSearch(orderId);
@@ -385,7 +386,7 @@ function CustomerHeaderInline({ order, isCancelled }: { order: Order; isCancelle
             )}
             {order.delivery_date && (
                 <span className="text-[11px] tabular-nums shrink-0 flex items-center gap-0.5 font-semibold text-foreground">
-                    <CalendarDays className="h-3 w-3" />Due {shortDateFmt.format(new Date(order.delivery_date.toString()))}
+                    <CalendarDays className="h-3 w-3" />Due {shortDateFmt.format(parseUtcTimestamp(order.delivery_date.toString()))}
                 </span>
             )}
             <Popover>

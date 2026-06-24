@@ -39,8 +39,7 @@ import {
     TableHeader,
     TableRow,
 } from "@repo/ui/table";
-import { cn, parseUtcTimestamp } from "@/lib/utils";
-import { format } from "date-fns";
+import { cn, formatKuwaitDate } from "@/lib/utils";
 import { DatePicker } from "@repo/ui/date-picker";
 
 // Where a row click should navigate. The $main pages route into the full order
@@ -428,9 +427,9 @@ function OrderTableRow({
     const isWorkOrder = order.order_type === "WORK";
     const isAlterationOrder = order.order_type === "ALTERATION";
     const isGarmentOrder = isWorkOrder || isAlterationOrder;
-    const orderDate = order.order_date ? format(parseUtcTimestamp(order.order_date), "dd/MM/yy") : "N/A";
+    const orderDate = order.order_date ? formatKuwaitDate(order.order_date) : "N/A";
     const dueDate = isGarmentOrder && order.delivery_date
-        ? format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")
+        ? formatKuwaitDate(order.delivery_date)
         : null;
     const target = linkBuilder(order);
 
@@ -509,7 +508,7 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
     const isWorkOrder = order.order_type === "WORK";
     const isAlterationOrder = order.order_type === "ALTERATION";
     const isGarmentOrder = isWorkOrder || isAlterationOrder;
-    const orderDate = order.order_date ? format(parseUtcTimestamp(order.order_date), "dd/MM/yy") : "N/A";
+    const orderDate = order.order_date ? formatKuwaitDate(order.order_date) : "N/A";
     const target = linkBuilder(order);
 
     return (
@@ -540,7 +539,7 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
                             </span>
                             {isGarmentOrder && order.delivery_date && (
                                 <span className="text-xs text-foreground tabular-nums flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
+                                    <Clock className="w-3 h-3" />Due {formatKuwaitDate(order.delivery_date)}
                                 </span>
                             )}
                             {isGarmentOrder && <DeliveryBadge homeDelivery={order.home_delivery} />}
@@ -579,7 +578,7 @@ function OrderCard({ order, linkBuilder }: { order: OrderHistoryItem; linkBuilde
                         </div>
                         {isGarmentOrder && order.delivery_date && (
                             <div className="flex items-center gap-1 text-xs text-foreground tabular-nums">
-                                <Clock className="w-3 h-3" />Due {format(parseUtcTimestamp(order.delivery_date), "dd/MM/yy")}
+                                <Clock className="w-3 h-3" />Due {formatKuwaitDate(order.delivery_date)}
                             </div>
                         )}
                     </div>

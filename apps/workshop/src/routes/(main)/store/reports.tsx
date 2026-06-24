@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart, ArrowDownToLine, ArrowDownLeft, Send, AlertTriangle, Settings2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { TableContainer, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shared/table";
-import { cn, getLocalDateStr, getKuwaitDayRange } from "@/lib/utils";
+import { cn, getLocalDateStr, getKuwaitDayRange, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { getMovements, getMovementAggregates } from "@/api/stockMovements";
 import { MOVEMENT_TYPE_LABELS, MOVEMENT_TYPE_COLORS, getWasteReasonLabel } from "@/lib/inventory";
 import { PageHeader, SectionCard, EmptyState } from "@/components/shared/PageShell";
@@ -195,7 +195,7 @@ function ReportsPage() {
               <TableBody>
                 {recentAdjustments.map((m) => (
                   <TableRow key={m.id}>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{new Date(m.created_at).toLocaleString()}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{parseUtcTimestamp(m.created_at).toLocaleString("en-GB", { timeZone: TIMEZONE })}</TableCell>
                     <TableCell className="text-sm">{m.item_type} #{m.item_id} <span className="text-xs text-muted-foreground">({m.location})</span></TableCell>
                     <TableCell className={`text-right tabular-nums font-medium ${Number(m.qty_delta) >= 0 ? "text-[var(--status-ok)]" : "text-[var(--status-bad)]"}`}>
                       {Number(m.qty_delta) >= 0 ? "+" : ""}{Number(m.qty_delta).toFixed(1)}

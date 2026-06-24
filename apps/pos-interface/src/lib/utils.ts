@@ -65,11 +65,26 @@ export function parseUtcTimestamp(value: string | Date): Date {
   return new Date(value + "Z");
 }
 
+/**
+ * Format a stored UTC timestamp as a short date in Kuwait time (dd/MM/yy).
+ * Use this for any displayed date so the shown day always matches the
+ * Kuwait-based date filters, regardless of the viewer's machine timezone.
+ */
+export function formatKuwaitDate(value: string | Date | null | undefined): string {
+  if (!value) return "N/A";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).format(parseUtcTimestamp(value));
+}
+
 /** Parse any date value to local YYYY-MM-DD string */
 export function toLocalDateStr(value: string | Date | null | undefined): string | null {
   if (!value) return null;
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const d = new Date(value);
+  const d = parseUtcTimestamp(value);
   return isNaN(d.getTime()) ? null : getLocalDateStr(d);
 }
 

@@ -35,7 +35,7 @@ import {
   TableRow,
 } from "@repo/ui/table";
 
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { getPermission } from "@/lib/rbac";
 import {
@@ -1095,7 +1095,7 @@ function MovementsTab({
                       {m.user?.name && <span className="ml-2 text-xs opacity-70">by {m.user.name}</span>}
                     </TableCell>
                     <TableCell className="text-right text-xs text-muted-foreground">
-                      {new Date(m.created_at).toLocaleString()}
+                      {parseUtcTimestamp(m.created_at).toLocaleString("en-GB", { timeZone: TIMEZONE })}
                     </TableCell>
                   </TableRow>
                 );
@@ -1156,7 +1156,7 @@ function RestocksTab({
             <TableBody>
               {entries.map((e) => (
                 <TableRow key={e.id}>
-                  <TableCell className="text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{parseUtcTimestamp(e.created_at).toLocaleString("en-GB", { timeZone: TIMEZONE })}</TableCell>
                   <TableCell className="text-sm">{e.supplier?.name ?? "-"}</TableCell>
                   <TableCell className="text-right tabular-nums font-semibold text-green-700">
                     +{formatQty(itemType, e.qty, unit)}

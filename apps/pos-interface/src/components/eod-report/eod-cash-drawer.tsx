@@ -4,11 +4,12 @@ import { Wallet, ArrowDownToLine, ArrowUpFromLine, AlertTriangle, CheckCircle2, 
 import { useRegisterSessionByDate } from "@/hooks/useCashier";
 import type { EodReportSummary, CashMovementReasonCategory } from "@/api/cashier";
 import { CASH_MOVEMENT_CATEGORY_LABEL } from "@/lib/cashMovementLabels";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const fmtK = (n: number): string => `${fmt(n)} KWD`;
 const fmtTime = (iso: string): string =>
-    new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    parseUtcTimestamp(iso).toLocaleTimeString("en-GB", { timeZone: TIMEZONE, hour: "2-digit", minute: "2-digit" });
 
 interface EodCashDrawerProps {
     date: string;

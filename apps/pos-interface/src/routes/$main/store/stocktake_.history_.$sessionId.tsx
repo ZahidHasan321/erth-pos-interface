@@ -7,7 +7,7 @@ import { Button } from "@repo/ui/button";
 import { Skeleton } from "@repo/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/table";
 
-import { cn } from "@/lib/utils";
+import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { formatQty } from "@/lib/inventory";
 import { getFabrics } from "@/api/fabrics";
 import { getShelf } from "@/api/shelf";
@@ -70,7 +70,7 @@ function StocktakeHistoryDetailPage() {
           <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
             <History className="h-5 w-5 text-muted-foreground" />
             {sessionQ.data?.validated_at
-              ? new Date(sessionQ.data.validated_at).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
+              ? parseUtcTimestamp(sessionQ.data.validated_at).toLocaleDateString(undefined, { timeZone: TIMEZONE, day: "numeric", month: "long", year: "numeric" })
               : "Stocktake"}
           </h1>
           {sessionQ.data && (

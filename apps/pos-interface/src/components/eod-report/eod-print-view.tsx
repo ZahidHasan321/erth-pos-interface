@@ -522,7 +522,7 @@ export function EodReportDocument({ summary, transactions, dateFrom, dateTo, reg
                         {registerSession!.status === "closed" ? (
                             <Text style={s.closingNote}>
                                 Closed by {registerSession!.closed_by_name ?? "—"} at{" "}
-                                {registerSession!.closed_at ? timeFmt.format(new Date(registerSession!.closed_at)) : "—"}
+                                {registerSession!.closed_at ? timeFmt.format(parseUtcTimestamp(registerSession!.closed_at)) : "—"}
                                 {registerSession!.closing_notes ? `.  Note: ${registerSession!.closing_notes}` : ""}
                             </Text>
                         ) : null}
@@ -540,7 +540,7 @@ export function EodReportDocument({ summary, transactions, dateFrom, dateTo, reg
                         </View>
                         {[...cashIn, ...cashOut].map((m, i) => (
                             <View key={m.id} style={[s.tRow, ...(i % 2 === 1 ? [s.tRowAlt] : [])]} wrap={false}>
-                                <Text style={[s.tCell, { width: "13%" }]}>{timeFmt.format(new Date(m.created_at))}</Text>
+                                <Text style={[s.tCell, { width: "13%" }]}>{timeFmt.format(parseUtcTimestamp(m.created_at))}</Text>
                                 <Text style={[s.tCell, { width: "13%" }]}>{m.type === "cash_in" ? "Paid In" : "Paid Out"}</Text>
                                 <Text style={[s.tCell, { width: "35%" }]}>
                                     {CASH_MOVEMENT_CATEGORY_LABEL[m.reason_category] ?? "Other"}{m.reason ? `: ${m.reason}` : ""}

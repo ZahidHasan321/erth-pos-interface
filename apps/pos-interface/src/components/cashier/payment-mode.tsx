@@ -10,6 +10,7 @@ import { PAYMENT_TYPE_LABELS, PAYMENT_METHOD_COLORS } from "@/lib/constants";
 import { Numpad } from "@/components/cashier/numpad";
 import { DiscountDialog } from "@/components/cashier/discount-dialog";
 import { DeliveryDialog } from "@/components/cashier/delivery-dialog";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 import type { Order, Garment, OrderShelfItem, Shelf } from "@repo/database";
 
@@ -405,7 +406,7 @@ export function PaymentMode({
 }
 
 // ── Read-only items list (LEFT panel) ──────────────────────────────────────
-const itemDateFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
+const itemDateFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TIMEZONE, day: "2-digit", month: "short" });
 function sameDay(a?: string | Date | null, b?: string | Date | null): boolean {
     if (!a || !b) return false;
     return new Date(a).toDateString() === new Date(b).toDateString();
@@ -459,7 +460,7 @@ function OrderItemsList({ garments, shelfItems, orderDeliveryDate }: { garments:
                                 )}
                                 {!isDiscarded && showOwnDate && (
                                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0 tabular-nums">
-                                        Due {itemDateFmt.format(new Date(g.delivery_date!))}
+                                        Due {itemDateFmt.format(parseUtcTimestamp(g.delivery_date!))}
                                     </span>
                                 )}
                                 <span className={`ml-auto text-xs text-muted-foreground tabular-nums shrink-0 ${isDiscarded ? "line-through" : ""}`}>

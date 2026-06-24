@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from "@repo/ui/select";
 import { PAYMENT_TYPE_LABELS } from "@/lib/constants";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { useEodTransactionsPaginated } from "@/hooks/useCashier";
 import type { EodTransaction, EodTransactionFilters } from "@/api/cashier";
 import {
@@ -39,11 +39,13 @@ import {
 
 const fmt = (n: number): string => Number(Number(n).toFixed(3)).toString();
 const timeFmt = new Intl.DateTimeFormat("en-GB", {
+  timeZone: TIMEZONE,
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
 });
 const dateFmt = new Intl.DateTimeFormat("en-GB", {
+  timeZone: TIMEZONE,
   day: "2-digit",
   month: "short",
 });
