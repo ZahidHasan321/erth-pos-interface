@@ -37,7 +37,7 @@ import {
 
 import { updateOrder } from "@/api/orders";
 import type { Order } from "@repo/database";
-import { cn, getLocalDateStr, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
+import { cn, pickedDayStr, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   timeZone: TIMEZONE,
@@ -102,7 +102,7 @@ export function ReminderCell({ orderId, type, date, note, colorClass }: Reminder
 
   const handleSave = async () => {
     if (!editDate) return;
-    const dateStr = getLocalDateStr(editDate);
+    const dateStr = pickedDayStr(editDate);
     let updates: Record<string, unknown> = {};
 
     if (type === "Escalation") {
@@ -237,7 +237,7 @@ export function CallCell({ orderId, date, status, note }: CallCellProps) {
   const handleSave = async () => {
     if (!editDate) return;
     const updates = {
-      call_reminder_date: getLocalDateStr(editDate),
+      call_reminder_date: pickedDayStr(editDate),
       call_status: editStatus,
       call_notes: editNote
     };

@@ -1,6 +1,7 @@
 "use client";
 
 import { updateOrder, getLinkedOrders } from "@/api/orders";
+import { pickedDayKuwaitMidnight } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
@@ -115,7 +116,7 @@ export default function UnlinkOrder() {
                 {
                     linked_order_id: null,
                     unlinked_date: new Date(),
-                    delivery_date: new Date(reviseDate.toISOString()),
+                    delivery_date: pickedDayKuwaitMidnight(reviseDate),
                 } as Partial<Order>,
                 orderToUnlink.id,
             );

@@ -45,7 +45,7 @@ import {
     ArrowRight,
     Check,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getKuwaitMidnight, pickedDayKuwaitMidnight } from "@/lib/utils";
 import { getFabricValue } from "@/lib/utils/fabric-utils";
 import { calculateGarmentStylePrice } from "@/lib/utils/style-utils";
 import { DataTable } from "./data-table";
@@ -171,8 +171,9 @@ export function FabricSelectionForm({
 
     React.useEffect(() => {
         if (!deliveryDate && !isOrderClosed && !isProceedDisabled) {
-            const today = new Date();
-            setDeliveryDate(today.toISOString());
+            // Default delivery day = today in Kuwait, stored at Kuwait midnight so
+            // it renders as the same day regardless of the viewer's timezone.
+            setDeliveryDate(getKuwaitMidnight().toISOString());
         }
     }, [deliveryDate, isOrderClosed, isProceedDisabled, setDeliveryDate]);
 
@@ -718,7 +719,7 @@ export function FabricSelectionForm({
                                 <DatePicker
                                     placeholder={new Date().toISOString()}
                                     value={deliveryDate ? new Date(deliveryDate) : new Date()}
-                                    onChange={(value) => value && setDeliveryDate(value.toISOString())}
+                                    onChange={(value) => value && setDeliveryDate(pickedDayKuwaitMidnight(value).toISOString())}
                                     disabled={isFormDisabled}
                                     className="h-8 border-border/60 rounded-md shadow-xs font-semibold text-sm"
                                 />

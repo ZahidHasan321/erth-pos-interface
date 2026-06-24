@@ -36,6 +36,23 @@ export function getKuwaitMidnight(date?: Date): Date {
 }
 
 /**
+ * The calendar day a DatePicker/Calendar handed back, as "YYYY-MM-DD".
+ * A picker encodes the chosen day at the BROWSER's local midnight, so read its
+ * local Y/M/D directly. Never run a picked day through getLocalDateStr/
+ * getKuwaitMidnight (UTC/Kuwait reinterpretation) or toISOString() — a browser
+ * east of Kuwait would shift the day back by one. Feed the result to
+ * getKuwaitDayRange for filters, or store it as the literal business day.
+ */
+export function pickedDayStr(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** Kuwait midnight (UTC instant) of the calendar day a picker returned. */
+export function pickedDayKuwaitMidnight(date: Date): Date {
+  return new Date(pickedDayStr(date) + "T00:00:00+03:00");
+}
+
+/**
  * UTC ISO bounds covering a Kuwait-local day.
  * `dateStr` is YYYY-MM-DD in Kuwait tz (omit for today).
  * Start = Kuwait 00:00, End = Kuwait 23:59:59.999 — both expressed as UTC ISO

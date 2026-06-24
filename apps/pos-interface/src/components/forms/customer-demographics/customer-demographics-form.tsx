@@ -1,4 +1,4 @@
-import { debounce, cn } from "@/lib/utils";
+import { debounce, cn, pickedDayKuwaitMidnight } from "@/lib/utils";
 import { findAccountsByPhone, getCustomerById, updateCustomer, createCustomer, type PhoneAccountMatch } from "@/api/customers";
 import { Button } from "@repo/ui/button";
 import { Combobox } from "@repo/ui/combobox";
@@ -615,7 +615,7 @@ export function CustomerDemographicsForm({
                         <FormControl>
                           <DatePicker
                             value={field.value ? new Date(field.value) : null}
-                            onChange={(date) => field.onChange(date ? date.toISOString() : null)}
+                            onChange={(date) => field.onChange(date ? pickedDayKuwaitMidnight(date).toISOString() : null)}
                             disabled={isReadOnly}
                             clearable
                           />

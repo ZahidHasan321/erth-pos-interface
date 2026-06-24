@@ -31,6 +31,17 @@ export function getKuwaitMidnight(date?: Date): Date {
 }
 
 /**
+ * The calendar day a DatePicker/Calendar handed back, as "YYYY-MM-DD".
+ * A picker encodes the chosen day at the BROWSER's local midnight, so read its
+ * local Y/M/D directly. Never run a picked day through getLocalDateStr/
+ * toLocalDateStr (Kuwait reinterpretation) or toISOString() — a browser east of
+ * Kuwait would shift the day back by one.
+ */
+export function pickedDayStr(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/**
  * Parse a DB timestamp correctly as UTC.
  * Supabase returns `timestamp without tz` as "2025-04-04T21:00:00" (no Z),
  * so JS would parse it as local time. The value is actually UTC — append Z.

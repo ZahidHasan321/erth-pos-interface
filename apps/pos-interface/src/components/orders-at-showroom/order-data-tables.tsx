@@ -21,7 +21,7 @@ import {
 } from "@repo/ui/table";
 import { ChevronLeft, ChevronRight, ChevronDown, ClipboardCheck, Settings2, Truck } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { cn, clickableProps, getKuwaitMidnight, TIMEZONE } from "@/lib/utils";
+import { cn, clickableProps, getKuwaitMidnight, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { isAlteration as isAlterationTrip, getAlterationNumber } from "@repo/database";
 
 import type { OrderRow } from "./types";
@@ -49,7 +49,7 @@ function fmtDate(value?: string | null) {
 
 function daysOverdue(deliveryDate?: string | null): number {
   if (!deliveryDate) return 0;
-  const delivery = getKuwaitMidnight(new Date(deliveryDate));
+  const delivery = getKuwaitMidnight(parseUtcTimestamp(deliveryDate));
   const today = getKuwaitMidnight();
   const diff = Math.ceil((today.getTime() - delivery.getTime()) / (1000 * 60 * 60 * 24));
   return diff > 0 ? diff : 0;

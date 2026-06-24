@@ -24,7 +24,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@repo/ui/popover";
-import { cn, getLocalDateStr } from "@/lib/utils";
+import { cn, pickedDayStr } from "@/lib/utils";
 
 export type FilterState = {
   searchId: string;
@@ -229,7 +229,7 @@ export function OrderFilters({
             <div className="w-[130px]">
               <DatePicker
                 value={filters.deliveryDateStart ? new Date(filters.deliveryDateStart) : null}
-                onChange={(d) => onFilterChange("deliveryDateStart", d ? getLocalDateStr(d) : "")}
+                onChange={(d) => onFilterChange("deliveryDateStart", d ? pickedDayStr(d) : "")}
                 placeholder="From"
                 clearable
                 className="h-9 text-xs border-2 border-border/60 rounded-lg bg-background font-bold"
@@ -239,7 +239,7 @@ export function OrderFilters({
             <div className="w-[130px]">
               <DatePicker
                 value={filters.deliveryDateEnd ? new Date(filters.deliveryDateEnd) : null}
-                onChange={(d) => onFilterChange("deliveryDateEnd", d ? getLocalDateStr(d) : "")}
+                onChange={(d) => onFilterChange("deliveryDateEnd", d ? pickedDayStr(d) : "")}
                 placeholder="To"
                 clearable
                 className="h-9 text-xs border-2 border-border/60 rounded-lg bg-background font-bold"

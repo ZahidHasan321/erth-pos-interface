@@ -23,7 +23,7 @@ import { useShowroomOrders } from "@/hooks/useShowroomOrders";
 import { OrderDataTable } from "@/components/orders-at-showroom/order-data-tables";
 import { OrderFilters, type FilterState } from "@/components/orders-at-showroom/order-filters";
 import { TableSkeleton } from "@/components/orders-at-showroom/table-skeleton";
-import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
+import { cn, parseUtcTimestamp, pickedDayStr, TIMEZONE } from "@/lib/utils";
 import { Button } from "@repo/ui/button";
 import { Card } from "@repo/ui/card";
 import { Badge } from "@repo/ui/badge";
@@ -122,7 +122,7 @@ function ReminderDialog({
 
     const handleSave = async () => {
         if (!editDate) return;
-        await onSave(editDate.toISOString().split("T")[0], editNotes);
+        await onSave(pickedDayStr(editDate), editNotes);
         setIsOpen(false);
     };
 
@@ -203,7 +203,7 @@ function CallLogDialog({
 
     const handleSave = async () => {
         if (!editDate) return;
-        await onSave(editDate.toISOString().split("T")[0], editStatus, editNotes);
+        await onSave(pickedDayStr(editDate), editStatus, editNotes);
         setIsOpen(false);
     };
 
@@ -289,7 +289,7 @@ function EscalationDialog({
 
     const handleSave = async () => {
         if (!editDate) return;
-        await onSave(editDate.toISOString().split("T")[0], editNotes);
+        await onSave(pickedDayStr(editDate), editNotes);
         setIsOpen(false);
     };
 

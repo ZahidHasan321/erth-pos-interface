@@ -1,7 +1,7 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { getBrand } from "@/api/orders";
-import { sanitizeFilterValue, getKuwaitMidnight } from "@/lib/utils";
+import { sanitizeFilterValue, getKuwaitDayRange, pickedDayStr } from "@/lib/utils";
 
 export type OrderHistoryItem = {
   id: number;
@@ -92,10 +92,13 @@ export function useOrderHistory({
       }
 
       if (dateFilter) {
-        // order_date stores UTC. Convert Kuwait day boundaries to UTC for correct filtering.
-        const startOfDay = getKuwaitMidnight(new Date(dateFilter));
-        const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
-        query = query.gte('order_date', startOfDay.toISOString()).lte('order_date', endOfDay.toISOString());
+        // The picker hands back the chosen calendar day at the BROWSER's local
+        // midnight. Read its local Y/M/D (the day the user actually clicked) and
+        // treat that as the Kuwait business day — never reinterpret the instant
+        // through Kuwait, or a browser east of Kuwait shifts the day back by one.
+        // order_date stores UTC, so getKuwaitDayRange yields the matching UTC bounds.
+        const { start, end } = getKuwaitDayRange(pickedDayStr(dateFilter));
+        query = query.gte('order_date', start).lte('order_date', end);
       }
 
       if (searchTerm) {

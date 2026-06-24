@@ -14,7 +14,7 @@ import { mapCustomerToFormValues } from "@/components/forms/customer-demographic
 import { CustomerDemographicsForm } from "@/components/forms/customer-demographics";
 import { SearchCustomer } from "@/components/forms/customer-demographics/search-customer";
 import { ErrorBoundary } from "@/components/global/error-boundary";
-import { TIMEZONE } from "@/lib/utils";
+import { TIMEZONE, pickedDayKuwaitMidnight } from "@/lib/utils";
 import { DatePicker } from "@repo/ui/date-picker";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
@@ -195,7 +195,7 @@ function NewAlterationOrder() {
             }
         }
 
-        const deliveryIso = requestedDeliveryDate.toISOString();
+        const deliveryIso = pickedDayKuwaitMidnight(requestedDeliveryDate).toISOString();
         const garmentsWithDelivery = garments.map((g) => ({ ...g, delivery_date: deliveryIso }));
 
         const parsed = alterationOrderSchema.safeParse({

@@ -32,7 +32,7 @@ import {
 } from "@/api/orders";
 import { fuzzySearchCustomers } from "@/api/customers";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
-import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
+import { cn, parseUtcTimestamp, pickedDayKuwaitMidnight, TIMEZONE } from "@/lib/utils";
 import { ErrorBoundary } from "../global/error-boundary";
 import { LinkConfigurationPanel } from "./link-configuration-panel";
 
@@ -213,7 +213,7 @@ export default function LinkOrder() {
       await Promise.all(
         selectedOrders.map((order) => {
           const isPrimary = order.id === primaryOrderId;
-          const updateData: Partial<Order> = { delivery_date: reviseDate };
+          const updateData: Partial<Order> = { delivery_date: pickedDayKuwaitMidnight(reviseDate) };
           if (isPrimary) {
             updateData.linked_order_id = null;
             updateData.unlinked_date = null;

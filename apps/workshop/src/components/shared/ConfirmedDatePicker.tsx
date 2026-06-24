@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DatePicker } from "@repo/ui/date-picker";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
-import { formatDate } from "@/lib/utils";
+import { formatDate, pickedDayStr } from "@/lib/utils";
 
 interface Props {
   value: Date | string | null | undefined;
@@ -27,7 +27,7 @@ export function ConfirmedDatePicker({
   const [pending, setPending] = useState<Date | null>(null);
 
   const currentStr = value ? formatDate(typeof value === "string" ? value : value.toISOString()) : "-";
-  const nextStr = pending ? formatDate(pending.toISOString()) : "";
+  const nextStr = pending ? formatDate(pickedDayStr(pending)) : "";
 
   return (
     <>

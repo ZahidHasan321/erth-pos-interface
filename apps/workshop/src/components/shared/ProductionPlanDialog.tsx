@@ -9,7 +9,7 @@ import { IconNeedle, IconIroning1, IconRosette, IconSparkles } from "@tabler/ico
 
 import { useResources } from "@/hooks/useResources";
 import { getFeedbackByGarmentAndTrip } from "@/api/feedback";
-import { cn, getLocalDateStr, toLocalDateStr } from "@/lib/utils";
+import { cn, getLocalDateStr, pickedDayStr } from "@/lib/utils";
 import type { TripHistoryEntry } from "@repo/database";
 
 import {
@@ -309,7 +309,7 @@ export function ProductionPlanDialog(props: ProductionPlanDialogProps) {
               </Label>
               <DatePicker
                 value={date}
-                onChange={(d) => setDate(d ? toLocalDateStr(d) ?? "" : "")}
+                onChange={(d) => setDate(d ? pickedDayStr(d) : "")}
                 className="h-9"
               />
             </div>
@@ -318,7 +318,7 @@ export function ProductionPlanDialog(props: ProductionPlanDialogProps) {
                 <Label className="text-sm text-muted-foreground">Delivery date</Label>
                 <DatePicker
                   value={deliveryDate}
-                  onChange={(d) => setDeliveryDate(d ? toLocalDateStr(d) ?? "" : "")}
+                  onChange={(d) => setDeliveryDate(d ? pickedDayStr(d) : "")}
                   className="h-9"
                 />
               </div>

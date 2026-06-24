@@ -16,7 +16,7 @@ import { DatePicker } from "@repo/ui/date-picker";
 import { Combobox } from "@repo/ui/combobox";
 import { getFabrics } from "@/api/fabrics";
 import { useQuery } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
+import { cn, pickedDayKuwaitMidnight } from "@/lib/utils";
 import Fuse from "fuse.js";
 import type { CellContext } from "@tanstack/react-table";
 import type { GarmentSchema } from "./garment-form.schema";
@@ -604,7 +604,7 @@ export const DeliveryDateCell = ({
     const isFormDisabled = meta?.isFormDisabled || false;
 
     const handleDateChange = (date: Date | null) => {
-        setValue(`garments.${row.index}.delivery_date`, date?.toISOString() || null, { shouldValidate: true });
+        setValue(`garments.${row.index}.delivery_date`, date ? pickedDayKuwaitMidnight(date).toISOString() : null, { shouldValidate: true });
     };
 
     return (

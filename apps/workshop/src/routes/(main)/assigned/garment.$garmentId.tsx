@@ -21,7 +21,7 @@ import { ConfirmedDatePicker } from "@/components/shared/ConfirmedDatePicker";
 import { Skeleton } from "@repo/ui/skeleton";
 import { Button } from "@repo/ui/button";
 import { ArrowLeft, Lock, Replace } from "lucide-react";
-import { toLocalDateStr, formatDate } from "@/lib/utils";
+import { toLocalDateStr, pickedDayStr, formatDate } from "@/lib/utils";
 import type { WorkshopGarment, TripHistoryEntry, GarmentFeedback } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/assigned/garment/$garmentId")({
@@ -273,7 +273,7 @@ function EditableDates({
   const handleDeliveryChange = async (d: Date) => {
     await updateMut.mutateAsync({
       id: garment.id,
-      updates: { delivery_date: toLocalDateStr(d) },
+      updates: { delivery_date: pickedDayStr(d) },
     });
   };
 
@@ -281,7 +281,7 @@ function EditableDates({
     if (!d) return;
     await updateMut.mutateAsync({
       id: garment.id,
-      updates: { assigned_date: toLocalDateStr(d) },
+      updates: { assigned_date: pickedDayStr(d) },
     });
   };
 
