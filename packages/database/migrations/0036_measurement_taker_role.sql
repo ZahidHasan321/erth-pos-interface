@@ -1,0 +1,15 @@
+-- Add the `measurement_taker` role (§5).
+--
+-- An order-taker who records measurements. Shop department (carries brand
+-- access like other shop users). Access is enforced in the POS app: full
+-- order-taking surface (orders / customers / appointments / deliveries /
+-- dashboard) but NO Store Management (inventory, transfers, stocktake,
+-- suppliers, reports, end-of-day report) and NO Cashier. Because those
+-- surfaces are ERTH-only (home-based brands have no cashier/EOD and never
+-- show Store Management), this single role rule yields: ERTH = everything
+-- except stock/cashier/EOD; SAKKBA/QASS = full.
+--
+-- ADD VALUE is idempotent (IF NOT EXISTS) and auto-commits; it must run
+-- outside an explicit transaction and the value cannot be used in the same
+-- transaction it is added in.
+ALTER TYPE role ADD VALUE IF NOT EXISTS 'measurement_taker';

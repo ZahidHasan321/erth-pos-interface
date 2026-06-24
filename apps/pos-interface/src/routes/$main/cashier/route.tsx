@@ -9,8 +9,12 @@ import { cn } from "@/lib/utils";
 // differs (shop sidebar here, dedicated header there). Order History and
 // End of Day stay shop-sidebar items, so they are not duplicated as tabs.
 export const Route = createFileRoute("/$main/cashier")({
-    beforeLoad: ({ params }) => {
+    beforeLoad: ({ params, context }) => {
         if (!brandUsesCashier(params.main)) {
+            throw redirect({ to: "/$main", params: { main: params.main } });
+        }
+        // Measurement takers (§5) are order-takers with no cashier access.
+        if (context.auth.user?.role === "measurement_taker") {
             throw redirect({ to: "/$main", params: { main: params.main } });
         }
     },

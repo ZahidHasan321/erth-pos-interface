@@ -42,3 +42,6 @@ yarn-error.log*
 
 # Local data
 *.xlsx
+
+# Plaintext user PINs - never commit
+new-db-users-credentials.csv

@@ -40,7 +40,13 @@ BEGIN
   ON CONFLICT (idempotency_key) DO NOTHING;
   RETURN FOUND;
 END;
-$$ LANGUAGE plpgsql;
+-- SECURITY DEFINER: rpc_idempotency is RLS-locked (super_admin-only direct
+-- access) and is pure bookkeeping, not user data. These three helpers are the
+-- ONLY sanctioned writers/readers, so they must run privileged regardless of
+-- whether the calling RPC is DEFINER or INVOKER -- otherwise every INVOKER RPC
+-- that passes an idempotency key fails for non-super-admin callers with
+-- "new row violates row-level security policy for table rpc_idempotency".
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- 0a-idem-store. Persist the original RPC result against its claimed key.
 -- Runs in the caller's transaction: a rollback discards this row alongside
@@ -53,7 +59,8 @@ BEGIN
   END IF;
   UPDATE rpc_idempotency SET result = p_result WHERE idempotency_key = p_key;
 END;
-$$ LANGUAGE plpgsql;
+-- SECURITY DEFINER: see idem_claim (RLS-locked bookkeeping table).
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- 0a-idem-replay. Return the persisted original result for an already-claimed key.
 -- If the row exists but result IS NULL the key was claimed by a still-in-flight
@@ -71,7 +78,8 @@ BEGIN
   END IF;
   RETURN v_result;
 END;
-$$ LANGUAGE plpgsql;
+-- SECURITY DEFINER: see idem_claim (RLS-locked bookkeeping table).
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
 
 -- 0a. Enable pg_trgm for fuzzy/trigram search (idempotent, available on Supabase)
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -112,7 +120,16 @@ CREATE OR REPLACE FUNCTION complete_work_order(
   p_fabric_items JSONB,     -- [{ id: number, length: number }]
   p_idempotency_key UUID DEFAULT NULL
 )
-RETURNS JSONB AS $$
+RETURNS JSONB
+-- SECURITY DEFINER: order-taking is open to all shop staff + measurement takers
+-- (access is gated at the page level, not per-table), but the fabric/shelf
+-- decrement below writes to inventory tables whose RLS is manager-only. As the
+-- caller, a non-manager's decrement silently matched zero rows (stock never
+-- dropped). Running as the owner bypasses that RLS; the explicit brand guard
+-- below preserves the §1 per-brand isolation the RLS used to enforce.
+SECURITY DEFINER
+SET search_path = public, extensions, pg_catalog
+AS $$
 DECLARE
   v_item JSONB;
   v_order_row RECORD;
@@ -137,6 +154,9 @@ BEGIN
   -- order/work-order rows in the normal RETURN shape so the caller sees an
   -- idempotent success, without decrementing again.
   SELECT * INTO v_order_row FROM orders WHERE id = p_order_id;
+  -- Brand isolation (§1): see enforce_order_brand_access. NULL brand (order not
+  -- found) is a no-op here; the missing order falls through to the UPDATE below.
+  PERFORM enforce_order_brand_access(v_order_row.brand::text);
   IF FOUND AND v_order_row.checkout_status = 'confirmed' THEN
     SELECT * INTO v_work_order_row FROM work_orders WHERE order_id = p_order_id;
     v_result := to_jsonb(v_order_row) || COALESCE(to_jsonb(v_work_order_row), '{}'::jsonb);
@@ -334,7 +354,13 @@ CREATE OR REPLACE FUNCTION complete_sales_order(
   p_shelf_items JSONB,      -- [{ id: number, quantity: number, unitPrice: number }]
   p_idempotency_key UUID DEFAULT NULL
 )
-RETURNS JSONB AS $$
+RETURNS JSONB
+-- SECURITY DEFINER: see complete_work_order. Non-manager shop order-takers must
+-- be able to decrement shelf stock during a sales confirm; the brand guard
+-- below keeps the §1 per-brand isolation the bypassed RLS enforced.
+SECURITY DEFINER
+SET search_path = public, extensions, pg_catalog
+AS $$
 DECLARE
   v_item JSONB;
   v_order_row orders%ROWTYPE;
@@ -354,6 +380,8 @@ BEGIN
   -- already-confirmed order would re-run the shelf decrement loop and
   -- double-deduct. Return the current order row in the normal shape instead.
   SELECT * INTO v_order_row FROM orders WHERE id = p_order_id;
+  -- Brand isolation (§1): see enforce_order_brand_access.
+  PERFORM enforce_order_brand_access(v_order_row.brand::text);
   IF FOUND AND v_order_row.checkout_status = 'confirmed' THEN
     v_result := to_jsonb(v_order_row);
     PERFORM idem_store(p_idempotency_key, v_result);
@@ -471,7 +499,13 @@ CREATE OR REPLACE FUNCTION create_complete_sales_order(
   p_shelf_items JSONB,      -- [{ id: number, quantity: number, unitPrice: number }]
   p_idempotency_key UUID DEFAULT NULL
 )
-RETURNS JSONB AS $$
+RETURNS JSONB
+-- SECURITY DEFINER: see complete_work_order. Non-manager shop order-takers must
+-- be able to decrement shelf stock during a sales confirm; the brand guard
+-- below keeps the §1 per-brand isolation the bypassed RLS enforced.
+SECURITY DEFINER
+SET search_path = public, extensions, pg_catalog
+AS $$
 DECLARE
   v_item JSONB;
   v_order_id INT;
@@ -492,6 +526,9 @@ BEGIN
 
   v_paid := (p_checkout_details->>'paid')::decimal;
   v_brand := (p_checkout_details->>'brand')::brand;
+
+  -- Brand isolation (§1): see enforce_order_brand_access.
+  PERFORM enforce_order_brand_access(v_brand::text);
 
   -- 1. Insert into orders
   INSERT INTO orders (
@@ -3136,6 +3173,52 @@ RETURNS BOOLEAN AS $$
     OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND lower(brand_value) = ANY(brands));
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
+-- Brand-isolation guard for the SECURITY DEFINER order/consumption RPCs
+-- (complete_work_order / complete_sales_order / create_complete_sales_order /
+-- consume_for_order). Those run as the table owner so non-manager shop
+-- order-takers can decrement inventory (whose RLS is manager-only) — which
+-- means the per-table RLS brand check no longer fires inside them. Re-assert it
+-- here, but ONLY for brand-scoped client roles arriving via PostgREST
+-- (authenticated/anon). Trusted callers carry a different JWT role
+-- (service_role) or no JWT at all (the lifecycle test harness, backend scripts,
+-- superuser) and are allowed through, mirroring how rolbypassrls roles skipped
+-- RLS before. An anon caller has no brand access, so it is rejected here —
+-- closing the privilege-escalation hole DEFINER would otherwise open.
+CREATE OR REPLACE FUNCTION enforce_order_brand_access(p_brand TEXT)
+RETURNS void AS $$
+BEGIN
+  IF p_brand IS NOT NULL
+     AND COALESCE((NULLIF(current_setting('request.jwt.claims', true), '')::jsonb)->>'role', '')
+           IN ('authenticated', 'anon')
+     AND NOT can_access_brand(p_brand) THEN
+    RAISE EXCEPTION 'permission denied: your account is not assigned to brand %', p_brand
+      USING ERRCODE = '42501';
+  END IF;
+END;
+$$ LANGUAGE plpgsql STABLE SET search_path = public, extensions, pg_catalog;
+
+-- Minimal guard for SECURITY DEFINER RPCs that bypass RLS (inventory mutations,
+-- stocktake). DEFINER is needed so the write actually applies — an INVOKER call
+-- by a non-manager silently matched 0 rows against the manager-only RLS on
+-- fabrics/shelf/accessories (= lost stock, no ledger). WHO may run these is
+-- enforced at the PAGE level (rbac.ts), deliberately NOT here: this stays
+-- role-agnostic so a future role (e.g. inventory_manager) needs no RPC change.
+-- We only re-assert the app-wide is_active invariant, and ONLY for client roles
+-- arriving via PostgREST (authenticated/anon) — trusted callers (service_role /
+-- no JWT: the lifecycle test harness, backend scripts, superuser) pass through,
+-- mirroring enforce_order_brand_access.
+CREATE OR REPLACE FUNCTION enforce_active_client()
+RETURNS void AS $$
+BEGIN
+  IF COALESCE((NULLIF(current_setting('request.jwt.claims', true), '')::jsonb)->>'role', '')
+       IN ('authenticated', 'anon')
+     AND NOT is_active_user() THEN
+    RAISE EXCEPTION 'permission denied: your account is not active'
+      USING ERRCODE = '42501';
+  END IF;
+END;
+$$ LANGUAGE plpgsql STABLE SET search_path = public, extensions, pg_catalog;
+
 -- ═══════════════════════════════════════════════════════════════════════
 -- ROW LEVEL SECURITY POLICIES
 -- ═══════════════════════════════════════════════════════════════════════
@@ -3306,10 +3389,17 @@ DROP POLICY IF EXISTS "campaigns_modify" ON campaigns;
 CREATE POLICY "campaigns_modify" ON campaigns FOR ALL USING (is_manager_or_above());
 DROP POLICY IF EXISTS "styles_modify" ON styles;
 CREATE POLICY "styles_modify" ON styles FOR ALL USING (is_manager_or_above());
+-- fabrics/shelf are operated by inventory staff in the shop (restock / adjust /
+-- waste / consume / transfer), all through stamping INVOKER RPCs that run as the
+-- caller. Gate writes on is_active_user() (matching suppliers_modify and
+-- stock_movements_insert below) — NOT a role, so a manager-only policy here would
+-- make those RPCs silently match 0 rows for non-managers (lost stock, no ledger).
+-- WHO may reach each action is enforced at the page level (rbac.ts), which also
+-- keeps future roles (e.g. inventory_manager) working with no DB change.
 DROP POLICY IF EXISTS "fabrics_modify" ON fabrics;
-CREATE POLICY "fabrics_modify" ON fabrics FOR ALL USING (is_manager_or_above());
+CREATE POLICY "fabrics_modify" ON fabrics FOR ALL USING (is_active_user());
 DROP POLICY IF EXISTS "shelf_modify" ON shelf;
-CREATE POLICY "shelf_modify" ON shelf FOR ALL USING (is_manager_or_above());
+CREATE POLICY "shelf_modify" ON shelf FOR ALL USING (is_active_user());
 
 -- ── Measurements ────────────────────────────────────────────────────
 ALTER TABLE measurements ENABLE ROW LEVEL SECURITY;
@@ -6380,13 +6470,18 @@ DROP POLICY IF EXISTS "accessories_select" ON accessories;
 CREATE POLICY "accessories_select" ON accessories
     FOR SELECT USING (is_active_user());
 
+-- Accessories are operated by inventory staff in BOTH apps (restock / adjust /
+-- waste / transfer dispatch+receive), all via stamping INVOKER RPCs that run as
+-- the caller. Gate on is_active_user() (matching fabrics/shelf/suppliers above) —
+-- NOT a role; manager-only here made those RPCs silently no-op for non-managers.
+-- Page-level rbac.ts decides who may reach each action.
 DROP POLICY IF EXISTS "accessories_insert" ON accessories;
 CREATE POLICY "accessories_insert" ON accessories
-    FOR INSERT WITH CHECK (is_manager_or_above());
+    FOR INSERT WITH CHECK (is_active_user());
 
 DROP POLICY IF EXISTS "accessories_update" ON accessories;
 CREATE POLICY "accessories_update" ON accessories
-    FOR UPDATE USING (is_manager_or_above());
+    FOR UPDATE USING (is_active_user());
 
 -- ── Suppliers (shared inventory reference; created/edited from the store
 --    surfaces and inline during restock by inventory staff in both apps) ──
@@ -7103,17 +7198,28 @@ CREATE OR REPLACE FUNCTION consume_for_order(
   p_user_id UUID DEFAULT NULL,
   p_idempotency_key UUID DEFAULT NULL
 )
-RETURNS JSONB AS $$
+RETURNS JSONB
+-- SECURITY DEFINER: see complete_work_order. Re-consuming fabric/shelf on a
+-- redo/resume must work for non-manager shop order-takers; the brand guard
+-- below keeps the §1 per-brand isolation the bypassed RLS enforced.
+SECURITY DEFINER
+SET search_path = public, extensions, pg_catalog
+AS $$
 DECLARE
   v_item JSONB;
   v_qty NUMERIC;
   v_current NUMERIC;
   v_result JSONB;
+  v_brand brand;
 BEGIN
   -- Idempotency: a lost-response replay must not decrement stock twice.
   IF NOT idem_claim(p_idempotency_key, 'consume_for_order') THEN
     RETURN idem_replay(p_idempotency_key);
   END IF;
+
+  -- Brand isolation (§1): see enforce_order_brand_access.
+  SELECT brand INTO v_brand FROM orders WHERE id = p_order_id;
+  PERFORM enforce_order_brand_access(v_brand::text);
 
   -- Stamp ledger context once for the whole batch
   PERFORM set_config('app.movement_type', 'consumption', true);
@@ -7778,6 +7884,9 @@ BEGIN
     RETURN idem_replay(p_idempotency_key);
   END IF;
 
+  -- DEFINER bypasses RLS; block anon/inactive callers (page guards who else).
+  PERFORM enforce_active_client();
+
   SELECT id INTO v_id FROM stocktake_sessions
     WHERE side = p_side AND status = 'open' ORDER BY started_at DESC LIMIT 1;
 
@@ -7805,6 +7914,9 @@ DECLARE
   v_item JSONB;
   v_status stocktake_status;
 BEGIN
+  -- DEFINER bypasses RLS; block anon/inactive callers (page guards who else).
+  PERFORM enforce_active_client();
+
   SELECT status INTO v_status FROM stocktake_sessions WHERE id = p_session_id;
   IF v_status IS NULL THEN
     RAISE EXCEPTION 'save_stocktake_counts: session % not found', p_session_id;

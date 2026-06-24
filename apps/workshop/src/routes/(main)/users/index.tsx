@@ -61,6 +61,7 @@ const ROLE_STYLE: Record<Role, string> = {
   manager:     "bg-muted text-foreground",
   staff:       "bg-muted/40 text-muted-foreground",
   cashier:     "bg-muted/40 text-muted-foreground",
+  measurement_taker: "bg-muted/40 text-muted-foreground",
 };
 
 function getAvatarStyle(role: Role) {
@@ -69,7 +70,7 @@ function getAvatarStyle(role: Role) {
   return "bg-muted/60 text-muted-foreground";
 }
 
-const ROLE_RANK: Record<Role, number> = { super_admin: 0, admin: 1, manager: 2, staff: 3, cashier: 4 };
+const ROLE_RANK: Record<Role, number> = { super_admin: 0, admin: 1, manager: 2, staff: 3, cashier: 4, measurement_taker: 5 };
 
 // ── Deactivate Confirm Dialog ───────────────────────────────────────
 

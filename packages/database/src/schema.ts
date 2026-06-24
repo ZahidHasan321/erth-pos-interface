@@ -19,7 +19,7 @@ const numeric = (name: string, config?: { precision?: number; scale?: number }) 
 
 // --- ENUMS (Normalized from JSON) ---
 
-export const roleEnum = pgEnum("role", ["super_admin", "admin", "staff", "manager", "cashier"]);
+export const roleEnum = pgEnum("role", ["super_admin", "admin", "staff", "manager", "cashier", "measurement_taker"]);
 export type Role = (typeof roleEnum.enumValues)[number];
 
 export const departmentEnum = pgEnum("department", ["workshop", "shop"]);

@@ -165,6 +165,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   manager: "Manager",
   staff: "Staff",
   cashier: "Cashier",
+  measurement_taker: "Measurement Taker",
 };
 
 export const DEPARTMENT_LABELS: Record<Department, string> = {

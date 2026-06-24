@@ -3,6 +3,7 @@
 import { fuzzySearchCustomers, getCustomerById } from "@/api/customers";
 import { getPendingOrdersByCustomer } from "@/api/orders";
 import { Badge } from "@repo/ui/badge";
+import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Skeleton } from "@repo/ui/skeleton";
 import {
@@ -13,7 +14,7 @@ import {
 } from "@repo/ui/command";
 import type { Customer, Order } from "@repo/database";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, SearchIcon, UserIcon, X, AlertCircle, History } from "lucide-react";
+import { Loader2, SearchIcon, UserIcon, X, AlertCircle, History, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import { PendingOrdersDialog } from "./pending-orders-dialog";
@@ -30,6 +31,10 @@ interface SearchCustomerProps {
   onPendingOrderSelected?: (order: Order) => void;
   checkPendingOrders?: boolean;
   clearOnSelect?: boolean;
+  // When provided, the empty (no-results) state offers a "Create new customer"
+  // action that hands the current query back so the caller can pre-fill a fresh
+  // customer form (e.g. seed the phone number the staff just searched for).
+  onCreateNew?: (query: string) => void;
 }
 
 export function SearchCustomer({
@@ -38,6 +43,7 @@ export function SearchCustomer({
   onPendingOrderSelected,
   checkPendingOrders = false,
   clearOnSelect = false,
+  onCreateNew,
 }: SearchCustomerProps) {
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -336,6 +342,29 @@ export function SearchCustomer({
                             <AlertCircle className="size-10 opacity-20" />
                           </div>
                           <p className="text-sm font-medium">No customers found matching "{debouncedSearch}"</p>
+                          {onCreateNew && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => {
+                                // Pass the live input, not debouncedSearch: the empty
+                                // state can render in the window before the debounce
+                                // catches up, when debouncedSearch is still stale/empty.
+                                // onCreateNew pre-fills the demographics form, so only
+                                // collapse the search UI here. Calling the parent's
+                                // onHandleClear would reset that form and wipe the seed.
+                                onCreateNew(searchValue);
+                                setSearchValue("");
+                                setDebouncedSearch("");
+                                setSelectedCustomerId(null);
+                                setSelectedCustomer(null);
+                                setIsFocused(false);
+                              }}
+                            >
+                              <UserPlus className="size-4 mr-2" />
+                              Create new customer
+                            </Button>
+                          )}
                         </div>
                       )}
 

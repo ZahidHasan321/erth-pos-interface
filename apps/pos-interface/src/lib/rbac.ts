@@ -36,8 +36,10 @@ export {
 // End of Day are sidebar pages). The standalone cashier terminal was removed.
 const PERMISSIONS: PermissionMatrix = {
   // Office pages — full access for shop staff and managers.
-  "/home":            { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "view" },
-  "/profile":         { admin: "full", "manager:shop": "full", "staff:shop": "full", "manager:workshop": "full", "staff:workshop": "full" },
+  // Measurement takers (§5) are order-takers: full access to orders/customers/
+  // appointments, but no Store Management or Cashier (granted below = omitted here).
+  "/home":            { admin: "full", "manager:shop": "full", "staff:shop": "full", "measurement_taker:shop": "full", "manager:workshop": "view" },
+  "/profile":         { admin: "full", "manager:shop": "full", "staff:shop": "full", "measurement_taker:shop": "full", "manager:workshop": "full", "staff:workshop": "full" },
   "/cashier":         { admin: "full", "manager:shop": "full", "staff:shop": "full", "cashier:shop": "full" },
   "/store/inventory": { admin: "full", "manager:shop": "full", "staff:shop": "full" },
   "/store/transfers": { admin: "full", "manager:shop": "full", "staff:shop": "full" },

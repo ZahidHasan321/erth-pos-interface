@@ -682,6 +682,30 @@ function NewWorkOrder() {
         }
     }, [orderId, openDialog, handlePendingOrderSelected, closeDialog]);
 
+    // "Create new customer" from the search empty state: seed a fresh demographics
+    // form with whatever the staff searched for. A phone-like query pre-fills the
+    // mobile number (national part, country code stripped); anything else fills the
+    // name. They then complete the rest of the form inline.
+    const handleCreateNewCustomer = React.useCallback((query: string) => {
+        const q = query.trim();
+        const isPhone = /^[+0-9 ()\-]+$/.test(q) && /\d/.test(q);
+        const next = { ...customerDemographicsDefaults };
+        if (isPhone) {
+            const digits = q.replace(/\D/g, "");
+            // Strip a leading Kuwait country code so the national number lands in
+            // the field (the country code is a separate select, defaulting +965).
+            next.phone = digits.length > 8 && digits.startsWith("965")
+                ? digits.slice(3)
+                : digits;
+        } else {
+            next.name = q;
+        }
+        demographicsForm.reset(next);
+        setCustomerDemographics(next);
+        removeSavedStep(0);
+        setCurrentStep(0);
+    }, [demographicsForm, setCustomerDemographics, removeSavedStep, setCurrentStep]);
+
     // Load order from search params if provided
     React.useEffect(() => {
         if (searchOrderId && orderId !== searchOrderId && loadingOrderIdRef.current !== searchOrderId) {
@@ -1365,6 +1389,7 @@ function NewWorkOrder() {
                                 }}
                                 checkPendingOrders={true}
                                 onPendingOrderSelected={handleTopLevelPendingOrderSelected}
+                                onCreateNew={handleCreateNewCustomer}
                             />
                         </ErrorBoundary>
                     </div>

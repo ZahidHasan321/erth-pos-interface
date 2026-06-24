@@ -169,6 +169,7 @@ function describeAccess(role: Role, department: Department, jobFunctions: JobFun
   if (role === "manager" && department === "workshop") return { label: "Workshop manager", detail: "Full workshop operations: scheduling, receiving, dispatch, team, performance." };
   if (role === "manager" && department === "shop") return { label: "Shop manager: workshop view-only", detail: "View-only access to workshop data. Dashboard, tracker, performance." };
   if (role === "staff" && department === "shop") return { label: "Shop staff", detail: "Shop-only access. No workshop pages." };
+  if (role === "measurement_taker") return { label: "Measurement taker", detail: "Order-taking only: orders, customers, appointments, deliveries. No stock management, cashier, or end-of-day report." };
   // staff + workshop
   if (jobFunctions.length === 0) return { label: "Office staff", detail: "Dashboard / tracker / performance access. No terminals." };
   if (jobFunctions.length === 1) {

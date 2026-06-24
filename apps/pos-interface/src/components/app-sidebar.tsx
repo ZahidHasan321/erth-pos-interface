@@ -37,6 +37,7 @@ import {
 } from "@repo/ui/sidebar";
 import { BRAND_NAMES, brandUsesCashier, isHomeBasedBrand } from "@/lib/constants";
 import { useTransferBadgeCounts } from "@/hooks/useTransfers";
+import { useAuth } from "@/context/auth";
 
 const data = {
   navTop: [
@@ -248,6 +249,11 @@ export function AppSidebar({
   const isPathActive: IsPathActive = (to, exact = false) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
 
+  const { user } = useAuth();
+  // Measurement takers (§5) are restricted to order-taking: no Store Management
+  // (stock/transfers/stocktake/suppliers/reports/EOD) and no Cashier surface.
+  const isMeasurementTaker = user?.role === "measurement_taker";
+
   const { main } = useParams({ strict: false });
   const mainSegment = main ? `/${main}` : BRAND_NAMES.showroom;
   const isErth = main === BRAND_NAMES.showroom;
@@ -329,6 +335,8 @@ export function AppSidebar({
         {/* Nav groups */}
         {data.navMain
           .filter((item) => isErth || item.title !== "Store Management")
+          // Measurement takers see neither Store Management nor Cashier.
+          .filter((item) => !isMeasurementTaker || (item.title !== "Store Management" && item.title !== "Cashier"))
           .map((item) => {
             const visibleItems = (item.items as NavSubItem[]).filter((subItem) => {
               if (subItem.cashierBrandOnly && !brandUsesCashier(main)) return false;

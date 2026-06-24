@@ -237,6 +237,23 @@ export function CustomerDemographicsForm({
     setIsDuplicateDialogOpen(false);
   };
 
+  // "This is the same customer" from the duplicate dialog: the staff is
+  // re-entering someone already on file, so load that existing record into the
+  // order instead of minting a self-duplicate. Loads the account that actually
+  // owns the number (the matched row), not its primary.
+  const handleUseExisting = async () => {
+    if (!duplicateMatch || !onCustomerChange) return;
+    const res = await getCustomerById(duplicateMatch.id);
+    if (res.status !== "success" || !res.data) {
+      toast.error(res.message || "Could not load the existing customer.");
+      return;
+    }
+    onCustomerChange(res.data);
+    setWarnings((prev) => ({ ...prev, phone: undefined }));
+    setDuplicateMatch(null);
+    setIsDuplicateDialogOpen(false);
+  };
+
   // Picking a primary from the search dialog. If a Secondary is picked, resolve
   // to the Primary it belongs to (the link target must be a Primary).
   const handlePrimaryPicked = async (picked: Customer) => {
@@ -1153,7 +1170,8 @@ export function CustomerDemographicsForm({
                         ? duplicateMatch.name
                         : duplicateMatch.resolved_primary_name ?? duplicateMatch.name}
                     </span>
-                    . Is this a family member sharing the number, or a typo?
+                    . Is this the same customer, a family member sharing the
+                    number, or a typo?
                   </>
                 )}
               </DialogDescription>
@@ -1166,10 +1184,20 @@ export function CustomerDemographicsForm({
               >
                 It's a typo, fix the number
               </Button>
-              <Button type="button" onClick={handleLinkAsFamily}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleLinkAsFamily}
+              >
                 <Users className="size-4 mr-2" />
                 Link as family member
               </Button>
+              {onCustomerChange && (
+                <Button type="button" onClick={handleUseExisting}>
+                  <Check className="size-4 mr-2" />
+                  Use existing customer
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
