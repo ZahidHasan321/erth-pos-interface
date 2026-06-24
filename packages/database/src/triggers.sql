@@ -1425,10 +1425,20 @@ BEGIN
       COALESCE(o.order_total, 0) AS order_total,
       COALESCE(o.paid, 0) AS paid,
       COALESCE(w.advance, 0) AS advance,
+      -- §2.13 order linking: the group this order belongs to (NULL = unlinked
+      -- or itself the primary). The cashier clusters + badges on this.
+      w.linked_order_id,
+      -- §5 customer account: relation lets the cashier see family ties between
+      -- co-pending orders (e.g. a Secondary "son of <Primary>").
+      c.account_type,
+      c.relation,
+      c.primary_customer_id,
+      pc.name AS primary_customer_name,
       (SELECT COUNT(*) FROM garments g WHERE g.order_id = o.id) AS garment_count
     FROM orders o
     JOIN work_orders w ON w.order_id = o.id
     JOIN customers c ON c.id = o.customer_id
+    LEFT JOIN customers pc ON pc.id = c.primary_customer_id
     WHERE o.order_type = 'WORK'
       AND o.checkout_status = 'confirmed'
       AND w.cashier_processed_at IS NULL

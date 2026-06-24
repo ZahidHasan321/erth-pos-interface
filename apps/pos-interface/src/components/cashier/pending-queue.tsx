@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, Inbox, Banknote, Check } from "lucide-react";
+import { Search, Inbox, Banknote, Check, Link2, Users } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Checkbox } from "@repo/ui/checkbox";
@@ -13,6 +13,7 @@ import {
     useCashierConfirmNoPaymentMutation,
 } from "@/hooks/useCashier";
 import type { CashierPendingOrder } from "@/api/cashier";
+import { clusterByGroup, groupSizes, groupKeyOf, relationLabel } from "@/lib/cashier-grouping";
 
 const fmtK = (n: number): string => `${Number(Number(n).toFixed(3))} KWD`;
 
@@ -42,14 +43,22 @@ export function PendingQueueBody({
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return orders;
-        return orders.filter((o) =>
+        const matched = !q ? orders : orders.filter((o) =>
             (o.customer_name ?? "").toLowerCase().includes(q) ||
             (o.customer_phone ?? "").toLowerCase().includes(q) ||
             String(o.order_id).includes(q) ||
             String(o.invoice_number ?? "").includes(q),
         );
+        // Cluster linked-order groups (§2.13) adjacently for the cashier.
+        return clusterByGroup(matched, (o) => o.order_id, (o) => o.linked_order_id);
     }, [orders, search]);
+
+    // Group sizes over the full pending set so "Linked · N" is accurate even
+    // when search hides a sibling.
+    const sizes = useMemo(
+        () => groupSizes(orders, (o) => o.order_id, (o) => o.linked_order_id),
+        [orders],
+    );
 
     const toggle = (id: number) => {
         setSelected((prev) => {
@@ -148,14 +157,20 @@ export function PendingQueueBody({
                             <Checkbox checked={allFilteredSelected} onCheckedChange={toggleAll} />
                             Select all ({filtered.length})
                         </label>
-                        {filtered.map((o) => (
-                            <PendingRow
-                                key={o.order_id}
-                                order={o}
-                                selected={selected.has(o.order_id)}
-                                onToggle={() => toggle(o.order_id)}
-                            />
-                        ))}
+                        {filtered.map((o) => {
+                            const groupSize = sizes.get(groupKeyOf(o.order_id, o.linked_order_id)) ?? 1;
+                            const isLinked = o.linked_order_id != null || groupSize > 1;
+                            return (
+                                <PendingRow
+                                    key={o.order_id}
+                                    order={o}
+                                    selected={selected.has(o.order_id)}
+                                    onToggle={() => toggle(o.order_id)}
+                                    isLinked={isLinked}
+                                    groupSize={groupSize}
+                                />
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -198,12 +213,17 @@ function PendingRow({
     order,
     selected,
     onToggle,
+    isLinked,
+    groupSize,
 }: {
     order: CashierPendingOrder;
     selected: boolean;
     onToggle: () => void;
+    isLinked: boolean;
+    groupSize: number;
 }) {
     const delivery = toLocalDateStr(order.delivery_date);
+    const relation = relationLabel(order);
     return (
         <div
             className={`flex items-center gap-3 rounded-lg border-2 p-3 transition-colors cursor-pointer ${selected ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"}`}
@@ -211,11 +231,23 @@ function PendingRow({
         >
             <Checkbox checked={selected} onCheckedChange={onToggle} onClick={(e) => e.stopPropagation()} />
             <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold">
                         #{order.invoice_number ?? order.order_id}
                     </span>
                     <span className="text-sm truncate">{order.customer_name ?? "Unknown"}</span>
+                    {isLinked && (
+                        <Badge variant="outline" className="gap-1 text-[10px] font-medium border-primary/40 text-primary">
+                            <Link2 className="h-3 w-3" />
+                            Linked{groupSize > 1 ? ` · ${groupSize}` : ""}
+                        </Badge>
+                    )}
+                    {relation && (
+                        <Badge variant="secondary" className="gap-1 text-[10px] font-medium">
+                            <Users className="h-3 w-3" />
+                            {relation}
+                        </Badge>
+                    )}
                 </div>
                 <div className="text-xs text-muted-foreground truncate">
                     {order.customer_phone ?? ""}

@@ -220,7 +220,7 @@ export function OrderHistoryView({ linkBuilder }: OrderHistoryViewProps) {
                     </div>
                 ) : (
                     <>
-                        <div className={cn("transition-opacity duration-200", isFetching && "opacity-60")}>
+                        <div>
                             <OrderTable orders={orders} linkBuilder={linkBuilder} />
                             <div className="flex flex-col gap-2 lg:hidden">
                                 {orders.map((order) => (

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-    Search, CreditCard, CheckCircle2, XCircle, Clock, Loader2, Wallet, Layers, AlertCircle,
+    Search, CreditCard, CheckCircle2, XCircle, Clock, Loader2, Wallet, Layers, AlertCircle, Link2, Users,
 } from "lucide-react";
 import { Input } from "@repo/ui/input";
 import { Button } from "@repo/ui/button";
@@ -16,6 +16,7 @@ import {
 } from "@/hooks/useCashier";
 import type { CashierOrderListItem, CashierSummary, CashierPeriod, CashierFilter } from "@/api/cashier";
 import { EMPTY_CASHIER_SUMMARY } from "@/api/cashier";
+import { clusterByGroup, groupSizes, groupKeyOf, relationLabel } from "@/lib/cashier-grouping";
 import { ORDER_PHASE_LABELS } from "@/lib/constants";
 import { DonutChart } from "@/components/charts/donut-chart";
 import { OrderDetailShell } from "./order-detail-shell";
@@ -28,6 +29,28 @@ const fmtK = (n: number): string => `${fmt(n)} KWD`;
 const shortDateFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
 
 // ── Order List Row ──────────────────────────────────────────────────────────
+/** Linked-group + family-relation chips, shared by the card and table rows. */
+function LinkRelationBadges({ item, isLinked, groupSize }: { item: CashierOrderListItem; isLinked: boolean; groupSize: number }) {
+    const relation = relationLabel(item);
+    if (!isLinked && !relation) return null;
+    return (
+        <>
+            {isLinked && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border border-primary/40 text-primary">
+                    <Link2 className="h-3 w-3" />
+                    Linked{groupSize > 1 ? ` · ${groupSize}` : ""}
+                </span>
+            )}
+            {relation && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                    <Users className="h-3 w-3" />
+                    {relation}
+                </span>
+            )}
+        </>
+    );
+}
+
 /** Check if an order was confirmed recently (within minutes) and hasn't been paid yet */
 function isNewUnprocessed(item: CashierOrderListItem, withinMinutes = 10): boolean {
     if (item.checkout_status !== "confirmed") return false;
@@ -38,7 +61,7 @@ function isNewUnprocessed(item: CashierOrderListItem, withinMinutes = 10): boole
     return orderTime >= cutoff;
 }
 
-function OrderRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (id: string) => void }) {
+function OrderRow({ item, onSelect, isLinked, groupSize }: { item: CashierOrderListItem; onSelect: (id: string) => void; isLinked: boolean; groupSize: number }) {
     const remaining = item.order_total - item.paid;
     const isPaid = remaining <= 0;
     const isCancelled = item.checkout_status === "cancelled";
@@ -108,6 +131,7 @@ function OrderRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (i
                         Delivery
                     </span>
                 )}
+                <LinkRelationBadges item={item} isLinked={isLinked} groupSize={groupSize} />
                 <div className="flex-1" />
                 <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
                     <span className="tabular-nums">{orderDateStr}</span>
@@ -124,7 +148,7 @@ function OrderRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (i
 
 // ── Order Table Row (lg+) ───────────────────────────────────────────────────
 
-function OrderTableRow({ item, onSelect }: { item: CashierOrderListItem; onSelect: (id: string) => void }) {
+function OrderTableRow({ item, onSelect, isLinked, groupSize }: { item: CashierOrderListItem; onSelect: (id: string) => void; isLinked: boolean; groupSize: number }) {
     const remaining = item.order_total - item.paid;
     const isPaid = remaining <= 0;
     const isCancelled = item.checkout_status === "cancelled";
@@ -202,13 +226,14 @@ function OrderTableRow({ item, onSelect }: { item: CashierOrderListItem; onSelec
                             Delivery
                         </span>
                     )}
+                    <LinkRelationBadges item={item} isLinked={isLinked} groupSize={groupSize} />
                 </div>
             </TableCell>
         </TableRow>
     );
 }
 
-function OrderTable({ items, onSelect }: { items: CashierOrderListItem[]; onSelect: (id: string) => void }) {
+function OrderTable({ items, onSelect, sizes }: { items: CashierOrderListItem[]; onSelect: (id: string) => void; sizes: Map<number, number> }) {
     return (
         <div className="rounded-lg border border-border bg-card overflow-hidden">
             <Table>
@@ -224,9 +249,18 @@ function OrderTable({ items, onSelect }: { items: CashierOrderListItem[]; onSele
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {items.map((item) => (
-                        <OrderTableRow key={item.id} item={item} onSelect={onSelect} />
-                    ))}
+                    {items.map((item) => {
+                        const groupSize = sizes.get(groupKeyOf(item.id, item.linked_order_id)) ?? 1;
+                        return (
+                            <OrderTableRow
+                                key={item.id}
+                                item={item}
+                                onSelect={onSelect}
+                                isLinked={item.linked_order_id != null || groupSize > 1}
+                                groupSize={groupSize}
+                            />
+                        );
+                    })}
                 </TableBody>
             </Table>
         </div>
@@ -450,7 +484,14 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
     const { data: owingResult } = useRecentCashierOrders("owing", period);
     const owingOrders = (owingResult?.data || []).filter(o => (o.order_total - o.paid) > 0.001);
 
-    const allDisplayOrders = listSearchQuery ? searchedOrders : recentOrders;
+    // Cluster linked-order groups (§2.13) adjacently before paginating, and size
+    // each group so a row can badge "Linked · N".
+    const allDisplayOrders = clusterByGroup(
+        listSearchQuery ? searchedOrders : recentOrders,
+        (o) => o.id,
+        (o) => o.linked_order_id,
+    );
+    const linkSizes = groupSizes(allDisplayOrders, (o) => o.id, (o) => o.linked_order_id);
     const displayOrders = allDisplayOrders.slice(0, visibleCount);
     const hasMore = allDisplayOrders.length > visibleCount;
 
@@ -568,14 +609,22 @@ function CashierListView({ onSelectOrder }: { onSelectOrder: (id: string) => voi
                             {!isListSearching && displayOrders.length > 0 && (
                                 <>
                                     <div className="lg:hidden space-y-1">
-                                        {displayOrders.map((item, i) => (
-                                            <div key={item.id} style={i < 10 ? { animation: `cashier-deal 300ms cubic-bezier(0.2, 0, 0, 1) ${i * 30}ms both` } : undefined}>
-                                                <OrderRow item={item} onSelect={onSelectOrder} />
-                                            </div>
-                                        ))}
+                                        {displayOrders.map((item, i) => {
+                                            const groupSize = linkSizes.get(groupKeyOf(item.id, item.linked_order_id)) ?? 1;
+                                            return (
+                                                <div key={item.id} style={i < 10 ? { animation: `cashier-deal 300ms cubic-bezier(0.2, 0, 0, 1) ${i * 30}ms both` } : undefined}>
+                                                    <OrderRow
+                                                        item={item}
+                                                        onSelect={onSelectOrder}
+                                                        isLinked={item.linked_order_id != null || groupSize > 1}
+                                                        groupSize={groupSize}
+                                                    />
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                     <div className="hidden lg:block">
-                                        <OrderTable items={displayOrders} onSelect={onSelectOrder} />
+                                        <OrderTable items={displayOrders} onSelect={onSelectOrder} sizes={linkSizes} />
                                     </div>
                                 </>
                             )}

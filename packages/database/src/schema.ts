@@ -715,6 +715,10 @@ export const workOrders = pgTable("work_orders", {
     
     // Identity
     invoice_number: integer("invoice_number"),
+    // Original (pre-migration) invoice number from the imported Airtable data,
+    // kept for reference after invoice_number was renumbered into one clean
+    // gapless chronological sequence at cutover. NULL for orders created live.
+    legacy_invoice_number: integer("legacy_invoice_number"),
     invoice_revision: integer("invoice_revision").default(0).notNull(),
     campaign_id: integer("campaign_id").references(() => campaigns.id),
     linked_order_id: integer("linked_order_id").references(() => orders.id, { onDelete: 'set null' }),

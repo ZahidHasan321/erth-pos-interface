@@ -47,9 +47,9 @@ function flattenCashierOrder(data: Record<string, unknown> | null): Order | null
 // Lightweight select for order list (no garments, no transactions)
 const CASHIER_ORDER_LIST_QUERY = `
     id, order_type, checkout_status, order_total, paid, order_date, brand, discount_value,
-    workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery),
+    workOrder:work_orders!order_id(invoice_number, invoice_revision, order_phase, delivery_date, home_delivery, linked_order_id),
     alterationOrder:alteration_orders!order_id(invoice_number, order_phase),
-    customer:customers(name, phone),
+    customer:customers(name, phone, account_type, relation, primary:customers!primary_customer_id(name)),
     garments:garments(piece_stage, location)
 `;
 
@@ -69,6 +69,11 @@ export interface CashierOrderListItem {
     home_delivery?: boolean;
     garment_total: number;
     garment_ready: number;
+    // §2.13 order linking + §5 customer account, for cashier grouping/badges.
+    linked_order_id?: number | null;
+    account_type?: string | null;
+    relation?: string | null;
+    primary_customer_name?: string | null;
 }
 
 function flattenOrderListItem(data: Record<string, unknown>): CashierOrderListItem {
@@ -92,6 +97,14 @@ function flattenOrderListItem(data: Record<string, unknown>): CashierOrderListIt
         home_delivery: workData?.home_delivery as boolean | undefined,
         customer_name: customerData?.name as string | undefined,
         customer_phone: customerData?.phone as string | undefined,
+        linked_order_id: (workData?.linked_order_id ?? null) as number | null,
+        account_type: (customerData?.account_type ?? null) as string | null,
+        relation: (customerData?.relation ?? null) as string | null,
+        primary_customer_name: (() => {
+            const p = customerData?.primary;
+            const pRow = (Array.isArray(p) ? p[0] : p) as NestedRow | null | undefined;
+            return (pRow?.name ?? null) as string | null;
+        })(),
         garment_total: garments.length,
         garment_ready: garments.filter((g) => g.location === "shop" && readyStages.includes(g.piece_stage as string)).length,
     };
@@ -435,6 +448,12 @@ export interface CashierPendingOrder {
     paid: number;
     advance: number;
     garment_count: number;
+    // §2.13 order linking + §5 customer account, for cashier grouping/badges.
+    linked_order_id: number | null;
+    account_type: string | null;
+    relation: string | null;
+    primary_customer_id: number | null;
+    primary_customer_name: string | null;
 }
 
 /** Pending WORK orders awaiting cashier processing (confirmed, gate still open). */

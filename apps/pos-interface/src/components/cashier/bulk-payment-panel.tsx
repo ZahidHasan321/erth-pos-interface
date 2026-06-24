@@ -10,6 +10,7 @@ import { toLocalDateStr } from "@/lib/utils";
 import { Numpad } from "@/components/cashier/numpad";
 import { useCashierPendingOrders, useBulkPaymentMutation } from "@/hooks/useCashier";
 import type { CashierPendingOrder } from "@/api/cashier";
+import { distributeAdvanceFirst, relationLabel } from "@/lib/cashier-grouping";
 
 const fmtK = (n: number): string => `${Number(Number(n).toFixed(3))} KWD`;
 // Touch-friendly method tabs: short labels + an icon per method. Short labels
@@ -63,6 +64,7 @@ export function BulkPaymentPanel({
 
     const [rows, setRows] = useState<Record<number, RowState>>({});
     const [focusedId, setFocusedId] = useState<number | null>(null);
+    const [lump, setLump] = useState("");
 
     const rowState = (id: number): RowState => rows[id] ?? { amount: "", method: "cash", refNo: "" };
     const setRow = (id: number, patch: Partial<RowState>) =>
@@ -86,6 +88,36 @@ export function BulkPaymentPanel({
             }
             return next;
         });
+    };
+
+    // Lump-sum entry: the customer hands over one amount across the selected
+    // (typically linked) orders. Seed each card advance-first, then spread the
+    // rest proportionally over the open balances. The cashier can still tweak
+    // any card afterward; this only fills the initial amounts.
+    const applyLump = () => {
+        const amt = Number(lump) || 0;
+        if (amt <= 0) {
+            toast.error("Enter the amount the customer paid");
+            return;
+        }
+        const dist = distributeAdvanceFirst(
+            selectedOrders.map((o) => ({ order_id: o.order_id, remaining: remainingOf(o), advance: o.advance || 0 })),
+            amt,
+        );
+        setRows((prev) => {
+            const next = { ...prev };
+            for (const o of selectedOrders) {
+                const v = dist[o.order_id] ?? 0;
+                next[o.order_id] = {
+                    ...(next[o.order_id] ?? { method: "cash", refNo: "" }),
+                    amount: v > 0 ? String(Number(v.toFixed(3))) : "",
+                };
+            }
+            return next;
+        });
+        if (amt > outstanding + 0.0005) {
+            toast.info(`Distributed ${fmtK(outstanding)} (the orders' full outstanding); ${fmtK(amt - outstanding)} is more than is owed.`);
+        }
     };
 
     const total = selectedOrders.reduce((sum, o) => sum + (Number(rowState(o.order_id).amount) || 0), 0);
@@ -196,10 +228,15 @@ export function BulkPaymentPanel({
                                 >
                                     <div className="flex items-start gap-3">
                                         <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="text-sm font-semibold truncate">
                                                     #{o.invoice_number ?? o.order_id} · {o.customer_name ?? "Unknown"}
                                                 </span>
+                                                {relationLabel(o) && (
+                                                    <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shrink-0">
+                                                        {relationLabel(o)}
+                                                    </span>
+                                                )}
                                                 {willCharge && (
                                                     <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary shrink-0">
                                                         <Check className="h-3 w-3" /> to charge
@@ -297,6 +334,28 @@ export function BulkPaymentPanel({
 
                 {/* Numpad + total + charge */}
                 <div className="mt-4 lg:mt-0 lg:w-72 shrink-0 flex flex-col gap-3">
+                    {selectedOrders.length > 1 && (
+                        <div className="rounded-lg border bg-card px-3 py-2.5">
+                            <div className="text-xs font-medium">Customer paid one amount?</div>
+                            <div className="text-[11px] text-muted-foreground">
+                                Splits advance-first, then by balance across the {selectedOrders.length} orders.
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                                <div className="relative flex-1">
+                                    <Input
+                                        value={lump}
+                                        inputMode="decimal"
+                                        onChange={(e) => setLump(e.target.value.replace(/[^0-9.]/g, ""))}
+                                        onKeyDown={(e) => { if (e.key === "Enter") applyLump(); }}
+                                        placeholder="0.000"
+                                        className="h-9 pr-10 text-sm tabular-nums"
+                                    />
+                                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">KWD</span>
+                                </div>
+                                <Button size="sm" className="h-9" onClick={applyLump}>Split</Button>
+                            </div>
+                        </div>
+                    )}
                     <div className="rounded-lg border bg-card px-3 py-2">
                         {focusedOrder ? (
                             <>
