@@ -385,7 +385,18 @@ export const users = pgTable("users", {
     notes: text("notes"),
     created_at: timestamp("created_at").defaultNow(),
     updated_at: timestamp("updated_at").defaultNow(),
-});
+}, (t) => ({
+    // A shop-department user is locked out of every write unless they carry at
+    // least one brand: can_access_brand() denies a NULL/empty brands array
+    // (the old "NULL = unrestricted" wildcard was removed for per-brand
+    // isolation, SPEC §1). Workshop + super_admin (department NULL) bypass the
+    // brand check, so only 'shop' is constrained. Guarantees no seed/script/
+    // edge-function path can persist a brand-less shop account again.
+    shopRequiresBrands: check(
+        "users_shop_requires_brands",
+        sql`${t.department} <> 'shop' OR (${t.brands} IS NOT NULL AND cardinality(${t.brands}) > 0)`,
+    ),
+}));
 
 // --- 1.5 USER SESSIONS (Presence / Heartbeat) ---
 export const userSessions = pgTable("user_sessions", {

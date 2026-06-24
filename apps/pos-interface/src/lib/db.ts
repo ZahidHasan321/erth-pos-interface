@@ -67,6 +67,22 @@ export function isTransientNetworkError(err: unknown): boolean {
   return /NetworkError|Failed to fetch|network ?error|fetch failed/i.test(msg);
 }
 
+// Turn a swallowed supabase-js write error into a message staff can act on.
+// The one that matters here is a row-level-security denial (Postgres 42501):
+// PostgREST reports it as "new row violates row-level security policy for
+// table ...", which reads as a mysterious failure. The usual cause is an
+// account with no brand assigned (can_access_brand denies the write), so the
+// insert is rejected and the whole transaction rolls back, nothing is saved.
+// Make that legible so the failure can't be mistaken for a successful save.
+export function describeWriteError(err: unknown): string {
+  const e = (err ?? null) as { code?: string; message?: string } | null;
+  const raw = e?.message ?? String(err);
+  if (e?.code === '42501' || /row-level security/i.test(raw)) {
+    return 'Permission denied: nothing was saved. Your account may not be assigned to this brand. Contact an administrator.';
+  }
+  return raw;
+}
+
 // Bounded replay for write paths the generic fetch layer refuses to retry.
 // Safe to use ONLY when the operation is idempotent: keyed by an
 // idempotency_key / unique constraint, an UPDATE-by-PK, or a server-side

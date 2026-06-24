@@ -371,7 +371,7 @@ function ReturnToWorkshopTab({
   const handleDispatchGarment = async (garment: RedispatchGarment) => {
     setDispatchingIds(prev => new Set(prev).add(garment.id));
     try {
-      await dispatchGarmentToWorkshop(garment.id, garment.trip_number || 1);
+      await dispatchGarmentToWorkshop(garment.id);
       await queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
     } catch (err) {
       toast.error(`Could not dispatch garment ${garment.garment_id || garment.id}: ${err instanceof Error ? err.message : String(err)}`);
@@ -389,7 +389,7 @@ function ReturnToWorkshopTab({
     setIsBulkDispatching(true);
     try {
       await Promise.all(
-        garments.map(g => dispatchGarmentToWorkshop(g.id, g.trip_number || 1))
+        garments.map(g => dispatchGarmentToWorkshop(g.id))
       );
       await queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
     } catch (err) {

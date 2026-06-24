@@ -67,44 +67,24 @@ export const getGarmentsForRedispatch = async (): Promise<ApiResponse<Garment[]>
 };
 
 export const dispatchGarmentToWorkshop = async (
-  garmentId: string,
-  currentTripNumber: number
+  garmentId: string
 ): Promise<ApiResponse<Garment>> => {
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .update({
-      location: 'transit_to_workshop',
-      piece_stage: 'waiting_cut',
-      in_production: false,
-      trip_number: currentTripNumber + 1,
-      production_plan: null,
-      completion_time: null,
-      start_time: null,
-    })
-    .eq('id', garmentId)
-    .select()
-    .single();
+  // Atomic RPC (dispatch_garment_to_workshop, triggers.sql): the garment flip to
+  // transit_to_workshop on its next trip_number AND the append-only dispatch_log
+  // audit row happen in one transaction, gated on location = 'shop' so a retry
+  // is a no-op. Replaces the old client UPDATE + best-effort log insert, which
+  // could silently drop the History row and double-bump trip_number on retry.
+  const { error } = await withWriteRetry(
+    () => db.rpc('dispatch_garment_to_workshop', { p_garment_id: garmentId }),
+    (r) => isTransientNetworkError(r.error),
+  );
 
   if (error) {
     console.error('dispatchGarmentToWorkshop: failed to dispatch garment to workshop:', error);
-    return { status: 'error', message: error.message };
+    return { status: 'error', message: `Failed to dispatch garment ${garmentId} to workshop: ${error.message}` };
   }
 
-  // Append dispatch log entry (best-effort; don't block on failure).
-  try {
-    if (data) {
-      const garmentData = data as Garment;
-      await db.from('dispatch_log').insert({
-        garment_id: garmentData.id,
-        order_id: garmentData.order_id,
-        direction: 'to_workshop',
-        trip_number: garmentData.trip_number ?? currentTripNumber + 1,
-      });
-    }
-  } catch (logErr) {
-    console.error('Failed to write dispatch_log (non-blocking):', logErr);
-  }
-
+  const { data } = await db.from(TABLE_NAME).select('*').eq('id', garmentId).single();
   return { status: 'success', data: data as Garment };
 };
 

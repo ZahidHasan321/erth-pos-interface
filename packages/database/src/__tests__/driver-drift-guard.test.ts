@@ -374,14 +374,14 @@ const CITATIONS: Citation[] = [
     anchorTokens: ["discarded", "needs_redo", "brova_trialed"],
   },
 
-  // ── sendBackToWorkshop ─────────────────────────────────────────────────────
+  // ── sendBackToWorkshop → dispatch_garment_to_workshop RPC (REAL) ──────────
   {
     driverFn: "sendBackToWorkshop",
-    rawCitation: "apps/pos-interface/src/api/garments.ts:69",
-    citedPath: "apps/pos-interface/src/api/garments.ts",
-    citedLine: 69,
+    rawCitation: "triggers.sql:1812",
+    citedPath: "triggers.sql",
+    citedLine: 1812,
     anchorTokens: [
-      "dispatchGarmentToWorkshop",
+      "dispatch_garment_to_workshop",
       "transit_to_workshop",
       "trip_number",
     ],

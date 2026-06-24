@@ -882,17 +882,14 @@ export async function finalReject(
 }
 
 /**
- * dispatchGarmentToWorkshop (apps/pos-interface/src/api/garments.ts:69) —
- * send a garment back: trip+1, reset to waiting_cut / transit_to_workshop.
+ * dispatch_garment_to_workshop RPC (triggers.sql:1812) — REAL deployed code.
+ * apps/pos-interface dispatchGarmentToWorkshop calls the same function: sends a
+ * returning garment back (trip+1, reset to waiting_cut / transit_to_workshop)
+ * with the atomic dispatch_log append (the app's best-effort log try/catch was
+ * removed). Gated on location = 'shop'.
  */
 export async function sendBackToWorkshop(tx: Tx, garmentId: string) {
-  await tx`
-    UPDATE garments
-       SET location = 'transit_to_workshop', piece_stage = 'waiting_cut',
-           in_production = false, trip_number = COALESCE(trip_number, 0) + 1,
-           production_plan = NULL, completion_time = NULL, start_time = NULL
-     WHERE id = ${garmentId}
-  `;
+  await tx`SELECT dispatch_garment_to_workshop(${garmentId}::uuid)`;
 }
 
 /**

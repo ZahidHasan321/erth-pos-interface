@@ -1,6 +1,6 @@
 import type { ApiResponse, UpsertApiResponse } from "../types/api";
 import type { Customer, AccountType } from "@repo/database";
-import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry, describeWriteError } from "@/lib/db";
 import { sanitizeFilterValue } from "@/lib/utils";
 
 const TABLE_NAME = "customers";
@@ -184,7 +184,7 @@ export const createCustomer = async (
     }
 
     console.error('Error creating customer:', res.error);
-    return { status: 'error', message: res.error.message };
+    return { status: 'error', message: describeWriteError(res.error) };
   }
 
   return { status: 'success', data: data as Customer };

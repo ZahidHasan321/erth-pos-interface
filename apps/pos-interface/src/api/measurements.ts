@@ -1,6 +1,6 @@
 import type { ApiResponse } from '../types/api';
 import type { Measurement } from '@repo/database';
-import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry, describeWriteError } from "@/lib/db";
 
 const TABLE_NAME = 'measurements';
 
@@ -87,7 +87,7 @@ export const createMeasurement = async (
     }
 
     console.error('createMeasurement: failed to create measurement:', res.error);
-    return { status: 'error', message: res.error.message };
+    return { status: 'error', message: describeWriteError(res.error) };
   }
 
   return { status: 'success', data: data as Measurement };

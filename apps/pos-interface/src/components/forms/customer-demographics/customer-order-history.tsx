@@ -48,7 +48,7 @@ export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) 
           garments:garments(*, fabric:fabrics(*))
         `)
         .eq("customer_id", customerId)
-        .order("created_at", { ascending: false });
+        .order("order_date", { ascending: false });
 
       if (error) throw error;
       return (data ?? []).map((row) => transformRow(flattenCustomerOrder(row as Record<string, unknown>)));

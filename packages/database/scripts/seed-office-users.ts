@@ -22,11 +22,15 @@ type Seed = {
 };
 
 const USERS: Seed[] = [
+  // Shop-department users MUST carry at least one brand or they are locked out
+  // of every write (can_access_brand denies a NULL/empty brands array; enforced
+  // by the users_shop_requires_brands CHECK constraint). shop_manager doubles as
+  // the multi-brand admin test account, so it gets all three.
   { username: "admin",        name: "Super Admin",       role: "super_admin", department: null },
   { username: "ws_manager",   name: "Workshop Manager",  role: "manager",     department: "workshop" },
-  { username: "shop_manager", name: "Shop Manager",      role: "manager",     department: "shop" },
+  { username: "shop_manager", name: "Shop Manager",      role: "manager",     department: "shop", brands: ["erth", "sakkba", "qass"] },
   { username: "ws_office",    name: "Workshop Office",   role: "staff",       department: "workshop" },
-  { username: "shop_office",  name: "Shop Office",       role: "staff",       department: "shop" },
+  { username: "shop_office",  name: "Shop Office",       role: "staff",       department: "shop", brands: ["erth"] },
   { username: "cashier",      name: "Cashier",           role: "cashier",     department: "shop", brands: ["erth"] },
 ];
 

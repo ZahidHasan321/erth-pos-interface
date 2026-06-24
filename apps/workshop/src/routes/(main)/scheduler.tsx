@@ -53,6 +53,29 @@ function feedbackInfo(g: WorkshopGarment): { label: string; color: PillColor } |
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
 
+function useSectionCollapsed(storageKey: string) {
+  const key = `workshop:scheduler:section:${storageKey}`;
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof localStorage === "undefined") return false;
+    try {
+      return localStorage.getItem(key) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () =>
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(key, next ? "1" : "0");
+      } catch {
+        // storage unavailable or full - ignore
+      }
+      return next;
+    });
+  return [collapsed, toggle] as const;
+}
+
 function Section({
   title,
   icon: Icon,
@@ -66,6 +89,7 @@ function Section({
   emptyLabel?: string;
   children: React.ReactNode;
 }) {
+  const [collapsed, toggle] = useSectionCollapsed(title);
   if (count === 0) {
     return (
       <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-border bg-card text-sm">
@@ -79,14 +103,24 @@ function Section({
   }
   return (
     <div className="space-y-3 mt-5">
-      <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={toggle}
+        className="flex items-center gap-2 w-full text-left rounded-md -mx-1 px-1 py-0.5 hover:bg-muted/40 transition-colors"
+      >
         <Icon className="w-4 h-4 text-muted-foreground" />
         <h2 className="text-base font-medium">{title}</h2>
         <Badge variant="secondary" className="text-xs font-medium">
           {count}
         </Badge>
-      </div>
-      {children}
+        <ChevronDown
+          className={cn(
+            "w-4 h-4 text-muted-foreground/50 transition-transform ml-auto",
+            collapsed && "-rotate-90",
+          )}
+        />
+      </button>
+      {!collapsed && children}
     </div>
   );
 }

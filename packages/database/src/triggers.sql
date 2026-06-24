@@ -1798,6 +1798,52 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- 11e-2. RPC: Shop re-dispatches a RETURNING garment back to the workshop.
+-- The return-trip sibling of dispatch_garments_to_shop, for a garment that came
+-- back to the shop and must go out again (a Reject-Repair brova, an
+-- Accept-with-Fix fix, an alteration trip). Promoted from the app's
+-- dispatchGarmentToWorkshop (apps/pos-interface/src/api/garments.ts:69), whose
+-- garment UPDATE and dispatch_log append were two separate round-trips with a
+-- best-effort try/catch on the log: a dropped log insert silently lost the
+-- audit row (the dispatch never showed in History), and a retry double-bumped
+-- the trip and wrote a duplicate log row. This makes both atomic and idempotent
+-- - the location = 'shop' gate means a re-run flips/logs nothing (a garment
+-- already in transit is no longer at the shop).
+CREATE OR REPLACE FUNCTION dispatch_garment_to_workshop(p_garment_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+  v_trip INT;
+BEGIN
+  IF p_garment_id IS NULL THEN
+    RAISE EXCEPTION 'dispatch_garment_to_workshop: no garment id provided';
+  END IF;
+
+  WITH moved AS (
+    UPDATE garments
+       SET location = 'transit_to_workshop',
+           piece_stage = 'waiting_cut',
+           in_production = false,
+           trip_number = COALESCE(trip_number, 0) + 1,
+           production_plan = NULL,
+           completion_time = NULL,
+           start_time = NULL
+     WHERE id = p_garment_id
+       AND location = 'shop'
+    RETURNING id, order_id, trip_number
+  ), logged AS (
+    INSERT INTO dispatch_log (garment_id, order_id, direction, trip_number)
+    SELECT id, order_id, 'to_workshop', trip_number FROM moved
+    RETURNING trip_number
+  )
+  SELECT trip_number INTO v_trip FROM logged;
+
+  RETURN jsonb_build_object(
+    'dispatched', v_trip IS NOT NULL,
+    'trip_number', v_trip
+  );
+END;
+$$ LANGUAGE plpgsql;
+
 -- 11f-types. GROUP A enum types + columns — created HERE (ahead of
 -- create_replacement_garment below, and ahead of the report RPCs later) because
 -- this single-batch apply validates a function's parameter types at CREATE time

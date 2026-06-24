@@ -1,7 +1,7 @@
 import type { ApiResponse } from "../types/api";
 import type { Order } from "@repo/database";
 import { computeStyleGroups } from "@repo/database";
-import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
+import { db, isTransientNetworkError, withWriteRetry, describeWriteError } from "@/lib/db";
 import { BRAND_NAMES } from "../lib/constants";
 
 const TABLE_NAME = "orders";
@@ -425,7 +425,7 @@ export const createOrder = async (
         }
 
         console.error('Error creating order:', res.error);
-        return { status: 'error', message: res.error.message };
+        return { status: 'error', message: describeWriteError(res.error) };
     }
 
     if (!data) {
@@ -439,8 +439,14 @@ export const createOrder = async (
             .from('work_orders')
             .upsert({ order_id: data.id, ...workFields }, { onConflict: 'order_id' });
 
+        // Do NOT swallow this. If the extension row is rejected (e.g. RLS
+        // denial), the order is incomplete (no invoice/phase/delivery) and the
+        // staff must know. The orders row is left behind on purpose: the stable
+        // idempotency_key lets a retry recover it (23505 path above) and replay
+        // this upsert, so surfacing the error stays safe and converges.
         if (workError) {
             console.error('Error creating work order extension:', workError);
+            return { status: 'error', message: describeWriteError(workError) };
         }
     }
 
@@ -729,7 +735,7 @@ export const completeWorkOrder = async (
 
     if (error) {
         console.error('Error completing work order:', error);
-        return { status: 'error', message: error.message };
+        return { status: 'error', message: describeWriteError(error) };
     }
     return { status: 'success', data: data as unknown as Order };
 };
