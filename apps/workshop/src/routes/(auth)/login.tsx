@@ -2,9 +2,7 @@ import { useState, useEffect } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
 import { toast } from "sonner";
-import { db } from "@/lib/db";
-import { getTerminalPath, isTerminalUser, JOB_FUNCTION_LABELS, type AuthUser } from "@/lib/rbac";
-import type { JobFunction } from "@repo/database";
+import { getTerminalPath, isTerminalUser, type AuthUser } from "@/lib/rbac";
 
 // Post-login destination. Terminal-locked users go straight to their terminal;
 // everyone else lands on Receiving (the ops default). Cashiers belong to the
@@ -36,25 +34,6 @@ const STAGES = [
 
 const TICKER = (STAGES.join("  ·  ") + "  ·  ").repeat(5);
 
-type WorkshopUser = {
-  id: string;
-  username: string;
-  name: string;
-  role: string | null;
-  department: string | null;
-  job_functions: string[] | null;
-};
-
-function pillSubtitle(u: WorkshopUser): string {
-  const jobs = (u.job_functions ?? []).filter((j): j is JobFunction => j in JOB_FUNCTION_LABELS);
-  if (jobs.length > 0) {
-    return jobs.map((j) => JOB_FUNCTION_LABELS[j]).join(" / ");
-  }
-  if (u.role === "super_admin") return "Super Admin";
-  if (u.role) return u.role.charAt(0).toUpperCase() + u.role.slice(1);
-  return "";
-}
-
 function LoginPage() {
   const auth = useAuth();
   const router = useRouter();
@@ -62,25 +41,10 @@ function LoginPage() {
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
-  const [workshopUsers, setWorkshopUsers] = useState<WorkshopUser[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setReady(true), 40);
     return () => clearTimeout(t);
-  }, []);
-
-  // DEV-ONLY: get_login_users returns the active-user roster to anon so
-  // the picker can show clickable staff. Disable before exposing the app
-  // on a public domain (see CLAUDE.md §11).
-  useEffect(() => {
-    db.rpc("get_login_users").then(({ data }) => {
-      if (data) {
-        const eligible = (data as WorkshopUser[]).filter(
-          (u) => u.department === "workshop" || u.role === "super_admin"
-        );
-        setWorkshopUsers(eligible);
-      }
-    });
   }, []);
 
   useEffect(() => {
@@ -451,41 +415,6 @@ function LoginPage() {
                   </button>
                 </div>
               </form>
-
-              {/* Quick login */}
-              <div className="wl-a5" style={{ marginTop: 30 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <div style={{ flex: 1, height: 1, background: "rgba(240,235,225,0.12)" }} />
-                  <span style={{
-                    fontFamily: "'Montserrat', sans-serif",
-                    fontSize: 8, fontWeight: 700,
-                    letterSpacing: "0.2em", textTransform: "uppercase",
-                    color: "rgba(240,235,225,0.35)",
-                    whiteSpace: "nowrap",
-                  }}>Quick access · PIN 1234</span>
-                  <div style={{ flex: 1, height: 1, background: "rgba(240,235,225,0.12)" }} />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
-                  {workshopUsers.map((u) => (
-                    <button
-                      key={u.id}
-                      type="button"
-                      className="wl-pill"
-                      onClick={() => { setUsername(u.username); setPin("1234"); }}
-                    >
-                      <span style={{
-                        fontFamily: "'Montserrat', sans-serif",
-                        fontSize: 11, fontWeight: 600,
-                        color: "rgba(240,235,225,0.85)",
-                      }}>{u.username}</span>
-                      <span style={{
-                        fontFamily: "'Montserrat', sans-serif",
-                        fontSize: 8, color: "rgba(240,235,225,0.45)",
-                      }}>{pillSubtitle(u)}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {/* Copyright */}
               <div className="wl-a6" style={{ marginTop: 40 }}>

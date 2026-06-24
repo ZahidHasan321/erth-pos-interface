@@ -5,7 +5,6 @@ import { useAuth } from "@/context/auth";
 import { BRAND_NAMES } from "@/lib/constants";
 import { Input } from "@repo/ui/input";
 import { AlertCircle } from "lucide-react";
-import { db } from "@/lib/db";
 import ErthLogoDark from "@/assets/erth-dark.svg";
 import SakkbaLogo from "@/assets/Sakkba.png";
 
@@ -25,15 +24,6 @@ export const Route = createFileRoute("/(auth)/login")({
     meta: [{ title: "Login" }],
   }),
 });
-
-type ShopUser = {
-  id: string;
-  username: string;
-  name: string;
-  role: string | null;
-  department: string | null;
-  brands: string[] | null;
-};
 
 const THEME = {
   erth: {
@@ -62,7 +52,6 @@ function LoginComponent() {
   const navigate = Route.useNavigate();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [shopUsers, setShopUsers] = React.useState<ShopUser[]>([]);
 
   const search = Route.useSearch();
 
@@ -73,20 +62,6 @@ function LoginComponent() {
 
   const [userType, setUserType] =
     React.useState<(typeof BRAND_NAMES)[keyof typeof BRAND_NAMES]>(initialUserType);
-
-  // DEV-ONLY: get_login_users returns the active-user roster to anon so
-  // the picker below can show clickable staff. Disable before exposing
-  // the app on a public domain (see CLAUDE.md §11).
-  React.useEffect(() => {
-    db.rpc("get_login_users").then(({ data }) => {
-      if (data) {
-        const eligible = (data as ShopUser[]).filter(
-          (u) => u.department === "shop" || u.role === "super_admin"
-        );
-        setShopUsers(eligible);
-      }
-    });
-  }, []);
 
   React.useEffect(() => {
     const root = document.documentElement;
@@ -126,11 +101,6 @@ function LoginComponent() {
     if (!identifier || !pin) return;
     await doLogin(identifier, pin);
   };
-
-  const filteredUsers = shopUsers.filter((u) => {
-    if (!u.brands || u.brands.length === 0) return true;
-    return u.brands.includes(userType);
-  });
 
   const isErth = userType === BRAND_NAMES.showroom;
   const t = isErth ? THEME.erth : THEME.sakkba;
@@ -565,34 +535,6 @@ function LoginComponent() {
                 </button>
               </fieldset>
             </form>
-
-            {filteredUsers.length > 0 && (
-              <div className="lg-quick">
-                <p className="lg-quick-label">
-                  <span>Quick sign-in</span>
-                  <span className="pin">PIN · 1234</span>
-                </p>
-                <div className="lg-quick-list">
-                  {filteredUsers.map((u) => (
-                    <button
-                      key={u.id}
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => doLogin(u.username, "1234")}
-                      className="lg-quick-item"
-                    >
-                      <div className="lg-avatar">{u.name.slice(0, 2).toUpperCase()}</div>
-                      <div className="lg-avatar-info">
-                        <div className="nm">{u.name}</div>
-                        <div className="sub">
-                          @{u.username}{u.role ? ` · ${u.role.charAt(0).toUpperCase() + u.role.slice(1)}` : ""}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <p className="lg-foot">© {new Date().getFullYear()} Alpaca · Kuwait</p>
           </div>

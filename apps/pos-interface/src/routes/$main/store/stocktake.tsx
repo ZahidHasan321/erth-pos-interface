@@ -13,7 +13,6 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui
 
 import { cn, parseUtcTimestamp, TIMEZONE } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
-import { isAdmin, isManager } from "@/lib/rbac";
 import { formatQty } from "@/lib/inventory";
 import { getFabrics } from "@/api/fabrics";
 import { getShelf } from "@/api/shelf";
@@ -43,7 +42,9 @@ function StocktakePage() {
   const { main } = Route.useParams();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const canValidate = isManager(user) || isAdmin(user);
+  // Validation is no longer manager-only; any active user who can reach the
+  // stocktake page may validate & apply (page access is the gate, rbac.ts).
+  const canValidate = true;
 
   const statusQ = useQuery({ queryKey: ["stocktake_status", SIDE], queryFn: () => getStocktakeStatus(SIDE), staleTime: 30_000 });
   const sessionId = statusQ.data?.open_session_id ?? null;

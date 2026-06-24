@@ -3047,28 +3047,11 @@ GRANT EXECUTE ON FUNCTION link_auth_id(UUID, UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION migrate_plaintext_pins() TO service_role;
 GRANT EXECUTE ON FUNCTION verify_pin(TEXT, TEXT) TO service_role;
 
--- DEV-ONLY convenience: returns the full active-user roster so the login
--- pages can render a clickable staff picker (fast role-switching during
--- testing). Anyone hitting the URL gets the roster — that's a staff-
--- enumeration leak in a public-internet deployment. Tracked in
--- CLAUDE.md §11: DROP this function before exposing the app on a public
--- domain, and switch the login pages back to typed-username only.
-CREATE OR REPLACE FUNCTION get_login_users()
-RETURNS JSONB AS $$
-  SELECT coalesce(jsonb_agg(
-    jsonb_build_object(
-      'id', id,
-      'username', username,
-      'name', name,
-      'role', role,
-      'department', department,
-      'job_functions', job_functions,
-      'brands', brands
-    ) ORDER BY name
-  ), '[]'::jsonb)
-  FROM users
-  WHERE is_active = true;
-$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
+-- REMOVED: get_login_users() was a DEV-ONLY helper that returned the full
+-- active-user roster to anon so the login pages could show a staff picker. That
+-- is a staff-enumeration leak (anyone could call it), so it is dropped along
+-- with the login-page pickers. Do NOT reintroduce — login is typed username + PIN.
+DROP FUNCTION IF EXISTS get_login_users();
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- RLS HELPER FUNCTIONS
@@ -4436,14 +4419,11 @@ BEGIN
     RAISE EXCEPTION 'Register session not found';
   END IF;
 
-  -- Brand isolation + role gate: reopening a closed session is sensitive
-  -- (resets variance, lets new transactions backdate), so restrict to
-  -- managers/admins of the session's brand.
+  -- Brand isolation: reopening a closed session is sensitive (resets variance,
+  -- lets new transactions backdate). WHO may reopen is page-guarded (rbac.ts);
+  -- here we only enforce brand access on the session.
   IF NOT can_access_brand(v_session.brand::text) THEN
     RAISE EXCEPTION 'You do not have access to this register session';
-  END IF;
-  IF NOT is_manager_or_above() THEN
-    RAISE EXCEPTION 'Only managers can reopen a closed register session';
   END IF;
 
   IF v_session.status = 'open' THEN
@@ -7782,7 +7762,6 @@ CREATE OR REPLACE FUNCTION record_waste(
 )
 RETURNS JSONB AS $$
 DECLARE
-  v_threshold CONSTANT NUMERIC := 25;  -- cost (KWD); mirror of WASTE_APPROVAL_THRESHOLD in lib/inventory.ts
   v_current NUMERIC;
   v_unit_cost NUMERIC;
   v_cost NUMERIC;
@@ -7829,10 +7808,6 @@ BEGIN
 
   v_unit_cost := COALESCE(p_unit_cost, v_unit_cost);
   v_cost := p_qty * COALESCE(v_unit_cost, 0);
-
-  IF v_cost >= v_threshold AND NOT is_manager_or_above() THEN
-    RAISE EXCEPTION 'record_waste: waste cost % is at/above the % approval threshold — needs manager approval', v_cost, v_threshold;
-  END IF;
 
   v_new_qty := v_current - p_qty;
 
@@ -7966,9 +7941,9 @@ BEGIN
     RETURN idem_replay(p_idempotency_key);
   END IF;
 
-  IF NOT is_manager_or_above() THEN
-    RAISE EXCEPTION 'validate_stocktake: only a manager may validate a stocktake';
-  END IF;
+  -- DEFINER bypasses RLS; block anon/inactive. WHO may validate is page-guarded
+  -- (rbac.ts) -- no longer manager-only.
+  PERFORM enforce_active_client();
 
   SELECT * INTO v_session FROM stocktake_sessions WHERE id = p_session_id FOR UPDATE;
   IF v_session.id IS NULL THEN

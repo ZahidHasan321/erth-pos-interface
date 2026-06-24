@@ -235,8 +235,8 @@ describe("register close — reconciliation (CLAUDE.md §EOD reconciliation; cas
       const close1 = await wf.closeRegister(tx, id, 35);
       expect(Number(close1.variance)).toBe(-5);
 
-      // SPEC: CLAUDE.md §EOD "Who" — reopen is manager-only (the sole manager
-      // gate in the EOD flow). The driver helper performs reopen as MANAGER.
+      // SPEC: CLAUDE.md §EOD "Who" — reopen is no longer manager-only (any
+      // active shop user may reopen; page-gated). A manager reopening still works.
       await wf.reopenRegister(tx, id);
       expect((await sessionRow(tx, id)).status).toBe("open");
 

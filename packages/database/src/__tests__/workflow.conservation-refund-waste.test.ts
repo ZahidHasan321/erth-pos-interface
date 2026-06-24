@@ -666,46 +666,27 @@ describe("record_waste (CLAUDE.md §4 Damage/Waste; conservation)", () => {
     });
   });
 
-  it("AT/ABOVE the cost threshold a NON-manager is rejected; a manager succeeds (RBAC gate by cost)", async () => {
+  it("a high-value waste succeeds for a NON-manager (no cost-threshold approval gate)", async () => {
     await inRolledBackTx(async (tx) => {
       const before = await fabricStock(tx, FABRIC_A_ID);
 
-      // SPEC: CLAUDE.md §4 "Manager-approval gate by cost ... At/above the
-      // threshold, only a manager/admin may perform it — the RPC rejects an
-      // over-threshold waste from a non-manager". Use a high unit_cost so
-      // qty * unit_cost is unambiguously over any small threshold, regardless
-      // of the exact KWD figure (which is an impl detail, not asserted).
-      const rejection = await tryInSavepoint(tx, (sp) =>
-        recordWaste(sp, {
-          itemId: FABRIC_A_ID,
-          location: "shop",
-          qty: 10,
-          reason: "supplier_defect",
-          unitCost: 100, // 10 * 100 = 1000 KWD: unambiguously over any threshold
-          actingUserId: ORDER_TAKER.id, // role 'staff' — not a manager
-        }),
-      );
-      expect(rejection).not.toBeNull();
-      // Secondary check (message is impl wording; the oracle is the §4 rule).
-      expect(String((rejection as Error).message)).toMatch(/manager/i);
-
-      // Rejected ⇒ no stock change.
-      const afterReject = await fabricStock(tx, FABRIC_A_ID);
-      expect(Number(afterReject.shop_stock)).toBe(Number(before.shop_stock));
-
-      // SPEC: §4 — a manager/admin MAY record the same over-threshold waste.
+      // SPEC: CLAUDE.md §4 / SPEC §4 "No manager-approval gate" — any active
+      // waste-permitted user records a waste of any value directly; there is no
+      // cost threshold and no manager sign-off. A high unit_cost (formerly
+      // "over-threshold") must now go through for a non-manager.
       const res = await recordWaste(tx, {
         itemId: FABRIC_A_ID,
         location: "shop",
         qty: 10,
         reason: "supplier_defect",
-        unitCost: 100,
-        actingUserId: MANAGER.id, // role 'manager'
+        unitCost: 100, // 10 * 100 = 1000 KWD: would have been over any old threshold
+        actingUserId: ORDER_TAKER.id, // role 'staff' — not a manager
       });
-      const afterAllow = await fabricStock(tx, FABRIC_A_ID);
-      // INVARIANT (conservation): the manager's waste removes exactly qty.
-      expect(Number(before.shop_stock) - Number(afterAllow.shop_stock)).toBe(10);
-      expect(Number(res.new_stock)).toBe(Number(afterAllow.shop_stock));
+
+      const after = await fabricStock(tx, FABRIC_A_ID);
+      // INVARIANT (conservation): waste removes exactly qty, regardless of value/role.
+      expect(Number(before.shop_stock) - Number(after.shop_stock)).toBe(10);
+      expect(Number(res.new_stock)).toBe(Number(after.shop_stock));
     });
   });
 
@@ -972,27 +953,27 @@ describe("validate_stocktake (CLAUDE.md §4 Stocktake; conservation + all-or-not
     });
   });
 
-  it("only a MANAGER may validate — a non-manager is rejected (no stock change)", async () => {
+  it("any active user may validate — a non-manager succeeds and applies the variance", async () => {
     await inRolledBackTx(async (tx) => {
       const fBefore = await fabricStock(tx, FABRIC_A_ID);
+      const fCounted = Number(fBefore.shop_stock) - 2;
 
       const sessionId = await startStocktake(tx, "shop", ORDER_TAKER.id); // staff may enter
       await saveStocktakeCounts(
         tx,
         sessionId,
-        [{ item_type: "fabric", item_id: FABRIC_A_ID, counted_qty: Number(fBefore.shop_stock) - 2, reason: "short" }],
+        [{ item_type: "fabric", item_id: FABRIC_A_ID, counted_qty: fCounted, reason: "short" }],
         ORDER_TAKER.id,
       );
 
-      // SPEC: CLAUDE.md §4 "Entering counts is open to staff; only a manager
-      // validates." A staff validate must be rejected.
-      expect(
-        await tryInSavepoint(tx, (sp) => validateStocktake(sp, sessionId, ORDER_TAKER.id)),
-      ).not.toBeNull();
+      // SPEC: SPEC §4 / CLAUDE.md §4 — validation is no longer manager-only; any
+      // active user who can reach the stocktake page may validate & apply.
+      const res = await validateStocktake(tx, sessionId, ORDER_TAKER.id);
+      expect(res.adjustments_applied).toBe(1);
 
       const fAfter = await fabricStock(tx, FABRIC_A_ID);
-      expect(Number(fAfter.shop_stock)).toBe(Number(fBefore.shop_stock));
-      expect(await ledgerCount(tx, "fabric", FABRIC_A_ID, "shop", "adjustment")).toBe(0);
+      expect(Number(fAfter.shop_stock)).toBe(fCounted); // variance applied
+      expect(await ledgerCount(tx, "fabric", FABRIC_A_ID, "shop", "adjustment")).toBe(1);
     });
   });
 });

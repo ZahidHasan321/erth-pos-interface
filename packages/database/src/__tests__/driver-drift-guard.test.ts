@@ -485,7 +485,7 @@ const CITATIONS: Citation[] = [
     anchorTokens: ["close_register", "p_session_id", "register_sessions"],
   },
 
-  // ── reopenRegister → reopen_register RPC (REAL, manager-only) ──────────────
+  // ── reopenRegister → reopen_register RPC (REAL; brand-gated, not manager-only) ──
   {
     driverFn: "reopenRegister",
     rawCitation: "triggers.sql:3736",

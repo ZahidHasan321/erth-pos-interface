@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, ImagePlus, Loader2, Minus, Plus, ShieldAlert, X } from "lucide-react";
+import { AlertTriangle, ImagePlus, Loader2, Minus, Plus, X } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@repo/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui/select";
 import { Textarea } from "@repo/ui/textarea";
 import { useAuth } from "@/context/auth";
-import { isAdmin, isManager } from "@/lib/rbac";
 import { recordWaste } from "@/api/stockMovements";
 import { uploadWastePhoto } from "@/lib/storage";
 import {
@@ -48,7 +47,6 @@ export function DamageWasteDialog({
 }: Props) {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const isMgr = isManager(user) || isAdmin(user);
 
   const [qty, setQty] = useState(0);
   const [qtyInput, setQtyInput] = useState("0");
@@ -74,8 +72,7 @@ export function DamageWasteDialog({
   const suffix = getUnitSuffix(itemType, unit);
   const isOther = reason === "other";
   const cost = +(qty * Number(unitCost ?? 0)).toFixed(3);
-  const overThreshold = cost >= WASTE_APPROVAL_THRESHOLD;
-  const blockedByApproval = overThreshold && !isMgr;
+  const overThreshold = cost >= WASTE_APPROVAL_THRESHOLD; // visual cue only; no approval gate
   const newQty = +(currentStock - qty).toFixed(2);
 
   const mut = useMutation({
@@ -154,10 +151,6 @@ export function DamageWasteDialog({
     }
     if (isOther && !note.trim()) {
       toast.error("Describe the reason");
-      return;
-    }
-    if (blockedByApproval) {
-      toast.error("This waste is above the approval threshold. A manager must record it");
       return;
     }
     mut.mutate();
@@ -294,22 +287,13 @@ export function DamageWasteDialog({
                 aria-hidden="true"
               />
             </Field>
-
-            {blockedByApproval && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900" aria-live="polite">
-                <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
-                <span>
-                  This is over the {WASTE_APPROVAL_THRESHOLD} cost threshold, so a manager needs to record it. Ask a manager to sign in and complete this write-off.
-                </span>
-              </div>
-            )}
           </div>
 
           <DialogFooter className="px-6 py-4 border-t bg-muted/30 gap-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button
               type="submit"
-              disabled={mut.isPending || qty <= 0 || blockedByApproval}
+              disabled={mut.isPending || qty <= 0}
               className="bg-red-600 hover:bg-red-700"
             >
               {mut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}

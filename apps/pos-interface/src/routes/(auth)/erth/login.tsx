@@ -2,7 +2,6 @@ import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-rout
 import * as React from "react";
 import { z } from "zod";
 import { useAuth } from "@/context/auth";
-import { db } from "@/lib/db";
 import ErthLogo from "@/assets/erth-light.svg";
 
 const STAGES = ["New Order", "Dispatch", "Brova Trial", "Alteration", "Collection"];
@@ -20,15 +19,6 @@ export const Route = createFileRoute("/(auth)/erth/login")({
   head: () => ({ meta: [{ title: "Erth: Sign In" }] }),
 });
 
-type ShopUser = {
-  id: string;
-  username: string;
-  name: string;
-  role: string | null;
-  department: string | null;
-  brands: string[] | null;
-};
-
 function ErthLoginPage() {
   const auth = useAuth();
   const router = useRouter();
@@ -39,7 +29,6 @@ function ErthLoginPage() {
   const [pin, setPin] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [users, setUsers] = React.useState<ShopUser[]>([]);
   const [ready, setReady] = React.useState(false);
 
   // Apply erth theme so CSS vars resolve correctly
@@ -52,23 +41,6 @@ function ErthLoginPage() {
   React.useEffect(() => {
     const t = setTimeout(() => setReady(true), 40);
     return () => clearTimeout(t);
-  }, []);
-
-  // DEV-ONLY: get_login_users powers the quick-access picker by returning
-  // the active-user roster to anon. Disable before exposing the app on a
-  // public domain (see CLAUDE.md §11).
-  React.useEffect(() => {
-    db.rpc("get_login_users").then(({ data }) => {
-      if (data) {
-        setUsers(
-          (data as ShopUser[]).filter(
-            (u) =>
-              (u.department === "shop" || u.role === "super_admin") &&
-              (!u.brands || u.brands.length === 0 || u.brands.includes("erth"))
-          )
-        );
-      }
-    });
   }, []);
 
   React.useEffect(() => {
@@ -432,49 +404,6 @@ function ErthLoginPage() {
                 </button>
               </div>
             </form>
-
-            {/* Quick login */}
-            <div className={`el-users-reveal${users.length > 0 ? " visible" : ""}`}>
-              <div>
-                <div className="el-item" style={{ marginTop: 24 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                    <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-                    <span style={{
-                      fontFamily: "'Montserrat', sans-serif",
-                      fontSize: 9, fontWeight: 700, letterSpacing: "0.18em",
-                      textTransform: "uppercase", color: "var(--muted-foreground)",
-                      whiteSpace: "nowrap",
-                    }}>Quick access · 1234</span>
-                    <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                    {users.map((u) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        className="el-pill"
-                        disabled={loading}
-                        onClick={() => doLogin(u.username, "1234")}
-                      >
-                        <div className="el-avatar">{u.name.slice(0, 2).toUpperCase()}</div>
-                        <div>
-                          <p style={{
-                            fontFamily: "'Montserrat', sans-serif",
-                            fontSize: 12, fontWeight: 600,
-                            color: "var(--card-foreground)", margin: 0,
-                          }}>{u.name.split(" ")[0]}</p>
-                          <p style={{
-                            fontFamily: "'Montserrat', sans-serif",
-                            fontSize: 10, color: "var(--muted-foreground)",
-                            margin: 0, textTransform: "capitalize",
-                          }}>{u.role ?? u.department}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
 
             <div className="el-item" style={{ marginTop: 28 }}>
               <span style={{
