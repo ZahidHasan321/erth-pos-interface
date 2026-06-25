@@ -42,6 +42,20 @@ export interface QcQualitySpec {
 }
 
 /**
+ * Measurements treated as optional *for QC only* — a blank cell never blocks
+ * QC submission. These stay required everywhere else (POS entry, add-garment);
+ * the override lives here, not in the central spec, so the rest of the system
+ * is unaffected. The override only flips the `optional` flag — it does not move
+ * these keys, so their position in QC_MEASUREMENT_GROUPS (the on-screen order)
+ * is unchanged.
+ */
+const QC_OPTIONAL_OVERRIDE_KEYS = new Set<string>([
+  "elbow",
+  "chest_full",
+  "waist_full",
+]);
+
+/**
  * QC measurement list — derived from the central spec.
  *
  * Order: numbered 1-18 (PDF tape order) first, then unnumbered required,
@@ -66,10 +80,12 @@ function buildQcMeasurements(): QcMeasurementSpec[] {
     (s) => !s.derived && s.optional && !s.basma,
   );
 
+  // The override is applied here (not in the partitioning above) so the three
+  // keys keep their existing slot — only their `optional` flag flips for QC.
   return [...numbered, ...unnumberedRequired, ...basma, ...optional].map((s) => ({
     key: s.key,
     label: qcLabel(s.label),
-    optional: s.optional,
+    optional: s.optional || QC_OPTIONAL_OVERRIDE_KEYS.has(s.key),
     basma: s.basma,
   }));
 }
