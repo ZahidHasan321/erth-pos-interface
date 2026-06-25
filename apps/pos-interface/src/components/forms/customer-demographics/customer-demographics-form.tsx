@@ -46,6 +46,20 @@ import { Pencil, X, Save, Check, Users, Info, Eye, Copy, MapPin, AlertTriangle }
 import { SearchCustomer } from "./search-customer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@repo/ui/dialog";
 
+// Family relations a Secondary account can carry (SPEC §5). Shared by the
+// relation field and the duplicate-phone "link as family member" flow.
+const RELATION_OPTIONS = [
+  "Son",
+  "Father",
+  "Cousin",
+  "Brother",
+  "Grandfather",
+  "Grandson",
+  "Nephew",
+  "Friend",
+  "Others",
+] as const;
+
 interface CustomerDemographicsFormProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<CustomerDemographicsSchema, any, any>;
@@ -87,6 +101,11 @@ export function CustomerDemographicsForm({
   // Duplicate-phone guard (SPEC §5): a phone already on file forces a choice.
   const [duplicateMatch, setDuplicateMatch] = useState<PhoneAccountMatch | null>(null);
   const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
+  // Second step of the duplicate dialog: capture the family relation before
+  // committing the link, so a linked Secondary is never left missing its
+  // (required) relation.
+  const [isLinkingFamily, setIsLinkingFamily] = useState(false);
+  const [linkRelation, setLinkRelation] = useState("");
   const [isPrimaryPickerOpen, setIsPrimaryPickerOpen] = useState(false);
   const [confirmationDialog, setConfirmationDialog] = useState({
     isOpen: false,
@@ -172,6 +191,8 @@ export function CustomerDemographicsForm({
       phone: `This mobile number is already used by Primary account: ${primaryName}.`,
     }));
     setDuplicateMatch(top);
+    setIsLinkingFamily(false);
+    setLinkRelation("");
     setIsDuplicateDialogOpen(true);
   }, [phoneMatches, id, form]);
 
@@ -219,21 +240,39 @@ export function CustomerDemographicsForm({
     }
   };
 
-  // "Link as family member" from the duplicate dialog: become a Secondary of the
-  // matched account's Primary. The linked-primary panel is filled by the sync effect.
+  // "Link as family member" from the duplicate dialog: move to the relation step
+  // (a Secondary must carry a relation, so we capture it before committing). If
+  // the matched account has no Primary on file, fall back to the primary picker.
   const handleLinkAsFamily = () => {
     if (!duplicateMatch) return;
-    const primaryId = duplicateMatch.resolved_primary_id;
-    if (!primaryId) {
+    if (!duplicateMatch.resolved_primary_id) {
       toast.error("That account has no primary on file. Search for a primary account to link.");
       setIsDuplicateDialogOpen(false);
       setIsPrimaryPickerOpen(true);
       return;
     }
+    setLinkRelation("");
+    setIsLinkingFamily(true);
+  };
+
+  // Commit the family link once a relation is chosen: become a Secondary of the
+  // matched account's Primary, with relation set. The linked-primary panel is
+  // filled by the sync effect.
+  const handleConfirmLink = () => {
+    if (!duplicateMatch) return;
+    const primaryId = duplicateMatch.resolved_primary_id;
+    if (!primaryId) return;
+    if (!linkRelation) {
+      toast.error("Choose how this customer is related to the primary account.");
+      return;
+    }
     form.setValue("account_type", "Secondary");
     form.setValue("primary_customer_id", primaryId);
+    form.setValue("relation", linkRelation);
     setWarnings((prev) => ({ ...prev, phone: undefined }));
     setDuplicateMatch(null);
+    setIsLinkingFamily(false);
+    setLinkRelation("");
     setIsDuplicateDialogOpen(false);
   };
 
@@ -567,6 +606,22 @@ export function CustomerDemographicsForm({
                           warnings.phone && !isFetching ? warnings.phone : undefined
                         }
                       />
+                      {unresolvedDuplicate && !isFetching && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="mt-1.5"
+                          onClick={() => {
+                            setIsLinkingFamily(false);
+                            setLinkRelation("");
+                            setIsDuplicateDialogOpen(true);
+                          }}
+                        >
+                          <Users className="size-4 mr-2" />
+                          Review options
+                        </Button>
+                      )}
                     </FormItem>
                   )}
                 />
@@ -908,15 +963,11 @@ export function CustomerDemographicsForm({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Son">Son</SelectItem>
-                          <SelectItem value="Father">Father</SelectItem>
-                          <SelectItem value="Cousin">Cousin</SelectItem>
-                          <SelectItem value="Brother">Brother</SelectItem>
-                          <SelectItem value="Grandfather">Grandfather</SelectItem>
-                          <SelectItem value="Grandson">Grandson</SelectItem>
-                          <SelectItem value="Nephew">Nephew</SelectItem>
-                          <SelectItem value="Friend">Friend</SelectItem>
-                          <SelectItem value="Others">Others</SelectItem>
+                          {RELATION_OPTIONS.map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {r}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -1153,52 +1204,158 @@ export function CustomerDemographicsForm({
           </ErrorBoundary>
         </div>
 
-        {/* Duplicate-phone hard block (SPEC §5): link as family member or fix the number. */}
-        <Dialog open={isDuplicateDialogOpen} onOpenChange={setIsDuplicateDialogOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="size-5 text-amber-500" />
-                Mobile number already in use
-              </DialogTitle>
-              <DialogDescription>
-                {duplicateMatch && (
-                  <>
-                    This number already belongs to{" "}
-                    <span className="font-semibold text-foreground">
-                      {duplicateMatch.account_type === "Primary"
-                        ? duplicateMatch.name
-                        : duplicateMatch.resolved_primary_name ?? duplicateMatch.name}
-                    </span>
-                    . Is this the same customer, a family member sharing the
-                    number, or a typo?
-                  </>
-                )}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="flex-col sm:flex-row gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsDuplicateDialogOpen(false)}
-              >
-                It's a typo, fix the number
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleLinkAsFamily}
-              >
-                <Users className="size-4 mr-2" />
-                Link as family member
-              </Button>
-              {onCustomerChange && (
-                <Button type="button" onClick={handleUseExisting}>
-                  <Check className="size-4 mr-2" />
-                  Use existing customer
-                </Button>
-              )}
-            </DialogFooter>
+        {/* Duplicate-phone hard block (SPEC §5): same customer, link as family
+            member (with relation), or fix the number. */}
+        <Dialog
+          open={isDuplicateDialogOpen}
+          onOpenChange={(open) => {
+            setIsDuplicateDialogOpen(open);
+            if (!open) {
+              setIsLinkingFamily(false);
+              setLinkRelation("");
+            }
+          }}
+        >
+          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+            {(() => {
+              const linkedPrimaryName = duplicateMatch
+                ? duplicateMatch.account_type === "Primary"
+                  ? duplicateMatch.name
+                  : duplicateMatch.resolved_primary_name ?? duplicateMatch.name
+                : "";
+              const optionClass =
+                "flex w-full items-start gap-3 rounded-lg border border-border/60 p-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <AlertTriangle className="size-5 text-amber-500" />
+                      Mobile number already in use
+                    </DialogTitle>
+                    <DialogDescription>
+                      {duplicateMatch &&
+                        (isLinkingFamily ? (
+                          <>
+                            Linking this customer as a family member of{" "}
+                            <span className="font-semibold text-foreground">
+                              {linkedPrimaryName}
+                            </span>
+                            . Choose how they are related.
+                          </>
+                        ) : (
+                          <>
+                            This number already belongs to{" "}
+                            <span className="font-semibold text-foreground">
+                              {linkedPrimaryName}
+                            </span>
+                            . Is this the same person, a family member sharing the
+                            number, or just a typo?
+                          </>
+                        ))}
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  {duplicateMatch && !isLinkingFamily && (
+                    <div className="flex flex-col gap-2 py-1">
+                      {onCustomerChange && (
+                        <button
+                          type="button"
+                          className={optionClass}
+                          onClick={handleUseExisting}
+                        >
+                          <Check className="size-5 mt-0.5 shrink-0 text-primary" />
+                          <span>
+                            <span className="block font-medium">Same customer</span>
+                            <span className="block text-sm text-muted-foreground">
+                              Load the existing record and continue this order.
+                            </span>
+                          </span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={optionClass}
+                        onClick={handleLinkAsFamily}
+                      >
+                        <Users className="size-5 mt-0.5 shrink-0 text-primary" />
+                        <span>
+                          <span className="block font-medium">Family member</span>
+                          <span className="block text-sm text-muted-foreground">
+                            A different person sharing this number. Link them to{" "}
+                            {linkedPrimaryName}.
+                          </span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={optionClass}
+                        onClick={() => setIsDuplicateDialogOpen(false)}
+                      >
+                        <Pencil className="size-5 mt-0.5 shrink-0 text-muted-foreground" />
+                        <span>
+                          <span className="block font-medium">It's a typo</span>
+                          <span className="block text-sm text-muted-foreground">
+                            Go back and fix the mobile number.
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                  )}
+
+                  {duplicateMatch && isLinkingFamily && (
+                    <div className="flex flex-col gap-3 py-1">
+                      <div className="rounded-md border border-border/50 bg-muted/50 p-2 text-sm">
+                        Linking to:{" "}
+                        <span className="font-semibold text-foreground">
+                          {linkedPrimaryName}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-semibold">
+                          <span className="text-destructive">*</span> Account
+                          Relation
+                        </label>
+                        <Select
+                          value={linkRelation}
+                          onValueChange={setLinkRelation}
+                        >
+                          <SelectTrigger className="bg-background border-border/60">
+                            <SelectValue placeholder="How are they related?" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {RELATION_OPTIONS.map((r) => (
+                              <SelectItem key={r} value={r}>
+                                {r}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setIsLinkingFamily(false);
+                            setLinkRelation("");
+                          }}
+                        >
+                          Back
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={handleConfirmLink}
+                          disabled={!linkRelation}
+                        >
+                          <Users className="size-4 mr-2" />
+                          Link as family member
+                        </Button>
+                      </DialogFooter>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </DialogContent>
         </Dialog>
 
