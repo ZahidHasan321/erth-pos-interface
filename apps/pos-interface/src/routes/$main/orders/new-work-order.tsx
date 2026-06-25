@@ -1408,7 +1408,9 @@ function NewWorkOrder() {
                         isOrderClosed={isOrderClosed}
                         orderId={orderId}
                         onCustomerChange={handleCustomerFound}
-                        hideAddress
+                        // ERTH collects the delivery address later in the cashier flow; home-based
+                        // brands (SAKKBA/QASS) are always home delivery, so capture it up front here.
+                        hideAddress={!isHomeBased}
                         onSave={(data) => {
                             setCustomerDemographics(data);
                             // Only add saved step if we already have an order
