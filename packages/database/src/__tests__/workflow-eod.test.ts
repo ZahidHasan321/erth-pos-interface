@@ -286,6 +286,41 @@ describe("register close — reconciliation (CLAUDE.md §EOD reconciliation; cas
       );
     });
   });
+
+  it("SPEC §3: inline confirmation payment (home brands) needs no open register", async () => {
+    await inRolledBackTx(async (tx) => {
+      // SPEC: CLAUDE.md §3 — home-based brands take payment INLINE at order
+      // confirmation and have NO cashier/register. Close the day so no session
+      // is open, then confirm a WORK order with deferToCashier=false + paid>0
+      // (the home-brand new-work-order path). It must succeed, not raise
+      // "Register is not open" — the register requirement lives only in the
+      // cashier path (record_payment_transaction), not at confirmation.
+      await wf.closeRegister(tx, await sessionId(tx), 0);
+
+      const { orderId } = await wf.createWorkOrder(
+        tx,
+        [{ garment_type: "final" }],
+        { paid: 40, deferToCashier: false },
+      );
+
+      // The inline payment is recorded (orders.paid summed by trigger) and the
+      // transaction carries a NULL session — there is no register to attach to.
+      const o = only(
+        await tx`SELECT paid FROM orders WHERE id = ${orderId}`,
+        "orders.paid",
+      ) as { paid: string | number };
+      expect(Number(o.paid)).toBe(40);
+
+      const t = only(
+        await tx`
+          SELECT amount, register_session_id
+          FROM payment_transactions WHERE order_id = ${orderId}`,
+        "payment_transactions",
+      ) as { amount: string | number; register_session_id: number | null };
+      expect(Number(t.amount)).toBe(40);
+      expect(t.register_session_id).toBeNull();
+    });
+  });
 });
 
 describe("EOD report sanity (CLAUDE.md §EOD; net = collected − refunded identity)", () => {

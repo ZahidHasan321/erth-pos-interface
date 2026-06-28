@@ -311,17 +311,15 @@ BEGIN
   END LOOP;
 
   -- 6. Record initial payment transaction (if paid > 0)
-  --    STRICT: any cash/electronic advance requires the brand's register to be open
-  --    so the transaction can be attributed to a session and reconciled at close.
-  --    Zero-paid confirmations are allowed (no money flow → no register dependency).
+  --    This is the inline confirmation-payment path, used only by home-based brands
+  --    (showroom/cashier brands always defer payment, so v_paid is 0 here for them).
+  --    Home brands have no register, so the transaction is recorded with a NULL session;
+  --    if a register happens to be open for this brand the payment attaches to it.
+  --    The register requirement lives only in record_payment_transaction (the cashier path).
   IF v_paid IS NOT NULL AND v_paid > 0 THEN
     SELECT id INTO v_session_id FROM register_sessions
     WHERE brand = v_order_row.brand AND status = 'open'
     LIMIT 1;
-
-    IF v_session_id IS NULL THEN
-      RAISE EXCEPTION 'Register is not open for %. Open the register before recording a payment.', v_order_row.brand;
-    END IF;
 
     INSERT INTO payment_transactions (
       order_id, amount, payment_type, payment_ref_no, payment_note,
@@ -459,15 +457,12 @@ BEGIN
   END LOOP;
 
   -- 4. Record initial payment transaction (if paid > 0)
-  --    STRICT: requires open register for the order's brand (see complete_work_order).
+  --    Inline confirmation-payment path (home brands only); no register requirement
+  --    (see complete_work_order). Attaches to an open session if one exists, else NULL.
   IF v_paid IS NOT NULL AND v_paid > 0 THEN
     SELECT id INTO v_session_id FROM register_sessions
     WHERE brand = v_order_row.brand AND status = 'open'
     LIMIT 1;
-
-    IF v_session_id IS NULL THEN
-      RAISE EXCEPTION 'Register is not open for %. Open the register before recording a payment.', v_order_row.brand;
-    END IF;
 
     INSERT INTO payment_transactions (
       order_id, amount, payment_type, payment_ref_no, payment_note,
@@ -612,15 +607,12 @@ BEGIN
   END LOOP;
 
   -- 3. Record initial payment transaction (if paid > 0)
-  --    STRICT: requires open register for the brand (see complete_work_order).
+  --    Inline confirmation-payment path (home brands only); no register requirement
+  --    (see complete_work_order). Attaches to an open session if one exists, else NULL.
   IF v_paid IS NOT NULL AND v_paid > 0 THEN
     SELECT id INTO v_session_id FROM register_sessions
     WHERE brand = v_brand AND status = 'open'
     LIMIT 1;
-
-    IF v_session_id IS NULL THEN
-      RAISE EXCEPTION 'Register is not open for %. Open the register before recording a payment.', v_brand;
-    END IF;
 
     INSERT INTO payment_transactions (
       order_id, amount, payment_type, payment_ref_no, payment_note,

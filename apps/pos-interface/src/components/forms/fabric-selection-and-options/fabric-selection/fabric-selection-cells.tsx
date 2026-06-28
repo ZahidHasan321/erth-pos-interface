@@ -15,6 +15,8 @@ import { Textarea } from "@repo/ui/textarea";
 import { DatePicker } from "@repo/ui/date-picker";
 import { Combobox } from "@repo/ui/combobox";
 import { getFabrics } from "@/api/fabrics";
+import { getBrand } from "@/api/orders";
+import { isHomeBasedBrand } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
 import { cn, pickedDayKuwaitMidnight } from "@/lib/utils";
 import Fuse from "fuse.js";
@@ -654,6 +656,15 @@ export const FabricAmountCell = ({
     const fabricLength = fabricLengthWatch ?? row.original.fabric_length;
 
     React.useEffect(() => {
+        // Home-based brands price garments at a fixed all-in total (SPEC §1/§5):
+        // fabric is folded in, never charged separately. The fabric still draws
+        // from ERTH stock (consumption by fabric_length, unaffected) but its
+        // customer-facing amount is 0 so the fixed matrix totals hold exactly.
+        if (isHomeBasedBrand(getBrand())) {
+            setValue(`garments.${row.index}.fabric_amount`, 0);
+            return;
+        }
+
         if (fabricSource === "OUT") {
             setValue(`garments.${row.index}.fabric_amount`, 0);
             return;
