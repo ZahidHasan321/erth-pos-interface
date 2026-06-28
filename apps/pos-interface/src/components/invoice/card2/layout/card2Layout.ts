@@ -128,7 +128,7 @@ export const card2FieldSlots: Readonly<Record<Card2FieldSlotId, Card2FieldSlotDe
     dataPath: 'orderHeader.brovaStatus',
   },
   collarLengthWidth: {
-    label: 'Collar L/W',
+    label: 'Collar L/H',
     dataPath: [
       'measurements.onGarment.collar.length',
       'measurements.onGarment.collar.width',

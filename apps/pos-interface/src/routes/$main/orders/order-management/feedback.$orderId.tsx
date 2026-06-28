@@ -150,7 +150,7 @@ export const Route = createFileRoute(
 // --- Constants & Config ---
 
 const MEASUREMENT_ROWS = [
-  { type: "Collar", subType: "Width", key: "collar_width" },
+  { type: "Collar", subType: "Length", key: "collar_width" },
   { type: "Collar", subType: "Height", key: "collar_height" },
   { type: "Length", subType: "Front", key: "length_front" },
   { type: "Length", subType: "Back", key: "length_back" },
@@ -1944,7 +1944,9 @@ function UnifiedFeedbackInterface() {
           for (const [key, val] of Object.entries(state.stagedMeasurement.correctedFields)) {
             baseRecord[key] = key === "collar_position" && val === "standard" ? null : val;
           }
-          baseRecord["idempotency_key"] = state.stagedMeasurement.localId;
+          // localId is "staged:<uuid>" (a client-only marker); idempotency_key is
+          // a uuid column, so strip the prefix to the bare uuid before writing.
+          baseRecord["idempotency_key"] = state.stagedMeasurement.localId.replace(/^staged:/, "");
           // Assign the next human-readable measurement_id sequence for this customer.
           const cm = await getMeasurementsByCustomer(activeOrder.customer.id);
           const maxSeq = (cm.data ?? []).reduce((max, row) => {

@@ -98,7 +98,7 @@ export const MEASUREMENT_GROUPS: {
   {
     title: "Collar",
     fields: [
-      { key: "collar_width", label: "Width" },
+      { key: "collar_width", label: "Length" },
       { key: "collar_height", label: "Height" },
     ],
   },

@@ -89,6 +89,7 @@ import {
 import {
   createMeasurement,
   getMeasurementsByCustomerId,
+  getLockedMeasurementIds,
   updateMeasurement,
 } from "@/api/measurements";
 import { getEmployees } from "@/api/employees";
@@ -331,6 +332,25 @@ export function CustomerMeasurementsForm({
     gcTime: Infinity,
   });
 
+  // Measurements already referenced by a CONFIRMED order can't be edited in
+  // place — that would silently rewrite a committed order's spec (§2.5). The
+  // user is redirected to "New Measurement" instead. Draft orders don't lock.
+  const { data: lockedQuery } = useQuery({
+    queryKey: ["locked-measurements", customerId],
+    queryFn: () =>
+      customerId ? getLockedMeasurementIds(customerId) : Promise.resolve(null),
+    enabled: !!customerId,
+  });
+  const lockedMeasurementIds = React.useMemo(
+    () => new Set(lockedQuery?.data ?? []),
+    [lockedQuery?.data],
+  );
+  const selectedMeasurementDbId = selectedMeasurementId
+    ? measurements.get(selectedMeasurementId)?.id ?? null
+    : null;
+  const isSelectedMeasurementLocked =
+    !!selectedMeasurementDbId && lockedMeasurementIds.has(selectedMeasurementDbId);
+
   // Populate measurements when query data arrives
   React.useEffect(() => {
     if (!customerId || !isSuccess || isFetching) return;
@@ -417,6 +437,12 @@ export function CustomerMeasurementsForm({
       const dbId = storedMeasurement?.id;
       if (!dbId) {
         toast.error("Cannot find measurement record for updating.");
+        return;
+      }
+      if (lockedMeasurementIds.has(dbId)) {
+        toast.error(
+          "This measurement is used by a confirmed order and can't be edited in place. Use 'New Measurement' to save a corrected copy.",
+        );
         return;
       }
       updateMeasurementMutation({
@@ -667,7 +693,12 @@ export function CustomerMeasurementsForm({
                 type="button"
                 variant="secondary"
                 onClick={() => setIsEditing(true)}
-                disabled={!selectedMeasurementId}
+                disabled={!selectedMeasurementId || isSelectedMeasurementLocked}
+                title={
+                  isSelectedMeasurementLocked
+                    ? "Used by a confirmed order. Use New to save a corrected copy."
+                    : undefined
+                }
               >
                 <Pencil className="w-4 h-4 mr-2" />
                 Edit
@@ -687,6 +718,12 @@ export function CustomerMeasurementsForm({
             )}
           </div>
         </div>
+        {isSelectedMeasurementLocked && !isEditing && !isCreatingNew && (
+          <p className="text-sm text-muted-foreground">
+            This measurement is used by a confirmed order, so it can't be edited.
+            Use New to save a corrected copy.
+          </p>
+        )}
         {/* ---- Auto-Tape Measurements (sequence 1-18) ---- */}
         <div className="space-y-3 pt-4">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Auto Tape Measurements</h3>

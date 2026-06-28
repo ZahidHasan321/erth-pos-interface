@@ -944,7 +944,7 @@ function tripLabel(trip: number) {
 // ── QC labels ──────────────────────────────────────────────────
 
 const QC_MEASUREMENT_LABELS: Record<string, string> = {
-  collar_width: "Collar width",
+  collar_width: "Collar length",
   collar_height: "Collar height",
   shoulder: "Shoulder",
   chest_full: "Chest (full)",

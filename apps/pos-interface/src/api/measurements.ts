@@ -35,6 +35,36 @@ export const getMeasurementsByCustomerId = async (customerId: number): Promise<A
 /** Alias — same as getMeasurementsByCustomerId; selects id, measurement_id, customer_id (plus all fields). */
 export const getMeasurementsByCustomer = getMeasurementsByCustomerId;
 
+/**
+ * Measurement UUIDs that are referenced by a garment on a CONFIRMED order for
+ * this customer. Such a record is part of a committed order's signed spec, so
+ * the measurement form must not edit it in place — that would silently rewrite
+ * the spec of an order already in production, bypassing the brova/production
+ * locks (§2.5). The form redirects those edits to "New Measurement" instead.
+ * Draft orders are NOT locked (still being built).
+ */
+export const getLockedMeasurementIds = async (
+  customerId: number,
+): Promise<ApiResponse<string[]>> => {
+  const { data, error } = await db
+    .from('garments')
+    .select('measurement_id, orders!inner(customer_id, checkout_status)')
+    .eq('orders.customer_id', customerId)
+    .eq('orders.checkout_status', 'confirmed')
+    .not('measurement_id', 'is', null);
+  if (error) {
+    return { status: 'error', message: error.message, data: [] };
+  }
+  const ids = Array.from(
+    new Set(
+      (data ?? [])
+        .map((g) => (g as { measurement_id: string | null }).measurement_id)
+        .filter((id): id is string => id != null),
+    ),
+  );
+  return { status: 'success', data: ids };
+};
+
 export const getMeasurementById = async (id: string): Promise<ApiResponse<Measurement>> => {
   const { data, error } = await db
     .from(TABLE_NAME)

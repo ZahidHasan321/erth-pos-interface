@@ -7,8 +7,8 @@ const MEASUREMENT_GROUPS: { title: string; fields: { key: keyof Measurement; lab
   {
     title: "Collar & shoulder",
     fields: [
-      { key: "collar_width", label: "Collar W" },
-      { key: "collar_height", label: "Collar H" },
+      { key: "collar_width", label: "Collar Length" },
+      { key: "collar_height", label: "Collar Height" },
       { key: "shoulder", label: "Shoulder" },
     ],
   },

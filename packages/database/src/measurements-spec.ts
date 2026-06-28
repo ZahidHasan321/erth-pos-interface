@@ -62,12 +62,12 @@ export interface MeasurementSpec {
  * Master list. Order = display order in the spec sheet sense.
  * PDF tape-measure order is driven by `pdfOrder` (1-18) — see PDF
  * "MEASURES NAMING.pdf" for source. Labels follow the latest naming pass
- * (COLLAR/GALLABI LEN/W, "10. Top Pocket Dist", etc.).
+ * (Collar Length/Height, "10. Top Pocket Dist", etc.).
  */
 export const MEASUREMENTS_SPEC: readonly MeasurementSpec[] = [
   // Collar
-  { key: "collar_width",           label: "Collar/Gallabi Len", shortLabel: "Collar Len", group: "collar",       pdfOrder: 17 },
-  { key: "collar_height",          label: "Collar/Gallabi W",   shortLabel: "Collar W",   group: "collar",       pdfOrder: 18 },
+  { key: "collar_width",           label: "Collar Length",      shortLabel: "Collar Len", group: "collar",       pdfOrder: 17 },
+  { key: "collar_height",          label: "Collar Height",      shortLabel: "Collar Ht",  group: "collar",       pdfOrder: 18 },
 
   // Shoulder & arm
   { key: "shoulder",               label: "Shoulder",                                     group: "shoulder_arm", pdfOrder: 2 },
