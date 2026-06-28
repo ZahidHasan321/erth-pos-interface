@@ -3,54 +3,41 @@ import { db } from "../src/client";
 import { sql } from "drizzle-orm";
 
 async function main() {
-  // Order-level context for 88
-  const order = await db.execute(sql`
+  // Order + work_order context for 2417 and 2418
+  const orders = await db.execute(sql`
     SELECT o.id, o.order_type, o.checkout_status, o.brand, o.paid, o.order_total,
-           o.order_date, wo.order_phase, wo.invoice_number, wo.delivery_date
+           o.order_date, o.customer_id,
+           wo.order_phase, wo.invoice_number, wo.delivery_date, wo.linked_order_id
     FROM orders o
     LEFT JOIN work_orders wo ON wo.order_id = o.id
-    WHERE o.id = 88
+    WHERE o.id IN (2417, 2418)
+    ORDER BY o.id
   `);
-  console.log("=== Order 88 (order + work_order) ===");
-  console.log(JSON.stringify(order, null, 2));
+  console.log("=== Orders 2417 & 2418 (order + work_order) ===");
+  console.log(JSON.stringify(orders, null, 2));
 
-  // All garments in order 88
-  const garments = await db.execute(sql`
-    SELECT garment_id, garment_type, piece_stage, location,
-           acceptance_status, feedback_status, in_production, trip_number,
-           soaking, soaking_completed_at, assigned_unit, assigned_person,
-           start_time, completion_time, fabric_source
-    FROM garments
-    WHERE order_id = 88
-    ORDER BY garment_id
+  // Customer info for both
+  const customers = await db.execute(sql`
+    SELECT DISTINCT c.id, c.name, c.phone, c.primary_customer_id, c.account_type
+    FROM customers c
+    JOIN orders o ON o.customer_id = c.id
+    WHERE o.id IN (2417, 2418)
+    ORDER BY c.id
   `);
-  console.log("\n=== Order 88 garments ===");
-  console.log(JSON.stringify(garments, null, 2));
+  console.log("\n=== Customers on these orders ===");
+  console.log(JSON.stringify(customers, null, 2));
 
-  // Is 88-1 alone, or are other garments stuck at piece_stage='soaking'?
-  const stuckSoaking = await db.execute(sql`
-    SELECT garment_id, garment_type, location, in_production, trip_number,
-           soaking, soaking_completed_at, feedback_status
-    FROM garments
-    WHERE piece_stage = 'soaking'
-    ORDER BY order_id, garment_id
+  // Anything pointing at either order via linked_order_id (group members)
+  const group = await db.execute(sql`
+    SELECT order_id, invoice_number, linked_order_id, delivery_date,
+           COALESCE(linked_order_id, order_id) AS group_key
+    FROM work_orders
+    WHERE order_id IN (2417, 2418)
+       OR linked_order_id IN (2417, 2418)
+    ORDER BY group_key, order_id
   `);
-  console.log("\n=== ALL garments at piece_stage='soaking' ===");
-  console.log(JSON.stringify(stuckSoaking, null, 2));
-
-  // FIX: 88-1 is orphaned at piece_stage='soaking' (a parallel-track value no
-  // terminal queue reads). Move it to 'sewing' so it surfaces in the sewing
-  // terminal. Guarded predicate so this can only touch this one orphaned brova.
-  const fix = await db.execute(sql`
-    UPDATE garments
-    SET piece_stage = 'sewing'
-    WHERE order_id = 88
-      AND garment_id = '88-1'
-      AND piece_stage = 'soaking'
-    RETURNING garment_id, piece_stage, location, in_production, trip_number
-  `);
-  console.log("\n=== FIX applied (88-1 → sewing) ===");
-  console.log(JSON.stringify(fix, null, 2));
+  console.log("\n=== Link group membership (COALESCE(linked_order_id, order_id)) ===");
+  console.log(JSON.stringify(group, null, 2));
 
   process.exit(0);
 }
