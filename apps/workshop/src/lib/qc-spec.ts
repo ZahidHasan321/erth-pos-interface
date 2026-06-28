@@ -92,35 +92,49 @@ function buildQcMeasurements(): QcMeasurementSpec[] {
 
 export const QC_MEASUREMENTS: QcMeasurementSpec[] = buildQcMeasurements();
 
-/** UI grouping for measurement tables. Groups split into ~7-col chunks, with
- *  basma + optional carved off as separate (conditionally rendered) groups. */
+/** UI grouping for measurement tables. The QC on-screen sequence is its OWN
+ *  order — deliberately distinct from the POS / new-work-order tape sequence
+ *  (`pdfOrder` in the central spec). It follows the worker's QC spec sheet
+ *  ("MEASURES NAMING.pdf", RANGE 1-29): collar -> shoulder/jabzour -> pockets ->
+ *  chest/arm -> sleeves -> front -> side pockets -> bottom -> back, with the two
+ *  "not measure" fields (chest_full, waist_full) trailing at the end. Keys are
+ *  split into ~7-col chunks for the table layout; the hemming / pen-pocket /
+ *  2nd-button fields stay optional (via the central spec) even though they now
+ *  sit inline in the sequence. Basma is carried as a separate conditionally
+ *  rendered group. */
 export const QC_MEASUREMENT_GROUPS: { title: string; keys: string[] }[] = [
   {
     title: "",
     keys: [
-      "chest_full", "shoulder", "sleeve_length", "sleeve_width",
-      "elbow", "armhole_front", "chest_upper",
+      "collar_width", "collar_height", "second_button_distance", "shoulder",
+      "jabzour_length", "jabzour_width", "top_pocket_distance",
     ],
   },
   {
     title: "",
     keys: [
-      "chest_front", "waist_front", "top_pocket_distance", "jabzour_length",
-      "length_front", "bottom", "chest_back",
+      "top_pocket_length", "top_pocket_width", "pen_pocket_length",
+      "pen_pocket_width", "chest_upper", "armhole_front", "elbow",
     ],
   },
   {
     title: "",
     keys: [
-      "waist_back", "length_back", "collar_width", "collar_height",
-      "waist_full", "jabzour_width", "top_pocket_length",
+      "sleeve_width", "sleeve_length", "sleeve_hemming", "chest_front",
+      "waist_front", "side_pocket_distance", "side_pocket_length",
     ],
   },
   {
     title: "",
     keys: [
-      "top_pocket_width", "side_pocket_length", "side_pocket_width",
-      "side_pocket_distance", "side_pocket_opening",
+      "side_pocket_opening", "side_pocket_width", "bottom", "bottom_hemming",
+      "length_front", "chest_back", "waist_back",
+    ],
+  },
+  {
+    title: "",
+    keys: [
+      "length_back", "chest_full", "waist_full",
     ],
   },
   // Basma group — rendered only when basma applies (see hasBasmaMeasurements).
@@ -129,14 +143,6 @@ export const QC_MEASUREMENT_GROUPS: { title: string; keys: string[] }[] = [
   {
     title: "Basma",
     keys: [...BASMA_MEASUREMENT_KEYS],
-  },
-  // Optional group — rendered last; never gates completion.
-  {
-    title: "Optional",
-    keys: [
-      "second_button_distance",
-      "sleeve_hemming", "bottom_hemming", "pen_pocket_length", "pen_pocket_width",
-    ],
   },
 ];
 
