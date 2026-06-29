@@ -24,7 +24,9 @@ export const getMeasurementsByCustomerId = async (customerId: number): Promise<A
     .from(TABLE_NAME)
     .select('*')
     .eq('customer_id', customerId)
-    .order('measurement_date', { ascending: false });
+    // newest first; null-dated (legacy-imported) rows sort LAST, not first,
+    // so they never win the default auto-select over a real dated measurement.
+    .order('measurement_date', { ascending: false, nullsFirst: false });
 
   if (error) {
     return { status: 'error', message: error.message, data: [], count: 0 };

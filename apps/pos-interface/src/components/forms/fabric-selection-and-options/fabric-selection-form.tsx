@@ -67,6 +67,20 @@ type FabricFormValues = {
     delivery_date?: string;
 };
 
+// A measurement carries real data only if at least one core dishdasha
+// dimension is populated. Legacy-imported placeholder rows (all dimensions
+// null) must never win the default auto-select.
+const measurementHasData = (m: {
+    length_front?: unknown;
+    length_back?: unknown;
+    bottom?: unknown;
+    shoulder?: unknown;
+    collar_width?: unknown;
+}): boolean =>
+    [m.length_front, m.length_back, m.bottom, m.shoulder, m.collar_width].some(
+        (v) => v !== null && v !== undefined && v !== "",
+    );
+
 interface FabricSelectionFormProps {
     customerId: number | null;
     customerName?: string;
@@ -530,8 +544,12 @@ export function FabricSelectionForm({
     }, [measurementQuery?.data, watchedGarments]);
 
     const addGarmentRow = (index: number, orderIdParam?: string | number) => {
-        // Query is ordered newest-first; index 0 is the latest measurement.
-        const latestMeasurement = measurements.length > 0 ? measurements[0] : null;
+        // Query is ordered newest-first. Default to the newest measurement that
+        // actually has data; never auto-select an empty/placeholder row just
+        // because it happens to sort first. Falls back to the newest row only
+        // when none carry data.
+        const latestMeasurement =
+            measurements.find(measurementHasData) ?? measurements[0] ?? null;
         const currentOrderId = orderIdParam || orderId || "";
         appendGarment({
             ...garmentDefaults,
