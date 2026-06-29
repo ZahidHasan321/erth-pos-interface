@@ -61,8 +61,8 @@ export interface MeasurementSpec {
 /**
  * Master list. Order = display order in the spec sheet sense.
  * PDF tape-measure order is driven by `pdfOrder` (1-18) — see PDF
- * "MEASURES NAMING.pdf" for source. Labels follow the latest naming pass
- * (Collar Length/Height, "10. Top Pocket Dist", etc.).
+ * "MEASURES NAMING.pdf" for source. Labels are spelled out in full (no
+ * abbreviations) and are the single naming source every surface follows.
  */
 export const MEASUREMENTS_SPEC: readonly MeasurementSpec[] = [
   // Collar
@@ -72,8 +72,8 @@ export const MEASUREMENTS_SPEC: readonly MeasurementSpec[] = [
   // Shoulder & arm
   { key: "shoulder",               label: "Shoulder",                                     group: "shoulder_arm", pdfOrder: 2 },
   { key: "armhole_front",          label: "Armhole Front",      shortLabel: "Armhole F",  group: "shoulder_arm", pdfOrder: 6 },
-  { key: "sleeve_length",          label: "Sleeve Len",                                   group: "shoulder_arm", pdfOrder: 3 },
-  { key: "sleeve_width",           label: "Sleeve W",                                     group: "shoulder_arm", pdfOrder: 4 },
+  { key: "sleeve_length",          label: "Sleeve Length",                                group: "shoulder_arm", pdfOrder: 3 },
+  { key: "sleeve_width",           label: "Sleeve Width",                                 group: "shoulder_arm", pdfOrder: 4 },
   { key: "elbow",                  label: "Elbow",                                        group: "shoulder_arm", pdfOrder: 5 },
 
   // Chest
@@ -83,43 +83,43 @@ export const MEASUREMENTS_SPEC: readonly MeasurementSpec[] = [
   { key: "chest_back",             label: "Back Chest",                                   group: "chest",        pdfOrder: 14 },
 
   // Top pocket
-  { key: "top_pocket_distance",    label: "Top Pocket Dist",    shortLabel: "Top Dist",   group: "top_pocket",   pdfOrder: 10 },
-  { key: "top_pocket_length",      label: "Top Pkt Len",        shortLabel: "Top L",      group: "top_pocket" },
-  { key: "top_pocket_width",       label: "Top Pkt W",          shortLabel: "Top W",      group: "top_pocket" },
+  { key: "top_pocket_distance",    label: "Top Pocket Distance", shortLabel: "Top Dist",  group: "top_pocket",   pdfOrder: 10 },
+  { key: "top_pocket_length",      label: "Top Pocket Length",  shortLabel: "Top L",      group: "top_pocket" },
+  { key: "top_pocket_width",       label: "Top Pocket Width",   shortLabel: "Top W",      group: "top_pocket" },
 
   // Side pocket
-  { key: "side_pocket_length",     label: "Side Pkt Len",       shortLabel: "Side L",     group: "side_pocket" },
-  { key: "side_pocket_width",      label: "Side Pkt W",         shortLabel: "Side W",     group: "side_pocket" },
-  { key: "side_pocket_distance",   label: "Side Pkt Dist",      shortLabel: "Side Dist",  group: "side_pocket" },
-  { key: "side_pocket_opening",    label: "Side Pkt Open",      shortLabel: "Side Open",  group: "side_pocket" },
+  { key: "side_pocket_length",     label: "Side Pocket Length", shortLabel: "Side L",     group: "side_pocket" },
+  { key: "side_pocket_width",      label: "Side Pocket Width",  shortLabel: "Side W",     group: "side_pocket" },
+  { key: "side_pocket_distance",   label: "Side Pocket Distance", shortLabel: "Side Dist", group: "side_pocket" },
+  { key: "side_pocket_opening",    label: "Side Pocket Opening", shortLabel: "Side Open", group: "side_pocket" },
 
   // Waist & length
   { key: "waist_full",             label: "Waist Full",                                   group: "waist_length" },
   { key: "waist_front",            label: "Front Waist",                                  group: "waist_length", pdfOrder: 9 },
   { key: "waist_back",             label: "Back Waist",                                   group: "waist_length", pdfOrder: 15 },
-  { key: "length_front",           label: "Front Len",                                    group: "waist_length", pdfOrder: 12 },
-  { key: "length_back",            label: "Back Len",                                     group: "waist_length", pdfOrder: 16 },
+  { key: "length_front",           label: "Front Length",                                 group: "waist_length", pdfOrder: 12 },
+  { key: "length_back",            label: "Back Length",                                  group: "waist_length", pdfOrder: 16 },
   { key: "bottom",                 label: "Bottom",                                       group: "waist_length", pdfOrder: 13 },
 
   // Jabzour
-  { key: "jabzour_length",         label: "Jabzour Len",                                  group: "jabzour",      pdfOrder: 11 },
-  { key: "jabzour_width",          label: "Jabzour W",                                    group: "jabzour" },
+  { key: "jabzour_length",         label: "Jabzour Length",                               group: "jabzour",      pdfOrder: 11 },
+  { key: "jabzour_width",          label: "Jabzour Width",                                group: "jabzour" },
 
   // Buttons
-  { key: "second_button_distance", label: "2nd Button Dist",                              group: "buttons",      optional: true },
+  { key: "second_button_distance", label: "2nd Button Distance",                          group: "buttons",      optional: true },
 
   // Basma — all independently optional. Two pieces: the basma trim itself.
   // (sleeve_length / sleeve_width above already apply whether or not basma exists.)
-  { key: "basma_length",           label: "Basma Len",                                    group: "basma",        basma: true, optional: true },
-  { key: "basma_width",            label: "Basma W",                                      group: "basma",        basma: true, optional: true },
+  { key: "basma_length",           label: "Basma Length",                                 group: "basma",        basma: true, optional: true },
+  { key: "basma_width",            label: "Basma Width",                                  group: "basma",        basma: true, optional: true },
 
   // Hemming — always optional
-  { key: "sleeve_hemming",         label: "Sleeve Hem",                                   group: "hemming",      optional: true },
-  { key: "bottom_hemming",         label: "Bottom Hem",                                   group: "hemming",      optional: true },
+  { key: "sleeve_hemming",         label: "Sleeve Hemming",                               group: "hemming",      optional: true },
+  { key: "bottom_hemming",         label: "Bottom Hemming",                               group: "hemming",      optional: true },
 
   // Pen pocket — optional
-  { key: "pen_pocket_length",      label: "Pen Pkt Len",                                  group: "pen_pocket",   optional: true },
-  { key: "pen_pocket_width",       label: "Pen Pkt W",                                    group: "pen_pocket",   optional: true },
+  { key: "pen_pocket_length",      label: "Pen Pocket Length",                            group: "pen_pocket",   optional: true },
+  { key: "pen_pocket_width",       label: "Pen Pocket Width",                             group: "pen_pocket",   optional: true },
 
   // Derived (computed, not entered)
   { key: "chest_provision",        label: "Chest Provision",    shortLabel: "Provision",  group: "provision",    derived: true },

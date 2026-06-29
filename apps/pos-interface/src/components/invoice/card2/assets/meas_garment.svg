@@ -23,6 +23,16 @@
            d="m 0,0 h 20.326 c 1.057,0 1.914,0.857 1.914,1.915 v 12.051 c 0,1.057 -0.857,1.915 -1.914,1.915 H 0 c -1.058,0 -1.915,-0.858 -1.915,-1.915 V 1.915 C -1.915,0.857 -1.058,0 0,0 Z"
            style="fill:none;stroke:#ed1c24;stroke-width:0.567;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
            transform="matrix(1.3333333,0,0,-1.3333333,114.40267,964.33853)" />
+        <path
+           id="path7_ah"
+           d="m 0,0 h 20.326 c 1.057,0 1.914,0.857 1.914,1.915 v 12.051 c 0,1.057 -0.857,1.915 -1.914,1.915 H 0 c -1.058,0 -1.915,-0.858 -1.915,-1.915 V 1.915 C -1.915,0.857 -1.058,0 0,0 Z"
+           style="fill:none;stroke:#ed1c24;stroke-width:0.567;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
+           transform="matrix(1.3333333,0,0,-1.3333333,156.8,964.33853)" />
+        <path
+           id="path7_w"
+           d="m 0,0 h 20.326 c 1.057,0 1.914,0.857 1.914,1.915 v 12.051 c 0,1.057 -0.857,1.915 -1.914,1.915 H 0 c -1.058,0 -1.915,-0.858 -1.915,-1.915 V 1.915 C -1.915,0.857 -1.058,0 0,0 Z"
+           style="fill:none;stroke:#ed1c24;stroke-width:0.567;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
+           transform="matrix(1.3333333,0,0,-1.3333333,196.9,964.33853)" />
         <text
            id="text20"
            xml:space="preserve"
@@ -30,7 +40,7 @@
              id="tspan20"
              style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.055px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="0"
-             y="0">Lenght</tspan><tspan
+             y="0">Length</tspan><tspan
              id="tspan21"
              style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.055px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="0"
@@ -44,17 +54,25 @@
            xml:space="preserve"
            transform="matrix(1.3333333,0,0,1.3333333,159.04293,759.092)"><tspan
              id="tspan44"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.623px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="0"
-             y="0">Collar</tspan></text>
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="-14.250"
+             y="0">Collar L</tspan><tspan
+             id="tspan44_b"
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="27.000"
+             y="0.00000">Collar H</tspan></text>
         <text
            id="text45"
            xml:space="preserve"
            transform="matrix(1.3333333,0,0,1.3333333,155.95187,813.1252)"><tspan
              id="tspan45"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.8648px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="0"
-             y="0">Length</tspan></text>
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="-12.000"
+             y="0">Front L</tspan><tspan
+             id="tspan45_b"
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="29.250"
+             y="0.00000">Back L</tspan></text>
         <text
            id="text46"
            xml:space="preserve"
@@ -63,45 +81,54 @@
              style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.8096px;font-family:Poppins;writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="0"
              dx="0 47.708847"
-             y="0">FB</tspan><tspan
+             y="0"></tspan><tspan
              id="tspan47"
              style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.8096px;font-family:Poppins;writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="-18.141701"
              dx="0 81.969559"
-             y="-34.268524">LW</tspan></text>
+             y="-34.268524"></tspan></text>
         <text
            id="text47"
            xml:space="preserve"
            transform="matrix(1.3333333,0,0,1.3333333,153.76427,873.31533)"><tspan
              id="tspan48"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.8648px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="0"
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.5px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="13.730"
              y="0">Shoulder</tspan><tspan
              id="tspan49"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.8648px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="-2.0182512"
-             y="46.996422">Armholes</tspan><tspan
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="11.711"
+             y="46.996422">Armhole F</tspan><tspan
              id="tspan50"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.8648px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="3.7138567"
-             y="158.89952">Waist</tspan><tspan
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="-10.320"
+             y="158.89952">Front Waist</tspan><tspan
+             id="tspan50_b"
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="30.930"
+             y="158.89952">Back Waist</tspan><tspan
              id="tspan51"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.8648px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="1.5033911"
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.5px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="11.801"
              y="204.87309">Bottom</tspan><tspan
              id="tspan52"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.8648px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="-1.88782"
-             y="85.12352">Up Chest</tspan><tspan
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.5px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="11.842"
+             y="85.12352">Upper Chest</tspan><tspan
              id="tspan53"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.8648px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="-23.470751"
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="-10.320"
              dx="0 0 0 0 0 27.28758"
-             y="124.98741">ChestHalf Chest</tspan><tspan
+             y="124.98741">Full Chest</tspan><tspan
+             id="tspan53_b"
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="30.930"
+             dx="0 0 0 0 0 27.28758"
+             y="124.98741">Front Chest</tspan><tspan
              id="tspan54"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.8648px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="-30.486576"
-             y="46.996422">Sleeves</tspan></text>
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="-18.473"
+             y="46.996422">Sleeve L</tspan></text>
         <path
            id="path54"
            d="m 0,0 c 1.339,-40.898 3.464,-83.197 6.529,-126.796 3.388,-48.205 7.688,-91.381 12.683,-136.034 -46.573,0.204 -93.147,0.408 -139.721,0.612 1.276,26.243 2.615,49.167 4.018,75.379 3.345,62.516 7.056,125.021 11.134,187.516 -10.767,-36.135 -28.589,-100.521 -28.589,-100.521 l -29.844,0.141 c 0,0 31.387,97.952 47.082,146.927 15.891,4.122 31.781,8.244 47.673,12.365 0.937,1.76 1.876,3.521 2.814,5.281 9.051,-0.297 18.015,0.246 27.067,-0.052 1.327,-1.468 2.745,-3.777 4.072,-5.246 15.365,-3.989 30.73,-7.979 46.094,-11.968 14.714,-49.312 44.142,-147.936 44.142,-147.936 l -31.655,1.205 C 23.499,-99.127 9.776,-36.478 0,0 Z"
@@ -152,9 +179,9 @@
            xml:space="preserve"
            transform="matrix(1.3333333,0,0,1.3333333,198.7044,935.97947)"><tspan
              id="tspan62"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.8648px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="0"
-             y="0">Width</tspan></text>
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="8.581"
+             y="0">Sleeve W</tspan></text>
         <path
            id="path63"
            d="M 0,0 V 29.47"
@@ -183,7 +210,7 @@
              style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.8096px;font-family:Poppins;writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="0"
              dx="0 47.708847"
-             y="0">FB</tspan></text>
+             y="0"></tspan></text>
         <path
            id="path1005"
            d="m 0,0 h 28.966 c 1.338,0 2.423,1.085 2.423,2.423 v 13.321 c 0,1.338 -1.085,2.423 -2.423,2.423 H 0 c -1.338,0 -2.423,-1.085 -2.423,-2.423 V 2.423 C -2.423,1.085 -1.338,0 0,0 Z"
@@ -209,9 +236,9 @@
            xml:space="preserve"
            transform="matrix(1.3333333,0,0,1.3333554,320.3476,915.6956)"><tspan
              id="tspan1008"
-             style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.0549px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
-             x="0"
-             y="0">Jabzour</tspan><tspan
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.5px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="10.596"
+             y="0">Jabzour L</tspan><tspan
              id="tspan1009"
              style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.0549px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="28.476194"
@@ -282,7 +309,7 @@
              id="tspan1020"
              style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.055px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="0"
-             y="0">Lenght</tspan><tspan
+             y="0">Length</tspan><tspan
              id="tspan1021"
              style="font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.055px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="0"

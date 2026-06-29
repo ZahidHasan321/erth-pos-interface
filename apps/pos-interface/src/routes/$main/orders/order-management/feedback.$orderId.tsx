@@ -96,7 +96,7 @@ import {
   SheetTitle,
 } from "@repo/ui/sheet";
 import type { Measurement, Order, Garment, Customer, GarmentFeedback, BrovaFeedback, ShoulderSlope } from "@repo/database";
-import { evaluateBrovaFeedback, getAlterationNumber } from "@repo/database";
+import { evaluateBrovaFeedback, getAlterationNumber, getLabel } from "@repo/database";
 
 // Assets & Constants
 import {
@@ -149,35 +149,38 @@ export const Route = createFileRoute(
 
 // --- Constants & Config ---
 
+// Keys only — display labels come from the central spec (getLabel) so the
+// feedback form always matches QC and the new-measurement form. Order here
+// drives the display order within each MEASUREMENT_GROUPS section below.
 const MEASUREMENT_ROWS = [
-  { type: "Collar", subType: "Length", key: "collar_width" },
-  { type: "Collar", subType: "Height", key: "collar_height" },
-  { type: "Length", subType: "Front", key: "length_front" },
-  { type: "Length", subType: "Back", key: "length_back" },
-  { type: "Top Pocket", subType: "Length", key: "top_pocket_length" },
-  { type: "Top Pocket", subType: "Width", key: "top_pocket_width" },
-  { type: "Top Pocket", subType: "Distance", key: "top_pocket_distance" },
-  { type: "Side Pocket", subType: "Length", key: "side_pocket_length" },
-  { type: "Side Pocket", subType: "Width", key: "side_pocket_width" },
-  { type: "Side Pocket", subType: "Distance", key: "side_pocket_distance" },
-  { type: "Side Pocket", subType: "Opening", key: "side_pocket_opening" },
-  { type: "Waist", subType: "Front", key: "waist_front" },
-  { type: "Waist", subType: "Back", key: "waist_back" },
-  { type: "Arm Hole", subType: "Front", key: "armhole_front" },
-  { type: "Chest", subType: "Upper", key: "chest_upper" },
-  { type: "Chest", subType: "Full", key: "chest_full" },
-  { type: "Chest", subType: "Half", key: "chest_front" },
-  { type: "Chest", subType: "Back", key: "chest_back" },
-  { type: "Shoulder", subType: "Shoulder", key: "shoulder" },
-  { type: "Elbow", subType: "Elbow", key: "elbow" },
-  { type: "Sleeves", subType: "Length", key: "sleeve_length" },
-  { type: "Sleeves", subType: "Width", key: "sleeve_width" },
-  { type: "Bottom", subType: "Bottom", key: "bottom" },
-  { type: "Jabzour", subType: "Length", key: "jabzour_length" },
-  { type: "Jabzour", subType: "Width", key: "jabzour_width" },
-  { type: "Jabzour", subType: "2nd Btn Dist", key: "second_button_distance" },
-  { type: "Basma", subType: "Length", key: "basma_length" },
-  { type: "Basma", subType: "Width", key: "basma_width" },
+  { key: "collar_width" },
+  { key: "collar_height" },
+  { key: "length_front" },
+  { key: "length_back" },
+  { key: "top_pocket_length" },
+  { key: "top_pocket_width" },
+  { key: "top_pocket_distance" },
+  { key: "side_pocket_length" },
+  { key: "side_pocket_width" },
+  { key: "side_pocket_distance" },
+  { key: "side_pocket_opening" },
+  { key: "waist_front" },
+  { key: "waist_back" },
+  { key: "armhole_front" },
+  { key: "chest_upper" },
+  { key: "chest_full" },
+  { key: "chest_front" },
+  { key: "chest_back" },
+  { key: "shoulder" },
+  { key: "elbow" },
+  { key: "sleeve_length" },
+  { key: "sleeve_width" },
+  { key: "bottom" },
+  { key: "jabzour_length" },
+  { key: "jabzour_width" },
+  { key: "second_button_distance" },
+  { key: "basma_length" },
+  { key: "basma_width" },
 ] as const;
 
 type MeasurementRow = (typeof MEASUREMENT_ROWS)[number];
@@ -690,7 +693,7 @@ const parseHistoryStringArray = (raw: unknown): string[] => {
 };
 
 const MEASUREMENT_LABEL = new Map<string, string>(
-  MEASUREMENT_ROWS.map(r => [r.key as string, `${r.type} · ${r.subType}`]),
+  MEASUREMENT_ROWS.map(r => [r.key as string, getLabel(r.key)]),
 );
 
 const OPTION_LABEL: Record<string, string> = {
@@ -1702,7 +1705,7 @@ function UnifiedFeedbackInterface() {
       if (orig == null) continue;
       if (Number(orig) === Number(fbVal)) continue;
       if (!currentState.differenceReasons[row.key]) {
-        missingReason.push(`${row.type} ${row.subType}`);
+        missingReason.push(getLabel(row.key));
       }
     }
     // shoulder_slope: a changed slope needs a reason too (same spec-correction gate).
@@ -3021,8 +3024,7 @@ function UnifiedFeedbackInterface() {
                                                                     <th className="text-left p-3 bg-muted/50 border-r border-border/60 sticky left-0 z-20" style={{ width: LABEL_COL_W }}>Label</th>
                                                                     {chunkRows.map((row) => (
                                                                         <th key={row.key} className="p-2 text-center border border-border/40" style={stretch ? undefined : { width: fieldColW }}>
-                                                                            <div className="font-semibold text-xs leading-tight">{row.type}</div>
-                                                                            <div className="font-medium text-xs text-muted-foreground leading-tight">{row.subType}</div>
+                                                                            <div className="font-semibold text-xs leading-tight">{getLabel(row.key)}</div>
                                                                         </th>
                                                                     ))}
                                                                 </tr>

@@ -90,67 +90,69 @@ export const fabricSourceValues = ["IN", "OUT"] as const;
 export type FabricSource = (typeof fabricSourceValues)[number];
 
 // Measurement groups — laid out as columns so each card renders as a
-// small table (label row + input row), matching POS new-work-order.
+// small table (label row + input row), matching POS new-work-order. Field
+// labels come from the central spec (getLabel) at the render site so naming
+// stays in lock-step with QC and the new-measurement form.
 export const MEASUREMENT_GROUPS: {
   title: string;
-  fields: { key: string; label: string }[];
+  fields: { key: string }[];
 }[] = [
   {
     title: "Collar",
     fields: [
-      { key: "collar_width", label: "Length" },
-      { key: "collar_height", label: "Height" },
+      { key: "collar_width" },
+      { key: "collar_height" },
     ],
   },
   {
     title: "Shoulder & Arm",
     fields: [
-      { key: "shoulder", label: "Shoulder" },
-      { key: "armhole_front", label: "A. Front" },
-      { key: "sleeve_length", label: "Sleeve L" },
-      { key: "sleeve_width", label: "Sleeve W" },
-      { key: "elbow", label: "Elbow" },
+      { key: "shoulder" },
+      { key: "armhole_front" },
+      { key: "sleeve_length" },
+      { key: "sleeve_width" },
+      { key: "elbow" },
     ],
   },
   {
     title: "Chest",
     fields: [
-      { key: "chest_upper", label: "Upper" },
-      { key: "chest_full", label: "Full" },
-      { key: "chest_front", label: "Front" },
-      { key: "chest_back", label: "Back" },
-      { key: "chest_provision", label: "Provision" },
+      { key: "chest_upper" },
+      { key: "chest_full" },
+      { key: "chest_front" },
+      { key: "chest_back" },
+      { key: "chest_provision" },
     ],
   },
   {
     title: "Pockets",
     fields: [
-      { key: "top_pocket_length", label: "Top L" },
-      { key: "top_pocket_width", label: "Top W" },
-      { key: "top_pocket_distance", label: "Top Dist" },
-      { key: "side_pocket_length", label: "Side L" },
-      { key: "side_pocket_width", label: "Side W" },
-      { key: "side_pocket_distance", label: "Side Dist" },
-      { key: "side_pocket_opening", label: "Side Open" },
+      { key: "top_pocket_length" },
+      { key: "top_pocket_width" },
+      { key: "top_pocket_distance" },
+      { key: "side_pocket_length" },
+      { key: "side_pocket_width" },
+      { key: "side_pocket_distance" },
+      { key: "side_pocket_opening" },
     ],
   },
   {
     title: "Waist & Length",
     fields: [
-      { key: "waist_full", label: "Waist Full" },
-      { key: "waist_front", label: "Waist Front" },
-      { key: "waist_back", label: "Waist Back" },
-      { key: "waist_provision", label: "Waist Prov." },
-      { key: "length_front", label: "Length Front" },
-      { key: "length_back", label: "Length Back" },
-      { key: "bottom", label: "Bottom" },
+      { key: "waist_full" },
+      { key: "waist_front" },
+      { key: "waist_back" },
+      { key: "waist_provision" },
+      { key: "length_front" },
+      { key: "length_back" },
+      { key: "bottom" },
     ],
   },
   {
     title: "Jabzour",
     fields: [
-      { key: "jabzour_length", label: "Length" },
-      { key: "jabzour_width", label: "Width" },
+      { key: "jabzour_length" },
+      { key: "jabzour_width" },
     ],
   },
 ];

@@ -4,6 +4,7 @@ import { ShoulderSlopeSelect } from "@repo/ui/shoulder-slope";
 import { CollarPositionSelect } from "@repo/ui/collar-position";
 import { SectionCard } from "@/components/shared/PageShell";
 import { cn } from "@/lib/utils";
+import { getLabel } from "@repo/database";
 import { MEASUREMENT_GROUPS } from "./constants";
 import type { AddGarmentFormValues } from "./schema";
 
@@ -84,7 +85,7 @@ export function MeasurementFields() {
                       "text-muted-foreground bg-muted/30",
                     )}
                   >
-                    {f.label}
+                    {getLabel(f.key)}
                   </th>
                 ))}
               </tr>

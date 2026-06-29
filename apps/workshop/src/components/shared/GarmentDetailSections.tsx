@@ -27,7 +27,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import type { WorkshopGarment, ProductionPlan, WorkerHistory, TripHistoryEntry, GarmentFeedback } from "@repo/database";
-import { getQcReturnStages } from "@repo/database";
+import { getQcReturnStages, getLabel } from "@repo/database";
 
 // ── Customer feedback constants ────────────────────────────────
 
@@ -943,35 +943,6 @@ function tripLabel(trip: number) {
 
 // ── QC labels ──────────────────────────────────────────────────
 
-const QC_MEASUREMENT_LABELS: Record<string, string> = {
-  collar_width: "Collar length",
-  collar_height: "Collar height",
-  shoulder: "Shoulder",
-  chest_full: "Chest (full)",
-  chest_upper: "Chest (upper)",
-  chest_front: "Chest (front)",
-  chest_back: "Chest (back)",
-  sleeve_length: "Sleeve length",
-  sleeve_width: "Sleeve width",
-  elbow: "Elbow",
-  armhole_front: "Armhole (front)",
-  waist_full: "Waist (full)",
-  waist_front: "Waist (front)",
-  waist_back: "Waist (back)",
-  length_front: "Length (front)",
-  length_back: "Length (back)",
-  bottom: "Bottom",
-  top_pocket_length: "Top pocket length",
-  top_pocket_width: "Top pocket width",
-  top_pocket_distance: "Top pocket distance",
-  side_pocket_length: "Side pocket length",
-  side_pocket_width: "Side pocket width",
-  side_pocket_distance: "Side pocket distance",
-  side_pocket_opening: "Side pocket opening",
-  jabzour_length: "Jabzour length",
-  jabzour_width: "Jabzour width",
-};
-
 const QC_OPTION_LABELS: Record<string, string> = {
   collar_type: "Collar",
   collar_button: "Collar button",
@@ -996,7 +967,7 @@ const QC_STYLE_KEY_OPTIONS = new Set([
 ]);
 
 function qcMeasurementLabel(key: string): string {
-  return QC_MEASUREMENT_LABELS[key] ?? key.replace(/_/g, " ");
+  return getLabel(key);
 }
 
 function qcOptionLabel(key: string): string {
