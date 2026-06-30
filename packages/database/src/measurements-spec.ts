@@ -78,7 +78,9 @@ export const MEASUREMENTS_SPEC: readonly MeasurementSpec[] = [
 
   // Chest
   { key: "chest_upper",            label: "Upper Chest",                                  group: "chest",        pdfOrder: 7 },
-  { key: "chest_full",             label: "Full Chest",                                   group: "chest",        pdfOrder: 1 },
+  // Full Chest is optional on entry (per client spec) and dropped from QC entirely
+  // (workshop doesn't measure it). It still feeds the derived chest provision.
+  { key: "chest_full",             label: "Full Chest",                                   group: "chest",        pdfOrder: 1, optional: true },
   { key: "chest_front",            label: "Front Chest",                                  group: "chest",        pdfOrder: 8 },
   { key: "chest_back",             label: "Back Chest",                                   group: "chest",        pdfOrder: 14 },
 
@@ -94,7 +96,9 @@ export const MEASUREMENTS_SPEC: readonly MeasurementSpec[] = [
   { key: "side_pocket_opening",    label: "Side Pocket Opening", shortLabel: "Side Open", group: "side_pocket" },
 
   // Waist & length
-  { key: "waist_full",             label: "Waist Full",                                   group: "waist_length" },
+  // Waist Full is optional on entry (per client spec) and dropped from QC entirely
+  // (workshop doesn't measure it). It still feeds the derived waist provision.
+  { key: "waist_full",             label: "Waist Full",                                   group: "waist_length", optional: true },
   { key: "waist_front",            label: "Front Waist",                                  group: "waist_length", pdfOrder: 9 },
   { key: "waist_back",             label: "Back Waist",                                   group: "waist_length", pdfOrder: 15 },
   { key: "length_front",           label: "Front Length",                                 group: "waist_length", pdfOrder: 12 },
@@ -113,9 +117,11 @@ export const MEASUREMENTS_SPEC: readonly MeasurementSpec[] = [
   { key: "basma_length",           label: "Basma Length",                                 group: "basma",        basma: true, optional: true },
   { key: "basma_width",            label: "Basma Width",                                  group: "basma",        basma: true, optional: true },
 
-  // Hemming — always optional
-  { key: "sleeve_hemming",         label: "Sleeve Hemming",                               group: "hemming",      optional: true },
-  { key: "bottom_hemming",         label: "Bottom Hemming",                               group: "hemming",      optional: true },
+  // Hemming — required on entry (per client spec; both seed a predicted default
+  // of 4 on a new measurement). bottom_hemming is optional in QC only (see the
+  // QC override in qc-spec.ts); sleeve_hemming is checked in QC.
+  { key: "sleeve_hemming",         label: "Sleeve Hemming",                               group: "hemming" },
+  { key: "bottom_hemming",         label: "Bottom Hemming",                               group: "hemming" },
 
   // Pen pocket — optional
   { key: "pen_pocket_length",      label: "Pen Pocket Length",                            group: "pen_pocket",   optional: true },

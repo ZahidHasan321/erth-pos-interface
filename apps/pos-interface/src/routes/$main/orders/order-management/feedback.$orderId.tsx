@@ -25,6 +25,7 @@ import {
   Pause,
   ChevronDown,
   History,
+  Eye,
 } from "lucide-react";
 
 // UI Components
@@ -96,7 +97,7 @@ import {
   SheetTitle,
 } from "@repo/ui/sheet";
 import type { Measurement, Order, Garment, Customer, GarmentFeedback, BrovaFeedback, ShoulderSlope } from "@repo/database";
-import { evaluateBrovaFeedback, getAlterationNumber, getLabel } from "@repo/database";
+import { evaluateBrovaFeedback, getAlterationNumber, getLabel, formatMeasurement } from "@repo/database";
 
 // Assets & Constants
 import {
@@ -112,6 +113,10 @@ import {
   thicknessOptions,
   type BaseOption
 } from "@/components/forms/fabric-selection-and-options/constants";
+import {
+  MeasurementPreviewDialog,
+  buildFeedbackPreviewData,
+} from "@/components/measurement-preview";
 
 // Stable idempotency key from a seed string (cyrb53 ×2 → 128-bit hex → UUID
 // shape). The brova-trial invoice-revision bump (§3) is an additive counter, so
@@ -2431,6 +2436,26 @@ function UnifiedFeedbackInterface() {
     return list.find(o => o.value === val || o.displayText === val)?.displayText ?? val;
   };
 
+  // Terminal-style measurement preview: the corrections being entered this trip,
+  // shown the way they appear on the workshop terminal ("only what's wrong").
+  const measurementPreview = buildFeedbackPreviewData({
+    base: measurement ?? null,
+    feedbackMeasurements: currentState.feedbackMeasurements,
+    shoulderSlopeNew: currentState.shoulderSlopeNew,
+    collarPositionNew: currentState.collarPositionNew,
+    differenceReasons: currentState.differenceReasons,
+    measurementKeys: MEASUREMENT_ROWS.map((r) => r.key),
+  });
+  const previewStyleNames = {
+    collar: findDisplayText(collarTypes, activeGarment?.collar_type) || undefined,
+    frontPocket: findDisplayText(topPocketTypes, activeGarment?.front_pocket_type) || undefined,
+    jabzour:
+      findDisplayText(jabzourTypes, activeGarment?.jabzour_2 || activeGarment?.jabzour_1) ||
+      undefined,
+    cuffs: findDisplayText(cuffTypes, activeGarment?.cuffs_type) || undefined,
+  };
+  const previewDegree = measurement?.degree ? Number(measurement.degree) : 0;
+
   const optionRows = useMemo(() => {
     if (!activeGarment) return [];
     const g = activeGarment;
@@ -2960,6 +2985,32 @@ function UnifiedFeedbackInterface() {
                                 <CardTitle className="text-base font-medium">Measurement feedback</CardTitle>
                             </div>
                             <div className="flex items-center gap-2">
+                                {measurementId && (
+                                    <MeasurementPreviewDialog
+                                        trigger={
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-6 px-2"
+                                                disabled={measurementPreview.changedKeys.size === 0}
+                                                title={
+                                                    measurementPreview.changedKeys.size === 0
+                                                        ? "No measurement changes to preview yet"
+                                                        : "Preview corrected measurements"
+                                                }
+                                            >
+                                                <Eye className="size-3.5" />
+                                                Preview
+                                            </Button>
+                                        }
+                                        values={measurementPreview.values}
+                                        degree={previewDegree}
+                                        styleNames={previewStyleNames}
+                                        changedKeys={measurementPreview.changedKeys}
+                                        reasonByKey={measurementPreview.reasonByKey}
+                                    />
+                                )}
                                 {isMeasurementLoading ? (
                                     <Badge variant="outline" className="bg-background font-semibold text-sm h-6 px-2">LOADING…</Badge>
                                 ) : measurementId ? (
@@ -3038,7 +3089,10 @@ function UnifiedFeedbackInterface() {
                                                                         return (
                                                                             <td key={row.key} className="p-2 text-center border border-border/30 bg-muted/20">
                                                                                 {orderValue != null ? (
-                                                                                    <span className="font-semibold text-sm tabular-nums">{orderValue}</span>
+                                                                                    <span className="inline-flex flex-col items-center leading-tight">
+                                                                                        <span className="font-semibold text-sm tabular-nums">{orderValue}</span>
+                                                                                        <span className="text-[11px] text-muted-foreground">{formatMeasurement(orderValue)}</span>
+                                                                                    </span>
                                                                                 ) : (
                                                                                     <span className="text-muted-foreground/40 text-sm">·</span>
                                                                                 )}

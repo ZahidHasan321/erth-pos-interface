@@ -166,6 +166,7 @@ const buildMeasurements = (m: Measurement | null | undefined): Card2PdfData['mea
       upChest: toNum(m.chest_upper),
       chest: toNum(m.chest_full),
       halfChest: toNum(m.chest_front),
+      backChest: toNum(m.chest_back),
       waist: { front: toNum(m.waist_front), back: toNum(m.waist_back) },
       bottom: toNum(m.bottom),
     },

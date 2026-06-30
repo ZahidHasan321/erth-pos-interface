@@ -1,3 +1,17 @@
+import type { MeasurementKey } from "@repo/database";
+
+/**
+ * Garment-template field geometry for the measurement preview's dishdasha
+ * overlay. This is a copy of the workshop terminal's layout so the shop preview
+ * matches "the terminal" exactly.
+ *
+ * KEEP IN SYNC with:
+ *   apps/workshop/src/components/print/quality-check-field-layout.ts (positions)
+ *   apps/workshop/src/components/shared/DishdashaOverlay.tsx          (FIELD_MAP)
+ *   apps/pos-interface/src/components/measurement-preview/assets/template.svg
+ * If the workshop template geometry changes, mirror it here.
+ */
+
 export type QualityTemplateFieldOrientation = "horizontal" | "vertical";
 
 export type QualityTemplateField = {
@@ -9,7 +23,7 @@ export type QualityTemplateField = {
   orientation?: QualityTemplateFieldOrientation;
 };
 
-export const qualityCheckTemplateFields = [
+export const dishdashaTemplateFields = [
   { id: "collar", left: 46.1, top: 8.6, width: 8.8, height: 3.1 },
   { id: "wk1", left: 54.8, top: 13.2, width: 10.6, height: 3.1 },
   { id: "lengthFront", left: 36.6, top: 26.7, width: 10.6, height: 3.3 },
@@ -37,7 +51,6 @@ export const qualityCheckTemplateFields = [
   },
   { id: "upperChest", left: 45.1, top: 59.2, width: 11.7, height: 3.4 },
   // Left cell = Back Chest (chest_back), right cell = Front Chest (chest_front).
-  // See FIELD_MAP in DishdashaOverlay for the cell-id → column note.
   { id: "chest", left: 35.8, top: 68.5, width: 10.8, height: 3.4 },
   { id: "halfChest", left: 53.6, top: 68.5, width: 10.8, height: 3.4 },
   { id: "waistFront", left: 35.6, top: 79.5, width: 10.8, height: 3.4 },
@@ -49,5 +62,31 @@ export const qualityCheckTemplateFields = [
   { id: "bottomHem", left: 44.2, top: 95.0, width: 13.7, height: 2.6 },
 ] as const satisfies readonly QualityTemplateField[];
 
-export type QualityTemplateFieldId =
-  (typeof qualityCheckTemplateFields)[number]["id"];
+export type DishdashaTemplateFieldId =
+  (typeof dishdashaTemplateFields)[number]["id"];
+
+/** Template cell id → measurements column. Mirrors the workshop FIELD_MAP. */
+export const FIELD_MEASUREMENT_MAP: Record<DishdashaTemplateFieldId, MeasurementKey> = {
+  collar: "collar_width",
+  wk1: "collar_height",
+  lengthFront: "length_front",
+  lengthBack: "length_back",
+  elbow: "elbow",
+  shoulder: "shoulder",
+  sideUpper: "side_pocket_distance",
+  sleeves: "sleeve_length",
+  armhole: "armhole_front",
+  width: "sleeve_width",
+  sideLower: "side_pocket_opening",
+  upperChest: "chest_upper",
+  chest: "chest_back",
+  halfChest: "chest_front",
+  waistFront: "waist_front",
+  waistBack: "waist_back",
+  bottom: "bottom",
+  sleeveHem: "sleeve_hemming",
+  bottomHem: "bottom_hemming",
+};
+
+/** SVG intrinsic aspect ratio (matches the workshop terminal frame). */
+export const DISHDASHA_TEMPLATE_ASPECT = "952.512 / 1122.5601";

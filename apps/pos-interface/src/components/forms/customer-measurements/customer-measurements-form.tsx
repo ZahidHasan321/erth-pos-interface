@@ -32,9 +32,12 @@ import { CollarPositionSelect, type CollarPositionValue } from "@repo/ui/collar-
 import {
   customerMeasurementsDefaults,
   JABZOUR_WIDTH_NEW_DEFAULT,
+  SLEEVE_HEMMING_NEW_DEFAULT,
+  BOTTOM_HEMMING_NEW_DEFAULT,
   type CustomerMeasurementsSchema,
 } from "./measurement-form.schema";
 import { getNumberedLabel, getLabel } from "@repo/database";
+import { MeasurementPreviewDialog } from "@/components/measurement-preview";
 
 /**
  * Helper: build a MeasurementTable `columns` array from spec keys, using the
@@ -95,7 +98,7 @@ import {
 import { getEmployees } from "@/api/employees";
 import { toast } from "sonner";
 import type { Measurement } from "@repo/database";
-import { Pencil, X, Save, Plus, ArrowRight, RotateCcw } from "lucide-react";
+import { Pencil, X, Save, Plus, ArrowRight, RotateCcw, Eye } from "lucide-react";
 
 const JABZOUR_SIDEPOCKET_OPTIONS = [1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875, 2];
 
@@ -108,6 +111,8 @@ interface CustomerMeasurementsFormProps {
   onProceed?: () => void;
   isOrderClosed: boolean;
   hideHeader?: boolean;
+  /** Show the terminal-style "Preview" button (new work order only). */
+  enablePreview?: boolean;
 }
 
 // ---------------------------------------
@@ -180,8 +185,11 @@ export function CustomerMeasurementsForm({
   onProceed,
   isOrderClosed,
   hideHeader = false,
+  enablePreview = false,
 }: CustomerMeasurementsFormProps) {
   const queryClient = useQueryClient();
+  const [previewOpen, setPreviewOpen] = React.useState(false);
+  const [previewValues, setPreviewValues] = React.useState<Partial<Measurement>>({});
   const [selectedMeasurementId, setSelectedMeasurementId] = React.useState<
     string | null
   >(null);
@@ -476,10 +484,16 @@ export function CustomerMeasurementsForm({
     delete (baseMeasurement as Record<string, unknown>).id;
     baseMeasurement.measurement_id = newId;
     baseMeasurement.measurement_date = new Date().toISOString();
-    // Seed the historical jabzour_width default for a fresh measurement
-    // (copying an existing one preserves its value).
+    // Seed the predicted jabzour_width / hemming defaults for a fresh
+    // measurement (copying an existing one preserves its value).
     if (baseMeasurement.jabzour_width == null) {
       baseMeasurement.jabzour_width = JABZOUR_WIDTH_NEW_DEFAULT;
+    }
+    if (baseMeasurement.sleeve_hemming == null) {
+      baseMeasurement.sleeve_hemming = SLEEVE_HEMMING_NEW_DEFAULT;
+    }
+    if (baseMeasurement.bottom_hemming == null) {
+      baseMeasurement.bottom_hemming = BOTTOM_HEMMING_NEW_DEFAULT;
     }
 
     addMeasurement(newId, baseMeasurement);
@@ -746,50 +760,51 @@ export function CustomerMeasurementsForm({
         </div>
 
         {/* ---- Shoulder Slope & Collar Position (categorical, required) ---- */}
-        <div className="space-y-3 pt-2">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Shoulder Slope</h3>
-          <div className="bg-card rounded-lg border border-border p-3">
-            <FormField
-              control={form.control}
-              name="shoulder_slope"
-              render={({ field, fieldState }) => (
-                <FormItem>
-                  <FormControl>
-                    <ShoulderSlopeSelect
-                      value={field.value as ShoulderSlopeValue | null | undefined}
-                      onChange={field.onChange}
-                      disabled={!isEditing}
-                      invalid={fieldState.invalid}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2">
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Shoulder Slope</h3>
+            <div className="bg-card rounded-lg border border-border p-3">
+              <FormField
+                control={form.control}
+                name="shoulder_slope"
+                render={({ field, fieldState }) => (
+                  <FormItem>
+                    <FormControl>
+                      <ShoulderSlopeSelect
+                        value={field.value as ShoulderSlopeValue | null | undefined}
+                        onChange={field.onChange}
+                        disabled={!isEditing}
+                        invalid={fieldState.invalid}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
           </div>
-        </div>
 
-        {/* ---- Collar Position (categorical, required) ---- */}
-        <div className="space-y-3 pt-2">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Collar Position</h3>
-          <div className="bg-card rounded-lg border border-border p-3">
-            <FormField
-              control={form.control}
-              name="collar_position"
-              render={({ field, fieldState }) => (
-                <FormItem>
-                  <FormControl>
-                    <CollarPositionSelect
-                      value={field.value as CollarPositionValue | null | undefined}
-                      onChange={field.onChange}
-                      disabled={!isEditing}
-                      invalid={fieldState.invalid}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Collar Position</h3>
+            <div className="bg-card rounded-lg border border-border p-3">
+              <FormField
+                control={form.control}
+                name="collar_position"
+                render={({ field, fieldState }) => (
+                  <FormItem>
+                    <FormControl>
+                      <CollarPositionSelect
+                        value={field.value as CollarPositionValue | null | undefined}
+                        onChange={field.onChange}
+                        disabled={!isEditing}
+                        invalid={fieldState.invalid}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
           </div>
         </div>
 
@@ -840,6 +855,29 @@ export function CustomerMeasurementsForm({
         </div>
         {/* ---- Bottom Actions ---- */}
         <div className="flex flex-wrap justify-end gap-4 pt-4">
+          {enablePreview && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setPreviewValues(
+                    mapFormValuesToMeasurement(form.getValues(), customerId ?? 0),
+                  );
+                  setPreviewOpen(true);
+                }}
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                Preview
+              </Button>
+              <MeasurementPreviewDialog
+                open={previewOpen}
+                onOpenChange={setPreviewOpen}
+                trigger={null}
+                values={previewValues}
+              />
+            </>
+          )}
           {(isEditing || isCreatingNew) && !isOrderClosed && (
             <>
               {isCreatingNew && (

@@ -37,8 +37,10 @@ const FIELD_MEASUREMENT_MAP: Record<QualityTemplateFieldId, keyof Measurement> =
     width: "sleeve_width",
     sideLower: "side_pocket_opening",
     upperChest: "chest_upper",
-    chest: "chest_front",
-    halfChest: "chest_back",
+    // Legacy positional ids: left "chest" cell = Back Chest, right "halfChest"
+    // cell = Front Chest (see DishdashaOverlay for the full note).
+    chest: "chest_back",
+    halfChest: "chest_front",
     waistFront: "waist_front",
     waistBack: "waist_back",
     bottom: "bottom",

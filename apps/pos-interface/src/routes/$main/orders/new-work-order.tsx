@@ -1442,6 +1442,7 @@ function NewWorkOrder() {
                                 isOrderClosed={isOrderClosed}
                                 customerId={customerDemographics.id || null}
                                 onProceed={handleMeasurementsProceed}
+                                enablePreview
                             />
                         </ErrorBoundary>
                     </LazySection>

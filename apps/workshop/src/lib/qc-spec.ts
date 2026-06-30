@@ -1,6 +1,7 @@
 import type { PieceStage } from "@repo/database";
 import {
   MEASUREMENTS_SPEC,
+  type MeasurementSpec,
   BASMA_MEASUREMENT_KEYS,
   hasBasmaMeasurements as specHasBasmaMeasurements,
 } from "@repo/database";
@@ -43,14 +44,26 @@ export interface QcQualitySpec {
 
 /**
  * Measurements treated as optional *for QC only* — a blank cell never blocks
- * QC submission. These stay required everywhere else (POS entry, add-garment);
- * the override lives here, not in the central spec, so the rest of the system
- * is unaffected. The override only flips the `optional` flag — it does not move
- * these keys, so their position in QC_MEASUREMENT_GROUPS (the on-screen order)
- * is unchanged.
+ * QC submission. These stay required on POS entry; the override lives here, not
+ * in the central spec, so the rest of the system is unaffected. The override
+ * only flips the `optional` flag — it does not move these keys, so their
+ * position in QC_MEASUREMENT_GROUPS (the on-screen order) is unchanged.
+ *
+ * bottom_hemming: required on the POS form (with a predicted default of 4) but
+ * not verified at QC (per client spec — the form table marks it YES, the QC
+ * table leaves it blank).
  */
 const QC_OPTIONAL_OVERRIDE_KEYS = new Set<string>([
-  "elbow",
+  "bottom_hemming",
+]);
+
+/**
+ * Measurements dropped from QC entirely — the workshop doesn't measure them
+ * (per client spec: "you can remove it, we don't measure it at workshop").
+ * They remain on the POS measurement form (optional) and still feed the derived
+ * provisions, but never appear in the QC list or the on-screen QC groups.
+ */
+const QC_EXCLUDED_KEYS = new Set<string>([
   "chest_full",
   "waist_full",
 ]);
@@ -65,19 +78,21 @@ const QC_OPTIONAL_OVERRIDE_KEYS = new Set<string>([
  * computed values.
  */
 function buildQcMeasurements(): QcMeasurementSpec[] {
+  const inQc = (s: MeasurementSpec) => !s.derived && !QC_EXCLUDED_KEYS.has(s.key);
+
   const numbered = MEASUREMENTS_SPEC
-    .filter((s) => !s.derived && typeof s.pdfOrder === "number")
+    .filter((s) => inQc(s) && typeof s.pdfOrder === "number")
     .slice()
     .sort((a, b) => (a.pdfOrder! - b.pdfOrder!));
 
   const unnumberedRequired = MEASUREMENTS_SPEC.filter(
-    (s) => !s.derived && s.pdfOrder == null && !s.optional && !s.basma,
+    (s) => inQc(s) && s.pdfOrder == null && !s.optional && !s.basma,
   );
 
-  const basma = MEASUREMENTS_SPEC.filter((s) => s.basma);
+  const basma = MEASUREMENTS_SPEC.filter((s) => inQc(s) && s.basma);
 
   const optional = MEASUREMENTS_SPEC.filter(
-    (s) => !s.derived && s.optional && !s.basma,
+    (s) => inQc(s) && s.optional && !s.basma,
   );
 
   // The override is applied here (not in the partitioning above) so the three
@@ -96,8 +111,9 @@ export const QC_MEASUREMENTS: QcMeasurementSpec[] = buildQcMeasurements();
  *  order — deliberately distinct from the POS / new-work-order tape sequence
  *  (`pdfOrder` in the central spec). It follows the worker's QC spec sheet
  *  ("MEASURES NAMING.pdf", RANGE 1-29): collar -> shoulder/jabzour -> pockets ->
- *  chest/arm -> sleeves -> front -> side pockets -> bottom -> back, with the two
- *  "not measure" fields (chest_full, waist_full) trailing at the end. Keys are
+ *  chest/arm -> sleeves -> front -> side pockets -> bottom -> back. Full Chest
+ *  and Waist Full are excluded (not measured at workshop, see QC_EXCLUDED_KEYS).
+ *  Keys are
  *  split into ~7-col chunks for the table layout; the hemming / pen-pocket /
  *  2nd-button fields stay optional (via the central spec) even though they now
  *  sit inline in the sequence. Basma is carried as a separate conditionally
@@ -134,7 +150,7 @@ export const QC_MEASUREMENT_GROUPS: { title: string; keys: string[] }[] = [
   {
     title: "",
     keys: [
-      "length_back", "chest_full", "waist_full",
+      "length_back",
     ],
   },
   // Basma group — rendered only when basma applies (see hasBasmaMeasurements).

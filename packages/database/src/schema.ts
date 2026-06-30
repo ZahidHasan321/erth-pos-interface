@@ -154,20 +154,29 @@ export const COLLAR_POSITION_LABELS: Record<CollarPositionChoice, string> = {
   standard: "Standard",
 };
 
-// Shoulder slope — a categorical body measurement (4 fixed shapes), entered as a
+// Shoulder slope — a categorical body measurement (6 fixed values), entered as a
 // required dropdown. Lives on `measurements` next to the numeric dimensions, but
 // is modelled as an enum so it stays OUT of the numeric MEASUREMENTS_SPEC machinery
 // (the Zod decimal builder, QC tolerance compare, and INPUT_MEASUREMENT_KEYS that
-// feeds the alteration form all assume numbers). The 4 shape glyphs + the editable
-// picker live in @repo/ui (shoulder-slope.tsx) — keep these values in sync.
-export const SHOULDER_SLOPE_VALUES = ["sloped_down", "sloped_up", "straight", "peaked"] as const;
+// feeds the alteration form all assume numbers). The editable dropdown + read-out
+// live in @repo/ui (shoulder-slope.tsx) — keep these values/labels in sync.
+export const SHOULDER_SLOPE_VALUES = [
+  "right_down",
+  "right_up",
+  "right_straight",
+  "both_down",
+  "both_up",
+  "both_straight",
+] as const;
 export const shoulderSlopeEnum = pgEnum("shoulder_slope", SHOULDER_SLOPE_VALUES);
 export type ShoulderSlope = (typeof SHOULDER_SLOPE_VALUES)[number];
 export const SHOULDER_SLOPE_LABELS: Record<ShoulderSlope, string> = {
-  sloped_down: "Sloped Down",
-  sloped_up: "Sloped Up",
-  straight: "Straight",
-  peaked: "Normal",
+  right_down: "RIGHT SHOULDER DOWN",
+  right_up: "RIGHT SHOULDER UP",
+  right_straight: "RIGHT SHOULDER STRAIGHT",
+  both_down: "LEFT AND RIGHT SHOULDER DOWN",
+  both_up: "LEFT AND RIGHT SHOULDER UP",
+  both_straight: "LEFT AND RIGHT SHOULDER STRAIGHT",
 };
 
 export const garmentTypeEnum = pgEnum("garment_type", ["brova", "final", "alteration"]);

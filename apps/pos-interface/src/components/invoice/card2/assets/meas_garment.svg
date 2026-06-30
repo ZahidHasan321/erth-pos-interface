@@ -118,13 +118,15 @@
              id="tspan53"
              style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="-10.320"
-             dx="0 0 0 0 0 27.28758"
              y="124.98741">Full Chest</tspan><tspan
              id="tspan53_b"
              style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="30.930"
-             dx="0 0 0 0 0 27.28758"
              y="124.98741">Front Chest</tspan><tspan
+             id="tspan53_back"
+             style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
+             x="-70"
+             y="124.98741">Back Chest</tspan><tspan
              id="tspan54"
              style="text-anchor:middle;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.8px;font-family:'JF Flat';writing-mode:lr-tb;fill:#231f20;fill-opacity:1;fill-rule:nonzero;stroke:none"
              x="-18.473"
@@ -272,6 +274,11 @@
            d="m 0,0 h 30.944 c 1.428,0 2.586,1.158 2.586,2.587 v 14.206 c 0,1.429 -1.158,2.587 -2.586,2.587 H 0 c -1.429,0 -2.587,-1.158 -2.587,-2.587 V 2.587 C -2.587,1.158 -1.429,0 0,0 Z"
            style="fill:none;stroke:#ed1c24;stroke-width:0.692;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
            transform="matrix(1.3333333,0,0,-1.3333333,121.19747,1068.9435)" />
+        <path
+           id="path1014_back"
+           d="m 0,0 h 30.944 c 1.428,0 2.586,1.158 2.586,2.587 v 14.206 c 0,1.429 -1.158,2.587 -2.586,2.587 H 0 c -1.429,0 -2.587,-1.158 -2.587,-2.587 V 2.587 C -2.587,1.158 -1.429,0 0,0 Z"
+           style="fill:none;stroke:#ed1c24;stroke-width:0.692;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
+           transform="matrix(1.3333333,0,0,-1.3333333,38,1068.9435)" />
         <path
            id="path1015"
            d="m 0,0 h 30.944 c 1.428,0 2.586,1.158 2.586,2.587 v 14.206 c 0,1.429 -1.158,2.587 -2.586,2.587 H 0 c -1.429,0 -2.587,-1.158 -2.587,-2.587 V 2.587 C -2.587,1.158 -1.429,0 0,0 Z"

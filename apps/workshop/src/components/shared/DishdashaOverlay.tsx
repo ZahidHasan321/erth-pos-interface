@@ -53,8 +53,12 @@ const FIELD_MAP: Record<QualityTemplateFieldId, keyof Measurement> = {
   width: "sleeve_width",
   sideLower: "side_pocket_opening",
   upperChest: "chest_upper",
-  chest: "chest_front",
-  halfChest: "chest_back",
+  // Cell ids are legacy/positional: the left "chest" cell is Back Chest, the
+  // right "halfChest" cell is Front Chest (the old "HALF CHEST" label was the
+  // alteration-sheet name for chest_front). Mapping matches the spec pdfOrder
+  // (#8 Front Chest, #14 Back Chest).
+  chest: "chest_back",
+  halfChest: "chest_front",
   waistFront: "waist_front",
   waistBack: "waist_back",
   bottom: "bottom",

@@ -99,6 +99,7 @@ export interface Card2OnGarmentMeasurements {
   upChest?: Card2MeasurementValue
   chest?: Card2MeasurementValue
   halfChest?: Card2MeasurementValue
+  backChest?: Card2MeasurementValue
   waist?: {
     front?: Card2MeasurementValue
     back?: Card2MeasurementValue
