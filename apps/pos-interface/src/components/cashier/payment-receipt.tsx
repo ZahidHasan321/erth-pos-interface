@@ -150,7 +150,7 @@ export const PaymentReceipt = React.forwardRef<HTMLDivElement, { data: PaymentRe
                 const collarBase = collarMap[g.collar_type || ""] || "عادي";
                 const collarPos = g.collar_position === "up" ? " (أعلى)" : g.collar_position === "down" ? " (أسفل)" : "";
                 const collar = `${collarBase}${collarPos}`;
-                const buttons = g.collar_button === "COL_TABBAGI" ? "تبقي" : g.collar_button === "COL_ARAVI_ZARRAR" ? "زرار عربي" : "زرارات";
+                const buttons = g.collar_button === "COL_TABBAGI" ? "تبقي" : g.collar_button === "COL_ARAVI_ZARRAR" ? "زرار عربي" : g.collar_button === "COL_NO_BUTTON" ? "بدون زرار" : "زرارات";
                 const jabzour = jabzourMap[g.jabzour_1 || ""] || "بدون";
                 const cuff = cuffMap[g.cuffs_type || ""] || "عادي";
                 const thickness = thicknessMap[g.jabzour_thickness || ""] || "خط واحد";

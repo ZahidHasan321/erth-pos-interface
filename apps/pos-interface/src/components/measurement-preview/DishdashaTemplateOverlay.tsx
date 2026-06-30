@@ -1,5 +1,6 @@
 import type { Measurement } from "@repo/database";
-import { parseMeasurementParts } from "@repo/database";
+import { parseMeasurementParts, getLabel } from "@repo/database";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui/tooltip";
 import templateSvg from "./assets/template.svg";
 import {
   dishdashaTemplateFields,
@@ -58,25 +59,29 @@ export function DishdashaTemplateOverlay({
         const tint = tints?.[key] ?? "";
 
         return (
-          <div
-            key={field.id}
-            className={`absolute flex items-center justify-center font-medium leading-none ${tint}`}
-            style={{
-              left: `${field.left}%`,
-              top: `${field.top}%`,
-              width: `${field.width}%`,
-              height: `${field.height}%`,
-              fontSize: "clamp(11px, 2.6%, 20px)",
-              writingMode: isVertical ? "vertical-rl" : undefined,
-              borderRadius: "4px",
-              boxSizing: "content-box",
-              padding: isVertical ? "8px 3px" : "4px 5px",
-              marginLeft: isVertical ? "-3px" : "-5px",
-              marginTop: isVertical ? "-8px" : "-4px",
-            }}
-          >
-            <MeasureText raw={raw} degree={degree} />
-          </div>
+          <Tooltip key={field.id}>
+            <TooltipTrigger asChild>
+              <div
+                className={`absolute flex items-center justify-center font-medium leading-none cursor-pointer transition-transform duration-100 hover:z-20 hover:scale-125 active:scale-110 ${tint}`}
+                style={{
+                  left: `${field.left}%`,
+                  top: `${field.top}%`,
+                  width: `${field.width}%`,
+                  height: `${field.height}%`,
+                  fontSize: "clamp(15px, 2.8%, 22px)",
+                  writingMode: isVertical ? "vertical-rl" : undefined,
+                  borderRadius: "4px",
+                  boxSizing: "content-box",
+                  padding: isVertical ? "8px 3px" : "4px 5px",
+                  marginLeft: isVertical ? "-3px" : "-5px",
+                  marginTop: isVertical ? "-8px" : "-4px",
+                }}
+              >
+                <MeasureText raw={raw} degree={degree} />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>{getLabel(key)}</TooltipContent>
+          </Tooltip>
         );
       })}
     </div>

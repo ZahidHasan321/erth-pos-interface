@@ -42,7 +42,7 @@ export function MeasurementTerminalPreview({
 
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-start">
-      <div className="mx-auto w-full max-w-[360px] shrink-0 md:mx-0">
+      <div className="mx-auto w-full max-w-[440px] shrink-0 md:mx-0">
         <DishdashaTemplateOverlay
           values={values}
           degree={degree}

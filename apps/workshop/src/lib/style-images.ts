@@ -44,6 +44,7 @@ export const STYLE_IMAGE_MAP: Record<string, { image: string; label: string }> =
   COL_ARAVI_ZARRAR: { image: araviZarrar, label: "Aravi Zarrar" },
   COL_ZARRAR__TABBAGI: { image: zarrarTabbagi, label: "Zarrar + Tabbagi" },
   COL_TABBAGI: { image: tabbagi, label: "Tabbagi" },
+  COL_NO_BUTTON: { image: "", label: "No Button" },
 
   // Jabzour
   JAB_BAIN_MURABBA: { image: bainMurabba, label: "Bain Murabba" },

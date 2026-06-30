@@ -177,7 +177,7 @@ export const CollarCell = ({
   row,
   table,
 }: CellContext<GarmentSchema, unknown>) => {
-  const { control } = useFormContext();
+  const { control, setValue } = useFormContext();
   const meta = table.options.meta as {
     isFormDisabled?: boolean;
   };
@@ -190,7 +190,17 @@ export const CollarCell = ({
         control={control}
         render={({ field }) => (
           <Select
-            onValueChange={field.onChange}
+            onValueChange={(v) => {
+              field.onChange(v);
+              // Japanese collar normally has no button: auto-select No Button
+              // (staff can still override for the rare cased Japanese-with-button).
+              if (v === "COL_JAPANESE") {
+                setValue(`garments.${row.index}.collar_button`, "COL_NO_BUTTON", {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }
+            }}
             value={field.value || ""}
             disabled={isFormDisabled}
           >
@@ -236,14 +246,23 @@ export const CollarCell = ({
           >
             <SelectTrigger className="bg-background border-border/60">
               {field.value ? (
-                <img
-                  src={
-                    collarButtons.find((b) => b.value === field.value)
-                      ?.image || undefined
-                  }
-                  alt={collarButtons.find((b) => b.value === field.value)?.alt}
-                  className="min-w-10 h-10 object-contain"
-                />
+                collarButtons.find((b) => b.value === field.value)?.image ? (
+                  <img
+                    src={
+                      collarButtons.find((b) => b.value === field.value)
+                        ?.image || undefined
+                    }
+                    alt={collarButtons.find((b) => b.value === field.value)?.alt}
+                    className="min-w-10 h-10 object-contain"
+                  />
+                ) : (
+                  <span>
+                    {
+                      collarButtons.find((b) => b.value === field.value)
+                        ?.displayText
+                    }
+                  </span>
+                )
               ) : (
                 <SelectValue placeholder="Select Button" />
               )}
@@ -252,11 +271,13 @@ export const CollarCell = ({
               {collarButtons.map((button) => (
                 <SelectItem key={button.value} value={button.value}>
                   <div className="flex items-center space-x-2">
-                    <img
-                      src={button.image || undefined}
-                      alt={button.alt}
-                      className="min-w-12 h-12 object-contain"
-                    />
+                    {button.image && (
+                      <img
+                        src={button.image || undefined}
+                        alt={button.alt}
+                        className="min-w-12 h-12 object-contain"
+                      />
+                    )}
                     <span>{button.displayText}</span>
                   </div>
                 </SelectItem>

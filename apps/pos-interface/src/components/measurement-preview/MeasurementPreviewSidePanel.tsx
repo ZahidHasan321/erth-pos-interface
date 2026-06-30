@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 import type { Measurement } from "@repo/database";
 import {
   getShortLabel,
+  getLabel,
   SHOULDER_SLOPE_LABELS,
   type ShoulderSlope,
 } from "@repo/database";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@repo/ui/tooltip";
 import { MeasureText, hasMeasureValue } from "./MeasureText";
 import { reasonTint } from "./reason-tint";
 
@@ -91,17 +93,21 @@ export function MeasurementPreviewSidePanel({
   const cell = (key: string): ReactNode => {
     const tint = changedOnly ? reasonTint(reasonByKey?.[key]) : "border border-border bg-card";
     return (
-      <div
-        key={key}
-        className={`flex flex-col items-center justify-center rounded-md px-2 py-1 text-center ${tint}`}
-      >
-        <span className="text-[10px] font-medium leading-tight text-muted-foreground">
-          {getShortLabel(key)}
-        </span>
-        <span className="text-base font-medium leading-tight tabular-nums">
-          <MeasureText raw={values[key as keyof Measurement]} />
-        </span>
-      </div>
+      <Tooltip key={key}>
+        <TooltipTrigger asChild>
+          <div
+            className={`flex flex-col items-center justify-center rounded-md px-2 py-1 text-center cursor-pointer transition-transform duration-100 hover:scale-105 ${tint}`}
+          >
+            <span className="text-[10px] font-medium leading-tight text-muted-foreground">
+              {getShortLabel(key)}
+            </span>
+            <span className="text-base font-medium leading-tight tabular-nums">
+              <MeasureText raw={values[key as keyof Measurement]} />
+            </span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>{getLabel(key)}</TooltipContent>
+      </Tooltip>
     );
   };
 

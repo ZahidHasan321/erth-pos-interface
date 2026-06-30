@@ -60,7 +60,7 @@ export function MeasurementPreviewDialog({
           )}
         </DialogTrigger>
       )}
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] sm:max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{resolvedDescription}</DialogDescription>

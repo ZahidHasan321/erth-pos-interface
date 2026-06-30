@@ -77,6 +77,7 @@ export const collarButtons: BaseOption[] = [
   { value: "COL_ARAVI_ZARRAR", alt: "Aravi Zarrar", displayText: "Aravi Zarrar", image: araviZarrar },
   { value: "COL_ZARRAR__TABBAGI", alt: "Zarrar + Tabbagi", displayText: "Zarrar + Tabbagi", image: zarrarTabbagi },
   { value: "COL_TABBAGI", alt: "Tabbagi", displayText: "Tabbagi", image: tabbagi },
+  { value: "COL_NO_BUTTON", alt: "No Button", displayText: "No Button", image: null },
 ];
 
 /** Jabzour types */

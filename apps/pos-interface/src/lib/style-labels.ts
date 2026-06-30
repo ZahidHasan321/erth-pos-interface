@@ -37,6 +37,7 @@ export const collarButtonAr: Record<string, string> = {
   COL_ZARRAR__TABBAGI: "طباقي + زرار",
   COL_TABBAGI: "طباقي",
   COL_SMALL_TABBAGI: "طباقي صغير",
+  COL_NO_BUTTON: "بدون زرار",
 };
 
 /** Cuffs (بزمات). */
