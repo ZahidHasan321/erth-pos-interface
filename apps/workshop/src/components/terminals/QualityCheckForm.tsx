@@ -59,6 +59,7 @@ import {
   QC_RETURN_STAGES,
   QC_TOLERANCE,
   QC_QUALITY_THRESHOLD,
+  QC_DRAFT_SCHEMA_VERSION,
   evaluateQc,
   deriveExpectedQcOptions,
   type QcInputs,
@@ -1911,15 +1912,21 @@ function mergedInputsForSave(
 }
 
 // ── Draft helpers ───────────────────────────────────────────────────────────
-// Drafts auto-expire after 24h. Each load also sweeps stale entries so an
-// abandoned shop doesn't accumulate localStorage bloat over time.
+// Drafts auto-expire after 30 days (they're cleared on submit, so the only
+// drafts that reach the TTL are genuinely abandoned). Each load also sweeps
+// stale entries so an abandoned shop doesn't accumulate localStorage bloat over
+// time, and drops any draft whose QC field shape no longer matches the current
+// spec (a measurement/option change would otherwise restore stale values).
 
 const DRAFT_PREFIX = "qc-draft:";
-const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+const DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 interface QcDraft {
   /** Number of QC attempts on the garment when this draft was saved. */
   attemptsCount: number;
+  /** QC-spec fingerprint at save time (see QC_DRAFT_SCHEMA_VERSION). A draft
+   *  saved under an older field shape is discarded rather than restored. */
+  schemaVersion: string;
   inspector: string;
   measurements: Record<string, string>;
   options: Record<string, string | boolean | number | null>;
@@ -1931,6 +1938,9 @@ interface QcDraft {
 /**
  * Loads draft. Returns null and clears the entry if:
  * - missing/expired (TTL)
+ * - schemaVersion mismatch (the QC field shape changed since save → the draft
+ *   could restore stale/invalid values, e.g. a shoulder_slope value that's no
+ *   longer offered, or a measurement dropped from QC)
  * - attemptsCount mismatch (a new fail/pass was recorded since save → carryForward
  *   shifted, draft is stale and would mis-prefill the form)
  */
@@ -1945,6 +1955,10 @@ function loadDraft(key: string, currentAttemptsCount: number): QcDraft | null {
       localStorage.removeItem(key);
       return null;
     }
+    if (parsed.schemaVersion !== QC_DRAFT_SCHEMA_VERSION) {
+      localStorage.removeItem(key);
+      return null;
+    }
     if (parsed.attemptsCount !== currentAttemptsCount) {
       localStorage.removeItem(key);
       return null;
@@ -1955,10 +1969,13 @@ function loadDraft(key: string, currentAttemptsCount: number): QcDraft | null {
   }
 }
 
-function saveDraft(key: string, data: Omit<QcDraft, "savedAt">) {
+function saveDraft(key: string, data: Omit<QcDraft, "savedAt" | "schemaVersion">) {
   if (typeof localStorage === "undefined") return;
   try {
-    localStorage.setItem(key, JSON.stringify({ ...data, savedAt: Date.now() }));
+    localStorage.setItem(
+      key,
+      JSON.stringify({ ...data, schemaVersion: QC_DRAFT_SCHEMA_VERSION, savedAt: Date.now() }),
+    );
   } catch {
     // Quota exceeded or disabled — silent failure, draft is best-effort.
   }
@@ -1984,8 +2001,14 @@ function sweepStaleDrafts() {
       try {
         const raw = localStorage.getItem(k);
         if (!raw) continue;
-        const parsed = JSON.parse(raw) as { savedAt?: number };
-        if (!parsed.savedAt || now - parsed.savedAt > DRAFT_TTL_MS) stale.push(k);
+        const parsed = JSON.parse(raw) as { savedAt?: number; schemaVersion?: string };
+        if (
+          !parsed.savedAt ||
+          now - parsed.savedAt > DRAFT_TTL_MS ||
+          parsed.schemaVersion !== QC_DRAFT_SCHEMA_VERSION
+        ) {
+          stale.push(k);
+        }
       } catch {
         stale.push(k);
       }

@@ -25,6 +25,7 @@ import {
   ListChecks,
   PlayCircle,
   ArrowRight,
+  Wrench,
 } from "lucide-react";
 import type { WorkshopGarment, ProductionPlan, WorkerHistory, TripHistoryEntry, GarmentFeedback } from "@repo/database";
 import { getQcReturnStages, getLabel } from "@repo/database";
@@ -980,6 +981,14 @@ function qcOptionLabel(key: string): string {
   return QC_OPTION_LABELS[key] ?? key.replace(/_/g, " ");
 }
 
+// Label a defect key the way its section labels it, so the accountability list
+// reads with the same names as the failure rows above it.
+function qcDefectLabel(category: "measurement" | "option" | "quality", key: string): string {
+  if (category === "measurement") return qcMeasurementLabel(key);
+  if (category === "option") return qcOptionLabel(key);
+  return key.replace(/_/g, " ");
+}
+
 function formatOptionValue(key: string, value: unknown): string {
   if (value == null || value === "") return "-";
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -1002,11 +1011,13 @@ function QcFailureDetails({
   const failedQuality = qc.failed_quality ?? [];
   const qualityRatings = qc.quality_ratings ?? qc.ratings ?? null;
   const returnStages = getQcReturnStages(qc);
+  const attributions = (qc.defect_attributions ?? []).filter((a) => a.responsible);
 
   const hasAny =
     failedMeasurements.length > 0 ||
     failedOptions.length > 0 ||
     failedQuality.length > 0 ||
+    attributions.length > 0 ||
     !!qc.fail_reason;
 
   return (
@@ -1031,6 +1042,11 @@ function QcFailureDetails({
               </thead>
               <tbody>
                 {failedMeasurements.map((key) => {
+                  // "Expected" is reconstructed from the garment's CURRENT linked
+                  // measurement, not snapshotted at QC time (the attempt only stores
+                  // the recorded value). If the spec was corrected after this QC
+                  // (feedback-minted measurement / style change), this can differ
+                  // from what the inspector actually compared against.
                   const expected = measurement?.[key] ?? null;
                   const recorded = qc.measurements?.[key] ?? null;
                   return (
@@ -1123,6 +1139,41 @@ function QcFailureDetails({
                 </span>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {attributions.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+            <Wrench className="w-3.5 h-3.5" />
+            Caused by
+            <span className="text-xs text-muted-foreground font-normal tabular-nums">
+              {attributions.length}
+            </span>
+          </div>
+          <div className="rounded-md border border-border overflow-hidden bg-card">
+            <table className="w-full text-sm">
+              <tbody>
+                {attributions.map((a, i) => (
+                  <tr key={`${a.category}:${a.key}:${i}`} className="border-t border-border first:border-t-0">
+                    <td className="px-2 py-1.5">{qcDefectLabel(a.category, a.key)}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">
+                      {PIECE_STAGE_LABELS[a.stage as keyof typeof PIECE_STAGE_LABELS] ?? a.stage}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      <span className="inline-flex items-center gap-1">
+                        <User className="w-3 h-3 text-muted-foreground shrink-0" />
+                        {a.responsible}
+                        {a.scope === "unit" && (
+                          <span className="text-xs text-muted-foreground">(unit)</span>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

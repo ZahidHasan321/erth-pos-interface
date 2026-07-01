@@ -4,6 +4,7 @@ import {
   type MeasurementSpec,
   BASMA_MEASUREMENT_KEYS,
   hasBasmaMeasurements as specHasBasmaMeasurements,
+  SHOULDER_SLOPE_VALUES,
 } from "@repo/database";
 
 /** Tolerance in inches for measurement comparison. */
@@ -204,6 +205,29 @@ export const QC_QUALITY: QcQualitySpec[] = [
   { key: "jabzour",      label: "Rating Jabzour" },
   { key: "hemming",      label: "Rating Hemming" },
 ];
+
+/**
+ * Fingerprint of the QC form's field shape. Recomputed from the specs at module
+ * load, so it changes automatically whenever the measurement set, option set,
+ * quality aspects, or shoulder-slope value space changes. It is persisted inside
+ * each localStorage QC draft; `loadDraft` discards any draft whose fingerprint no
+ * longer matches, so a spec change (e.g. shoulder_slope 6->10 values, a removed
+ * measurement) can't silently restore stale/invalid values into the form.
+ */
+export const QC_DRAFT_SCHEMA_VERSION: string = (() => {
+  const parts = [
+    QC_MEASUREMENTS.map((m) => `${m.key}:${m.optional ? 1 : 0}`).join(","),
+    QC_OPTIONS.map((o) => `${o.key}:${o.type}`).join(","),
+    QC_QUALITY.map((q) => q.key).join(","),
+    [...SHOULDER_SLOPE_VALUES].join(","),
+  ].join("|");
+  // djb2 hash → base36 so the per-draft payload stays small and opaque.
+  let h = 5381;
+  for (let i = 0; i < parts.length; i++) {
+    h = ((h << 5) + h + parts.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
+})();
 
 /** Stages operator can choose from on QC fail. Cutting → Ironing range.
  *  post_cutting is excluded — it's disabled in the production flow (§2.2), and a

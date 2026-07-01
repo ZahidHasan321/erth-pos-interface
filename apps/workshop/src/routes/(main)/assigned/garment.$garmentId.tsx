@@ -54,6 +54,7 @@ function AssignedGarmentDetailPage() {
   const updateMut = useUpdateGarmentDetails();
   const router = useRouter();
   const [planOpen, setPlanOpen] = useState(false);
+  const [selectedTripState, setSelectedTrip] = useState<number | null>(null);
 
   if (isLoading) {
     return (
@@ -88,7 +89,7 @@ function AssignedGarmentDetailPage() {
   const editability = getGarmentEditability(garment);
 
   const currentTripNum = garment.trip_number ?? 1;
-  const [selectedTrip, setSelectedTrip] = useState<number>(currentTripNum);
+  const selectedTrip = selectedTripState ?? currentTripNum;
   const selectedFeedback: GarmentFeedback | null =
     feedbackHistory.find((fb) => (fb.trip_number ?? 1) === selectedTrip) ?? null;
 
