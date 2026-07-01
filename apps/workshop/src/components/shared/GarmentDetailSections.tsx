@@ -69,7 +69,8 @@ function parseJson<T>(raw: unknown): T | null {
 const STYLE_FIELDS: { key: string; label: string; type: "text" | "boolean"; thicknessKey?: string }[] = [
   { key: "collar_type", label: "Collar", type: "text", thicknessKey: "collar_thickness" },
   { key: "collar_button", label: "Collar button", type: "text" },
-  { key: "collar_position", label: "Collar position", type: "text" },
+  // collar_position is a categorical body MEASUREMENT (like shoulder_slope),
+  // not a style option — it renders in MeasurementGrid, not here.
   { key: "cuffs_type", label: "Cuffs", type: "text", thicknessKey: "cuffs_thickness" },
   { key: "front_pocket_type", label: "Front pocket", type: "text", thicknessKey: "front_pocket_thickness" },
   { key: "wallet_pocket", label: "Wallet pocket", type: "boolean" },
@@ -83,7 +84,7 @@ const STYLE_FIELDS: { key: string; label: string; type: "text" | "boolean"; thic
 
 /** §2.11 toggle fields — always shown with an explicit answer. */
 const TOGGLE_SPEC_KEYS = new Set([
-  "wallet_pocket", "pen_holder", "mobile_pocket", "small_tabaggi", "collar_position",
+  "wallet_pocket", "pen_holder", "mobile_pocket", "small_tabaggi",
 ]);
 
 export const HISTORY_KEY_MAP: Record<string, string> = {
@@ -329,21 +330,13 @@ export function StyleSection({
           const thicknessLabel = thicknessStr ? THICKNESS_LABELS[thicknessStr] ?? thicknessStr : null;
           const isBool = field.type === "boolean";
           const isOn = isBool && g[field.key] === true;
-          // §2.11 — collar position reads Up / Down / Standard (Standard = the
-          // absence of up/down). Booleans read explicit Yes / No.
-          const isCollarPos = field.key === "collar_position";
-          // collar_position lives on the linked measurement (like shoulder_slope),
-          // not on the garment; null/absent reads back as the neutral "Standard".
-          const collarPos = garment.measurement?.collar_position ?? null;
-          const collarLabel = collarPos === "up" ? "Up"
-            : collarPos === "down" ? "Down" : "Standard";
+          // Booleans read explicit Yes / No.
           const boolIcon = isOn && field.key === "wallet_pocket" ? ACCESSORY_ICONS.wallet
             : isOn && field.key === "pen_holder" ? ACCESSORY_ICONS.pen
             : isOn && field.key === "mobile_pocket" ? ACCESSORY_ICONS.phone
             : isOn && field.key === "small_tabaggi" ? ACCESSORY_ICONS.smallTabaggi
             : null;
           const displayText = isBool ? (isOn ? "Yes" : "No")
-            : isCollarPos ? collarLabel
             : (mapped?.label ?? lookupKey);
 
           return (

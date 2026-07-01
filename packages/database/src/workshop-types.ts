@@ -44,6 +44,9 @@ export type WorkshopGarment = Omit<Garment, 'production_plan' | 'worker_history'
     measurement?: Measurement | null;
     order_brand?: string;
     order_date?: string;
+    // Order-level free-text note ("special instructions") entered on the shop
+    // order-summary form. Denormalized from orders.notes for the order detail page.
+    order_notes?: string | null;
     delivery_date_order?: string;
     home_delivery_order?: boolean;
     order_phase?: string;

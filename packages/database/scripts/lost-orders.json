@@ -1,0 +1,578 @@
+[
+  {
+    "inv": 1334,
+    "name": "ABDUL AZIZ",
+    "phone": "50388199",
+    "date": "2025-11-18",
+    "phase": "06 FINAL AT SHOP",
+    "total": "6"
+  },
+  {
+    "inv": 1330,
+    "name": "NAIF ZAID",
+    "phone": "51655545",
+    "date": "2025-11-17",
+    "phase": "06 FINAL AT SHOP",
+    "total": "9"
+  },
+  {
+    "inv": 1326,
+    "name": "ABDUL HAMID",
+    "phone": "50725444",
+    "date": "2025-11-16",
+    "phase": "06 FINAL AT SHOP",
+    "total": "23"
+  },
+  {
+    "inv": 1310,
+    "name": "AB",
+    "phone": "98997993",
+    "date": "2025-11-16",
+    "phase": "06 FINAL AT SHOP",
+    "total": ""
+  },
+  {
+    "inv": 1315,
+    "name": "ABU TURKI",
+    "phone": "66226278",
+    "date": "2025-11-14",
+    "phase": "06 FINAL AT SHOP",
+    "total": "9"
+  },
+  {
+    "inv": 1312,
+    "name": "ABDULLAH",
+    "phone": "98899722",
+    "date": "2025-11-14",
+    "phase": "06 FINAL AT SHOP",
+    "total": "28"
+  },
+  {
+    "inv": 1319,
+    "name": "SULAIMAN AL MUTAIRI",
+    "phone": "95545232",
+    "date": "2025-11-14",
+    "phase": "06 FINAL AT SHOP",
+    "total": "9"
+  },
+  {
+    "inv": 1236,
+    "name": "ABDULLAH AL JASIM",
+    "phone": "90008899",
+    "date": "2025-11-07",
+    "phase": "06 FINAL AT SHOP",
+    "total": "234"
+  },
+  {
+    "inv": 1234,
+    "name": "SAAD HAMAD",
+    "phone": "66662099",
+    "date": "2025-11-07",
+    "phase": "06 FINAL AT SHOP",
+    "total": "43"
+  },
+  {
+    "inv": 1235,
+    "name": "ABDULLAH SAAD",
+    "phone": "66662099",
+    "date": "2025-11-07",
+    "phase": "06 FINAL AT SHOP",
+    "total": "43"
+  },
+  {
+    "inv": 1154,
+    "name": "NAIF AL MUTERI",
+    "phone": "96972046",
+    "date": "2025-10-28",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "20"
+  },
+  {
+    "inv": 1114,
+    "name": "ABDUL AZIZ",
+    "phone": "98999690",
+    "date": "2025-10-23",
+    "phase": "06 FINAL AT SHOP",
+    "total": "12"
+  },
+  {
+    "inv": 993,
+    "name": "NASIR LAZAM",
+    "phone": "55152153",
+    "date": "2025-09-24",
+    "phase": "06 FINAL AT SHOP",
+    "total": "31"
+  },
+  {
+    "inv": 244,
+    "name": "MARZUK",
+    "phone": "99993134",
+    "date": "2025-06-05",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "45.75"
+  },
+  {
+    "inv": 248,
+    "name": "YAZID SAAD AL MUTERI",
+    "phone": "55995900",
+    "date": "2025-05-24",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "16"
+  },
+  {
+    "inv": 245,
+    "name": "NASIR AL BARRAK",
+    "phone": "67737726",
+    "date": "2025-05-24",
+    "phase": "06 FINAL AT SHOP",
+    "total": "9"
+  },
+  {
+    "inv": 190,
+    "name": "MOHAMMAD",
+    "phone": "51332100",
+    "date": "2025-05-24",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "30"
+  },
+  {
+    "inv": 191,
+    "name": "ABDUL RHEMAN",
+    "phone": "55535506",
+    "date": "2025-05-24",
+    "phase": "06 FINAL AT SHOP",
+    "total": "9"
+  },
+  {
+    "inv": 192,
+    "name": "MOHAMMAD MUTERI",
+    "phone": "55116695",
+    "date": "2025-05-24",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "19"
+  },
+  {
+    "inv": 247,
+    "name": "FAISSAL SAAD AL MUTERI",
+    "phone": "55955900",
+    "date": "2025-05-24",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "18"
+  },
+  {
+    "inv": 249,
+    "name": "KHALID SAAD AL MUTERI",
+    "phone": "55955900",
+    "date": "2025-05-24",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "16"
+  },
+  {
+    "inv": 240,
+    "name": "FAHAD BIN SHOUK",
+    "phone": "99062509",
+    "date": "2025-05-23",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "34"
+  },
+  {
+    "inv": 242,
+    "name": "HADI",
+    "phone": "99927507",
+    "date": "2025-05-23",
+    "phase": "06 FINAL AT SHOP",
+    "total": "18.45"
+  },
+  {
+    "inv": 238,
+    "name": "BASEL AL MUTERI",
+    "phone": "41112418",
+    "date": "2025-05-23",
+    "phase": "06 FINAL AT SHOP",
+    "total": "17.25"
+  },
+  {
+    "inv": 234,
+    "name": "NAIF KHALID RASHIDI",
+    "phone": "51101239",
+    "date": "2025-05-22",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "49.5"
+  },
+  {
+    "inv": 229,
+    "name": "OMAR AL RAYES",
+    "phone": "97246201",
+    "date": "2025-05-19",
+    "phase": "06 FINAL AT SHOP",
+    "total": "10"
+  },
+  {
+    "inv": 228,
+    "name": "SAAD AL MUTAIRI",
+    "phone": "69905872",
+    "date": "2025-05-19",
+    "phase": "06 FINAL AT SHOP",
+    "total": "57"
+  },
+  {
+    "inv": 226,
+    "name": "KHALED AL FALDI",
+    "phone": "55355535",
+    "date": "2025-05-18",
+    "phase": "06 FINAL AT SHOP",
+    "total": "100"
+  },
+  {
+    "inv": 223,
+    "name": "MOHAMMAD AL MUTERI",
+    "phone": "50229949",
+    "date": "2025-05-17",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "50"
+  },
+  {
+    "inv": 220,
+    "name": "FAISSAL AL RAJHI",
+    "phone": "99006929",
+    "date": "2025-05-16",
+    "phase": "06 FINAL AT SHOP",
+    "total": "46.5"
+  },
+  {
+    "inv": 221,
+    "name": "BADR FAISAL AL RAJHI",
+    "phone": "99006929",
+    "date": "2025-05-16",
+    "phase": "06 FINAL AT SHOP",
+    "total": "36"
+  },
+  {
+    "inv": 218,
+    "name": "YUSUF",
+    "phone": "94118707",
+    "date": "2025-05-15",
+    "phase": "06 FINAL AT SHOP",
+    "total": "9"
+  },
+  {
+    "inv": 214,
+    "name": "MOHAMMAD",
+    "phone": "60060779",
+    "date": "2025-05-15",
+    "phase": "06 FINAL AT SHOP",
+    "total": "12.5"
+  },
+  {
+    "inv": 216,
+    "name": "ABDULLAH",
+    "phone": "60459995",
+    "date": "2025-05-15",
+    "phase": "06 FINAL AT SHOP",
+    "total": "10"
+  },
+  {
+    "inv": 207,
+    "name": "FAISAL AL AJMI",
+    "phone": "60060779",
+    "date": "2025-05-15",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "36"
+  },
+  {
+    "inv": 205,
+    "name": "HAMAD",
+    "phone": "95525753",
+    "date": "2025-05-10",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "20"
+  },
+  {
+    "inv": 202,
+    "name": "MOHAMMAD AL MUTAIRI",
+    "phone": "66031331",
+    "date": "2025-05-09",
+    "phase": "06 FINAL AT SHOP",
+    "total": "18"
+  },
+  {
+    "inv": 201,
+    "name": "RAKAN",
+    "phone": "99111693",
+    "date": "2025-05-09",
+    "phase": "06 FINAL AT SHOP",
+    "total": ""
+  },
+  {
+    "inv": 204,
+    "name": "HASSAN AL HARBI",
+    "phone": "66918484",
+    "date": "2025-05-09",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "40"
+  },
+  {
+    "inv": 203,
+    "name": "SULTAN MUTERI",
+    "phone": "60686770",
+    "date": "2025-05-09",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "25"
+  },
+  {
+    "inv": 995,
+    "name": "OMAR AL RAYES",
+    "phone": "97246201",
+    "date": "2025-04-22",
+    "phase": "06 FINAL AT SHOP",
+    "total": "0"
+  },
+  {
+    "inv": 243,
+    "name": "OSAMA",
+    "phone": "65897810",
+    "date": "2025-03-15",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "60"
+  },
+  {
+    "inv": 246,
+    "name": "WALID AL GATTAN",
+    "phone": "98888200",
+    "date": "2025-03-15",
+    "phase": "06 FINAL AT SHOP",
+    "total": "30"
+  },
+  {
+    "inv": 241,
+    "name": "TURKI HAMAD AL ANZI",
+    "phone": "50408604",
+    "date": "2025-03-15",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "30"
+  },
+  {
+    "inv": 235,
+    "name": "ABDULLAH JALWY",
+    "phone": "55448711",
+    "date": "2025-03-14",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "83"
+  },
+  {
+    "inv": 236,
+    "name": "FAHAD AL UMRAN",
+    "phone": "55885817",
+    "date": "2025-03-14",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "51"
+  },
+  {
+    "inv": 237,
+    "name": "NAWAF FAHD",
+    "phone": "55591703",
+    "date": "2025-03-14",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "36"
+  },
+  {
+    "inv": 239,
+    "name": "ABDUL RAHMAN",
+    "phone": "69333399",
+    "date": "2025-03-14",
+    "phase": "06 FINAL AT SHOP",
+    "total": "24"
+  },
+  {
+    "inv": 231,
+    "name": "ABDUL AZIZ",
+    "phone": "99091911",
+    "date": "2025-03-13",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "16"
+  },
+  {
+    "inv": 227,
+    "name": "FAHD AL ANZI",
+    "phone": "98888803",
+    "date": "2025-03-13",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": ""
+  },
+  {
+    "inv": 230,
+    "name": "KHALID GHAZI",
+    "phone": "98888871",
+    "date": "2025-03-13",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": ""
+  },
+  {
+    "inv": 232,
+    "name": "NASER MUTEIRI",
+    "phone": "55665415",
+    "date": "2025-03-13",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "20"
+  },
+  {
+    "inv": 225,
+    "name": "OTMAN AL MUTERI",
+    "phone": "99800478",
+    "date": "2025-03-12",
+    "phase": "06 FINAL AT SHOP",
+    "total": "18"
+  },
+  {
+    "inv": 217,
+    "name": "MOHAMMAD AL YUSUF",
+    "phone": "69008080",
+    "date": "2025-03-12",
+    "phase": "06 FINAL AT SHOP",
+    "total": "33"
+  },
+  {
+    "inv": 219,
+    "name": "SULEMAN",
+    "phone": "97949424",
+    "date": "2025-03-12",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "34"
+  },
+  {
+    "inv": 224,
+    "name": "MOHAMMAD AL ANZI",
+    "phone": "99444693",
+    "date": "2025-03-12",
+    "phase": "06 FINAL AT SHOP",
+    "total": "21"
+  },
+  {
+    "inv": 213,
+    "name": "ABDUL RHEMAN MOHAMMAD",
+    "phone": "60701844",
+    "date": "2025-03-11",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "54"
+  },
+  {
+    "inv": 208,
+    "name": "SALMAN ALANGODI",
+    "phone": "99780079",
+    "date": "2025-03-10",
+    "phase": "06 FINAL AT SHOP",
+    "total": "10"
+  },
+  {
+    "inv": 206,
+    "name": "KHALIL AL MUTERI",
+    "phone": "50964009",
+    "date": "2025-03-10",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "18"
+  },
+  {
+    "inv": 210,
+    "name": "NAIF NASER",
+    "phone": "55005201",
+    "date": "2025-03-10",
+    "phase": "06 FINAL AT SHOP",
+    "total": "33"
+  },
+  {
+    "inv": 212,
+    "name": "MOHAMMAD IBRAHIM",
+    "phone": "99385252",
+    "date": "2025-03-10",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "49"
+  },
+  {
+    "inv": 209,
+    "name": "NASER",
+    "phone": "97351455",
+    "date": "2025-03-10",
+    "phase": "06 FINAL AT SHOP",
+    "total": "10"
+  },
+  {
+    "inv": 215,
+    "name": "ABDULLAH AJMI BN HINDI",
+    "phone": "50577884",
+    "date": "2025-03-10",
+    "phase": "06 FINAL AT SHOP",
+    "total": "18"
+  },
+  {
+    "inv": 1039,
+    "name": "ATEF SHARIDA",
+    "phone": "50612141",
+    "date": "2025-02-23",
+    "phase": "06 FINAL AT SHOP",
+    "total": ""
+  },
+  {
+    "inv": 1119,
+    "name": "MOHAMMAD AL RABEA",
+    "phone": "66096613",
+    "date": "2025-02-19",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": ""
+  },
+  {
+    "inv": 1221,
+    "name": "SAUD AL MUTERI",
+    "phone": "99686365",
+    "date": "2025-02-15",
+    "phase": "06 FINAL AT SHOP",
+    "total": "18"
+  },
+  {
+    "inv": 1329,
+    "name": "FAHAD",
+    "phone": "99858156",
+    "date": "2025-02-15",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "27"
+  },
+  {
+    "inv": 1186,
+    "name": "MISHAL ABDULLAH",
+    "phone": "50922211",
+    "date": "2025-02-12",
+    "phase": "06 FINAL AT SHOP",
+    "total": "32"
+  },
+  {
+    "inv": 1134,
+    "name": "MUSAAD AL MUTAIRI",
+    "phone": "62222881",
+    "date": "2025-02-12",
+    "phase": "06 FINAL AT SHOP",
+    "total": "45"
+  },
+  {
+    "inv": 1304,
+    "name": "MOHAMAD",
+    "phone": "667500607",
+    "date": "2025-02-09",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "20"
+  },
+  {
+    "inv": 1300,
+    "name": "ABU FAWAZ",
+    "phone": "99966640",
+    "date": "2025-02-08",
+    "phase": "06 FINAL AT SHOP",
+    "total": "27"
+  },
+  {
+    "inv": 1232,
+    "name": "MISHARI AL FOUDARI",
+    "phone": "60000062",
+    "date": "2025-02-06",
+    "phase": "06 FINAL+BROVA AT SHOP",
+    "total": "18"
+  }
+]

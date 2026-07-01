@@ -460,6 +460,15 @@ function OrderHeader({
           daysLabelClassName={urgency.className}
         />
       </div>
+
+      {/* Order-level note ("special instructions") entered by the shop on the
+          order-summary form. Distinct from per-garment / measurement notes. */}
+      {first.order_notes && (
+        <div className="mt-3 bg-[var(--status-warn-bg)] border border-border rounded-md p-3 space-y-1">
+          <h4 className="text-sm font-medium text-[var(--status-warn)]">Order note</h4>
+          <p className="text-base text-foreground whitespace-pre-wrap">{first.order_notes}</p>
+        </div>
+      )}
     </div>
   );
 }

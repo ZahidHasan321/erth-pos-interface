@@ -120,6 +120,7 @@ interface RawOrderJoin {
   checkout_status?: string | null;
   order_date?: string | null;
   order_type?: string | null;
+  notes?: string | null;
   workOrder?: RawWorkOrder | RawWorkOrder[] | null;
   alterationOrder?: RawAlterationOrder | RawAlterationOrder[] | null;
   customer?: RawCustomer | RawCustomer[] | null;
@@ -814,6 +815,7 @@ const GARMENT_DETAIL_QUERY = `
     order_type,
     checkout_status,
     order_date,
+    notes,
     workOrder:work_orders!order_id(invoice_number, delivery_date, order_phase, home_delivery, linked_order_id),
     alterationOrder:alteration_orders!order_id(invoice_number, received_date, order_phase),
     customer:customers!customer_id(name, phone, country_code)
@@ -859,6 +861,7 @@ function flattenDetailGarment(raw: RawGarmentRow): WorkshopGarment {
     ...garment,
     order_brand: order?.brand ?? undefined,
     order_date: order?.order_date ?? undefined,
+    order_notes: order?.notes ?? undefined,
     invoice_number: wo?.invoice_number ?? ao?.invoice_number ?? undefined,
     delivery_date_order: wo?.delivery_date ?? undefined,
     home_delivery_order: wo?.home_delivery ?? false,

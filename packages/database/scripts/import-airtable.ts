@@ -75,6 +75,10 @@ const first = (v: unknown): string | null => {
     return t ? (t.split(",")[0]!.trim() || null) : null;
 };
 
+// Normalize a customer name for keying (case/space-insensitive). A phone is NOT
+// unique per person (families share one), so customer lookups key on phone+name.
+const normName = (v: unknown): string => (txt(v) ?? "").toUpperCase().replace(/\s+/g, " ");
+
 const num = (v: unknown): number | null => {
     if (blank(v)) return null;
     // Old data sometimes uses fractions like "1 1/2" — drop those, keep plain numbers
@@ -183,7 +187,8 @@ const ACTIVE_PHASES = new Set(["02 BR PRD", "03 PENDING", "04 FN WTG", "05 FN PR
 
 // -- Lookup maps populated as we insert ---------------------------------------
 
-const customerByPhone = new Map<string, number>();      // phone → customers.id
+const customerByPhone = new Map<string, number>();      // phone → customers.id (LAST on a shared phone; name-less fallback only)
+const customerByPhoneName = new Map<string, number>();  // `${phone}|${NORMNAME}` → customers.id (primary, disambiguates families)
 const measurementByMid = new Map<string, string>();     // "IM000805" → measurements.id (uuid)
 const fabricByName = new Map<string, number>();         // fabric name → fabrics.id
 const orderByInvoice = new Map<string, number>();       // FATOURA → orders.id
@@ -307,6 +312,7 @@ async function importCustomers() {
         `;
         if (existing.length) {
             customerByPhone.set(phone, existing[0].id);
+            customerByPhoneName.set(`${phone}|${normName(name)}`, existing[0].id);
             skipped++;
             continue;
         }
@@ -315,6 +321,7 @@ async function importCustomers() {
             INSERT INTO customers ${sql(payload)} RETURNING id
         `;
         customerByPhone.set(phone, row.id);
+        customerByPhoneName.set(`${phone}|${normName(name)}`, row.id);
         inserted++;
     }
     console.log(`  inserted=${inserted} skipped=${skipped}`);
@@ -545,11 +552,14 @@ async function importOrders() {
     console.log(`\n[orders] ${rows.length} rows`);
     let inserted = 0, skipped = 0;
 
-    if (!DRY_RUN && customerByPhone.size === 0) {
-        const all = await sql<{ id: number; phone: string }[]>`
-            SELECT id, phone FROM customers WHERE phone IS NOT NULL
+    if (!DRY_RUN && customerByPhoneName.size === 0) {
+        const all = await sql<{ id: number; phone: string; name: string }[]>`
+            SELECT id, phone, name FROM customers WHERE phone IS NOT NULL
         `;
-        for (const c of all) customerByPhone.set(c.phone, c.id);
+        for (const c of all) {
+            customerByPhone.set(c.phone, c.id);
+            customerByPhoneName.set(`${c.phone}|${normName(c.name)}`, c.id);
+        }
     }
 
     for (const r of rows) {
@@ -559,7 +569,12 @@ async function importOrders() {
         const prodPhase = (txt(r["PRODUCTION PHASE"]) || "").toUpperCase();
         if (ACTIVE_PHASES.has(prodPhase)) { skipped++; continue; }
         const phone = txt(r["PHONE CUSTOMER 📞"]) ?? txt(r["PHONE CUSTOMER"]);
-        const customerId = phone ? customerByPhone.get(phone) : undefined;
+        // Resolve by phone+name (the invoice's NAME CUSTOMER) -- a phone is shared
+        // by family members, so phone alone would collapse their orders onto one.
+        const custName = txt(r["NAME CUSTOMER"]);
+        const customerId = phone
+            ? (customerByPhoneName.get(`${phone}|${normName(custName)}`) ?? customerByPhone.get(phone))
+            : undefined;
         if (!customerId) { skipped++; continue; }
 
         const cancelled = (txt(r["cancellation"]) || "").toLowerCase() === "true"
@@ -735,6 +750,28 @@ async function linkGarmentMeasurements() {
     console.log(`  garment↔measurement links: ${linked}`);
 }
 
+// 7b. RECONCILE MEASUREMENT OWNERSHIP ---------------------------------------
+// MEASURE.csv carries only a phone (no name), so measurements are first attached
+// by phone -- which lands on the wrong family member when a phone is shared. Once
+// garments/orders exist, the authoritative owner is the customer of the order(s)
+// using the measurement; re-point to it when that customer is unambiguous.
+async function reconcileMeasurementCustomers() {
+    if (!shouldRun("garments") || DRY_RUN) return;
+    const res = await sql`
+        UPDATE measurements m
+        SET customer_id = sub.cust
+        FROM (
+            SELECT g.measurement_id AS mid, MIN(o.customer_id) AS cust
+            FROM garments g JOIN orders o ON o.id = g.order_id
+            WHERE g.measurement_id IS NOT NULL
+            GROUP BY g.measurement_id
+            HAVING COUNT(DISTINCT o.customer_id) = 1
+        ) sub
+        WHERE m.id = sub.mid AND m.customer_id IS DISTINCT FROM sub.cust
+    `;
+    console.log(`  measurement owner reconciled: ${res.count ?? 0}`);
+}
+
 // 8. PAYMENT TRANSACTIONS (split from FATOURA payment columns) ---------------
 async function importPayments() {
     if (!shouldRun("payments")) return;
@@ -825,6 +862,7 @@ async function main() {
         ["orders", importOrders],
         ["garments", importGarments],
         ["link-measurements", linkGarmentMeasurements],
+        ["reconcile-measurement-owners", reconcileMeasurementCustomers],
         ["payments", importPayments],
         ["shelf", importShelf],
     ];

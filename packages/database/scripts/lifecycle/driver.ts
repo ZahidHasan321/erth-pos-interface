@@ -474,9 +474,9 @@ export async function collectGarments(
 
 /**
  * cashier_confirm_orders_no_payment RPC (triggers.sql) — the cashier clears a
- * WORK order's §3 processing gate WITHOUT taking payment. Acts as the cashier.
- * Idempotent and WORK-only (no-op on SALES/ALTERATION or already-processed
- * orders), so it is safe to call before any dispatch.
+ * WORK or ALTERATION order's §3 processing gate WITHOUT taking payment. Acts as
+ * the cashier. Idempotent (no-op on SALES or already-processed orders), so it is
+ * safe to call before any dispatch.
  */
 export async function cashierProcess(tx: Tx, orderId: number) {
   await actAs(tx, CASHIER.id);
@@ -522,8 +522,8 @@ export async function recordBulkPayment(
  * a mirror. apps/pos-interface/src/api/orders.ts dispatchOrder calls the
  * same function, so app and test exercise identical logic (no drift).
  *
- * A WORK order must be cashier-processed before dispatch (§3 gate). By default
- * this helper clears that gate first (confirm-without-payment) so the lifecycle
+ * A WORK or ALTERATION order must be cashier-processed before dispatch (§3 gate).
+ * By default this helper clears that gate first (confirm-without-payment) so the lifecycle
  * tests model the real "cashier processed → dispatched" flow without each site
  * repeating it. Pass { skipCashierProcess: true } to exercise the raw gate
  * (e.g. assert dispatch is rejected while still pending).
