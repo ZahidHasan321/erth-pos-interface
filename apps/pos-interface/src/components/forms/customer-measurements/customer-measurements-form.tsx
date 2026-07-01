@@ -490,8 +490,20 @@ export function CustomerMeasurementsForm({
 
     const newId = `${customerId}-${nextNumber}`;
 
-    // Take a snapshot of the current form values as the base for the copy
-    const baseMeasurement = { ...form.getValues() };
+    // Base the new measurement on the currently-selected STORED measurement (a
+    // deliberate "corrected copy"), never on form.getValues(). The live form can
+    // still hold values carried over from a prior customer or an unsaved edit
+    // before the populate/reset effects run; copying those would silently
+    // override the predicted seed defaults (e.g. a leftover jabzour_width 1.625
+    // instead of the intended 1.5). With no valid selection (fresh customer) we
+    // start from clean defaults and let the seeds below apply.
+    const source =
+      selectedMeasurementId != null
+        ? measurements.get(selectedMeasurementId)
+        : undefined;
+    const baseMeasurement: CustomerMeasurementsSchema = source
+      ? { ...source }
+      : { ...customerMeasurementsDefaults, measurer_id: form.getValues("measurer_id") };
     // Clear the DB id so it's treated as new, set the new display ID
     delete (baseMeasurement as Record<string, unknown>).id;
     baseMeasurement.measurement_id = newId;
@@ -742,7 +754,11 @@ export function CustomerMeasurementsForm({
                 type="button"
                 variant="outline"
                 onClick={handleNewMeasurement}
-                disabled={!customerId}
+                // Wait for the customer's measurements to load before allowing
+                // New: the next-id and the copy source are both derived from the
+                // populated map, so acting mid-fetch could duplicate an id or
+                // start from an empty base.
+                disabled={!customerId || isFetching}
               >
                 <Plus className="w-4 h-4 mr-2" />
                 New

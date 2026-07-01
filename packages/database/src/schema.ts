@@ -603,64 +603,66 @@ export const measurements = pgTable("measurements", {
     notes: text("notes"),
 
     // Dimensions (Standardized Decimal Precision)
-    collar_width: numeric("collar_width", { precision: 5, scale: 2 }),
-    collar_height: numeric("collar_height", { precision: 5, scale: 2 }),
-    shoulder: numeric("shoulder", { precision: 5, scale: 2 }),
+    // scale 3 so exact eighth-inch fractions (.125/.375/.625/.875) round-trip
+    // without being rounded to 2dp (e.g. jabzour_width 1.625 stayed 1.63 before).
+    collar_width: numeric("collar_width", { precision: 6, scale: 3 }),
+    collar_height: numeric("collar_height", { precision: 6, scale: 3 }),
+    shoulder: numeric("shoulder", { precision: 6, scale: 3 }),
     // Categorical body measurements (enum, not numeric) — see shoulderSlopeEnum
     // / collarPositionEnum. collar_position null = the neutral "Standard".
     shoulder_slope: shoulderSlopeEnum("shoulder_slope"),
     collar_position: collarPositionEnum("collar_position"),
-    chest_upper: numeric("chest_upper", { precision: 5, scale: 2 }),
-    chest_full: numeric("chest_full", { precision: 5, scale: 2 }),
-    sleeve_length: numeric("sleeve_length", { precision: 5, scale: 2 }),
-    sleeve_width: numeric("sleeve_width", { precision: 5, scale: 2 }),
-    elbow: numeric("elbow", { precision: 5, scale: 2 }),
+    chest_upper: numeric("chest_upper", { precision: 6, scale: 3 }),
+    chest_full: numeric("chest_full", { precision: 6, scale: 3 }),
+    sleeve_length: numeric("sleeve_length", { precision: 6, scale: 3 }),
+    sleeve_width: numeric("sleeve_width", { precision: 6, scale: 3 }),
+    elbow: numeric("elbow", { precision: 6, scale: 3 }),
 
     // Pockets
-    top_pocket_length: numeric("top_pocket_length", { precision: 5, scale: 2 }),
-    top_pocket_width: numeric("top_pocket_width", { precision: 5, scale: 2 }),
-    top_pocket_distance: numeric("top_pocket_distance", { precision: 5, scale: 2 }),
-    side_pocket_length: numeric("side_pocket_length", { precision: 5, scale: 2 }),
-    side_pocket_width: numeric("side_pocket_width", { precision: 5, scale: 2 }),
-    side_pocket_distance: numeric("side_pocket_distance", { precision: 5, scale: 2 }),
-    side_pocket_opening: numeric("side_pocket_opening", { precision: 5, scale: 2 }),
+    top_pocket_length: numeric("top_pocket_length", { precision: 6, scale: 3 }),
+    top_pocket_width: numeric("top_pocket_width", { precision: 6, scale: 3 }),
+    top_pocket_distance: numeric("top_pocket_distance", { precision: 6, scale: 3 }),
+    side_pocket_length: numeric("side_pocket_length", { precision: 6, scale: 3 }),
+    side_pocket_width: numeric("side_pocket_width", { precision: 6, scale: 3 }),
+    side_pocket_distance: numeric("side_pocket_distance", { precision: 6, scale: 3 }),
+    side_pocket_opening: numeric("side_pocket_opening", { precision: 6, scale: 3 }),
 
     // Waist/Length
-    waist_front: numeric("waist_front", { precision: 5, scale: 2 }),
-    waist_back: numeric("waist_back", { precision: 5, scale: 2 }),
-    waist_full: numeric("waist_full", { precision: 5, scale: 2 }),
-    length_front: numeric("length_front", { precision: 5, scale: 2 }),
-    length_back: numeric("length_back", { precision: 5, scale: 2 }),
-    bottom: numeric("bottom", { precision: 5, scale: 2 }),
+    waist_front: numeric("waist_front", { precision: 6, scale: 3 }),
+    waist_back: numeric("waist_back", { precision: 6, scale: 3 }),
+    waist_full: numeric("waist_full", { precision: 6, scale: 3 }),
+    length_front: numeric("length_front", { precision: 6, scale: 3 }),
+    length_back: numeric("length_back", { precision: 6, scale: 3 }),
+    bottom: numeric("bottom", { precision: 6, scale: 3 }),
 
     // Provisions
-    chest_provision: numeric("chest_provision", { precision: 5, scale: 2 }),
-    waist_provision: numeric("waist_provision", { precision: 5, scale: 2 }),
+    chest_provision: numeric("chest_provision", { precision: 6, scale: 3 }),
+    waist_provision: numeric("waist_provision", { precision: 6, scale: 3 }),
 
     // Degree (size grade adjustment — subtracted from real measurements)
-    degree: numeric("degree", { precision: 5, scale: 2 }),
+    degree: numeric("degree", { precision: 6, scale: 3 }),
 
     // Specifics
-    jabzour_width: numeric("jabzour_width", { precision: 5, scale: 2 }),
-    jabzour_length: numeric("jabzour_length", { precision: 5, scale: 2 }),
-    chest_front: numeric("chest_front", { precision: 5, scale: 2 }),
-    chest_back: numeric("chest_back", { precision: 5, scale: 2 }),
-    armhole_front: numeric("armhole_front", { precision: 5, scale: 2 }),
+    jabzour_width: numeric("jabzour_width", { precision: 6, scale: 3 }),
+    jabzour_length: numeric("jabzour_length", { precision: 6, scale: 3 }),
+    chest_front: numeric("chest_front", { precision: 6, scale: 3 }),
+    chest_back: numeric("chest_back", { precision: 6, scale: 3 }),
+    armhole_front: numeric("armhole_front", { precision: 6, scale: 3 }),
 
     // Buttons
-    second_button_distance: numeric("second_button_distance", { precision: 5, scale: 2 }),
+    second_button_distance: numeric("second_button_distance", { precision: 6, scale: 3 }),
 
     // Basma — optional, populated only when garment has basma trim
-    basma_length: numeric("basma_length", { precision: 5, scale: 2 }),
-    basma_width: numeric("basma_width", { precision: 5, scale: 2 }),
+    basma_length: numeric("basma_length", { precision: 6, scale: 3 }),
+    basma_width: numeric("basma_width", { precision: 6, scale: 3 }),
 
     // Hemming
-    sleeve_hemming: numeric("sleeve_hemming", { precision: 5, scale: 2 }),
-    bottom_hemming: numeric("bottom_hemming", { precision: 5, scale: 2 }),
+    sleeve_hemming: numeric("sleeve_hemming", { precision: 6, scale: 3 }),
+    bottom_hemming: numeric("bottom_hemming", { precision: 6, scale: 3 }),
 
     // Pen pocket
-    pen_pocket_length: numeric("pen_pocket_length", { precision: 5, scale: 2 }),
-    pen_pocket_width: numeric("pen_pocket_width", { precision: 5, scale: 2 }),
+    pen_pocket_length: numeric("pen_pocket_length", { precision: 6, scale: 3 }),
+    pen_pocket_width: numeric("pen_pocket_width", { precision: 6, scale: 3 }),
 
     // Idempotent create: unique when present so a network retry / double-submit
     // returns the original row instead of duplicating. Same as orders.
