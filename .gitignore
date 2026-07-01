@@ -45,3 +45,8 @@ yarn-error.log*
 
 # Plaintext user PINs - never commit
 new-db-users-credentials.csv
+
+# One-off / throwaway DB scripts and their data dumps - keep out of git
+packages/database/scripts/scratch/
+packages/database/scripts/*.json
+packages/database/scripts/.workflow-state.json
