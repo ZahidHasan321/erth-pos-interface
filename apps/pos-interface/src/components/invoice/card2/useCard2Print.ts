@@ -95,7 +95,8 @@ export function useCard2Print(order: Order | null | undefined) {
       paymentMethods: (order.payment_transactions ?? [])
         .filter((t) => t.transaction_type === "payment")
         .map((t) => t.payment_type),
-      specialRequest: null,
+      // The measurement "Notes for Workshop" prints in the card's Special Request box.
+      specialRequest: measurementResponse?.data?.notes ?? null,
       orderTakerName: orderTaker?.name ?? null,
       customerSignature: order.customer_signature_url ?? null,
     });

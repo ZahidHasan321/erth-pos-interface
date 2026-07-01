@@ -463,6 +463,12 @@ export function TerminalQualityTemplatePrint({
           <strong>Notes:</strong> {garment.notes}
         </div>
       ) : null}
+
+      {measurement?.notes ? (
+        <div className="terminal-qc-print-notes">
+          <strong>Notes for Workshop:</strong> {measurement.notes}
+        </div>
+      ) : null}
     </div>
   );
 }

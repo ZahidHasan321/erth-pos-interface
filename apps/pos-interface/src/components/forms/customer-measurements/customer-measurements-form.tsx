@@ -177,6 +177,17 @@ const SmallSpinner = () => (
   <div className="w-4 h-4 border-2 border-dashed rounded-full animate-spin border-primary" />
 );
 
+// The `reference` column stores either a preset label or, for "Other", the
+// custom free-text reference. The dropdown is driven by the derived category:
+// a preset selects itself, any other non-empty string is a custom "Other".
+const REFERENCE_PRESETS = ["Winter", "Summer", "Eid", "Occasion"] as const;
+const referenceCategory = (reference?: string | null): string | undefined => {
+  if (!reference) return undefined;
+  return (REFERENCE_PRESETS as readonly string[]).includes(reference)
+    ? reference
+    : "Other";
+};
+
 // ---------------------------------------
 // Main Form Component
 // ---------------------------------------
@@ -205,7 +216,7 @@ export function CustomerMeasurementsForm({
 
   const [selectedReference, setSelectedReference] = React.useState<
     string | undefined
-  >(form.getValues("reference") ?? undefined);
+  >(referenceCategory(form.getValues("reference")));
   useAutoProvision(form);
 
   // Track previous customerId to detect changes and reset internal state.
@@ -410,7 +421,7 @@ export function CustomerMeasurementsForm({
       const selected = measurements.get(selectedMeasurementId);
       if (selected) {
         form.reset(selected);
-        setSelectedReference(selected.reference ?? undefined);
+        setSelectedReference(referenceCategory(selected.reference));
       }
     } else if (!isCreatingNew) {
       form.reset(customerMeasurementsDefaults);
@@ -629,10 +640,13 @@ export function CustomerMeasurementsForm({
                   <div className="flex gap-2 items-center">
                     <Select
                       onValueChange={(value) => {
-                        field.onChange(value);
                         setSelectedReference(value);
+                        // Presets persist their own label; "Other" clears the
+                        // column so the custom-reference input can capture free
+                        // text (both live in `reference`, never `notes`).
+                        field.onChange(value === "Other" ? "" : value);
                       }}
-                      value={field.value || ""}
+                      value={selectedReference ?? ""}
                       disabled={!isEditing}
                     >
                       <FormControl>
@@ -657,7 +671,7 @@ export function CustomerMeasurementsForm({
             {selectedReference === "Other" && (
               <FormField
                 control={form.control}
-                name="notes"
+                name="reference"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="font-medium">
@@ -841,11 +855,11 @@ export function CustomerMeasurementsForm({
             name="notes"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="font-medium">Notes</FormLabel>
+                <FormLabel className="font-medium">Notes for Workshop</FormLabel>
                 <FormControl>
                   <Textarea
                     rows={5}
-                    placeholder="Special requests or notes"
+                    placeholder="Notes for the workshop"
                     {...field}
                     value={field.value ?? ""}
                     disabled={!isEditing}

@@ -25,7 +25,7 @@ export function mapMeasurementToFormValues(
     id: measurement.id,
     measurement_id: measurement.measurement_id || measurement.id,
     type: measurement.type || "Body",
-    reference: measurement.reference || "Other",
+    reference: measurement.reference ?? "",
     measurer_id: measurement.measurer_id || "",
     measurement_date: measurement.measurement_date
       ? parseUtcTimestamp(measurement.measurement_date).toISOString()

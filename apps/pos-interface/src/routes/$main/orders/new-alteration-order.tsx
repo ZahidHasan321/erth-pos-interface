@@ -190,8 +190,10 @@ function NewAlterationOrder() {
                 return;
             }
             const measurementChanges = Object.keys(g.alteration_measurements ?? {}).length;
+            // A present boolean `false` is an explicit "remove" change, so only
+            // null/blank/undefined count as no change.
             const styleChanges = Object.entries(g.alteration_styles ?? {}).filter(
-                ([, v]) => v !== false && v !== null && v !== "" && v !== undefined,
+                ([, v]) => v !== null && v !== "" && v !== undefined,
             ).length;
             if (measurementChanges === 0 && styleChanges === 0) {
                 toast.error(`${label}: enter at least one measurement or style change`);
@@ -585,7 +587,7 @@ function GarmentSummaryRow({
 }) {
     const measurementCount = Object.keys(garment.alteration_measurements ?? {}).length;
     const styleCount = Object.entries(garment.alteration_styles ?? {}).filter(
-        ([, v]) => v !== false && v !== null && v !== "" && v !== undefined,
+        ([, v]) => v !== null && v !== "" && v !== undefined,
     ).length;
 
     return (

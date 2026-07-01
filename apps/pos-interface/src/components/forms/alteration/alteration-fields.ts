@@ -36,4 +36,5 @@ export const STYLE_FIELD_DEFS: Record<AlterationStyleField, StyleFieldDef> = {
     jabzour_2: { label: "Jabzour 2", type: "text" },
     jabzour_thickness: { label: "Jabzour Thickness", type: "text" },
     lines: { label: "Lines", type: "number" },
+    shoulder_slope: { label: "Shoulder Slope", type: "text" },
 };

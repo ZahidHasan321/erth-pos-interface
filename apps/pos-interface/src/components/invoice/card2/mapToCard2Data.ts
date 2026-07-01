@@ -272,7 +272,9 @@ export const mapToCard2Data = (input: MapToCard2Input): Card2PdfData => {
         remaining,
         paymentMethods,
       },
-      remarks: input.specialRequest ?? undefined,
+      // specialRequest now carries the workshop-facing measurement note, so it is
+      // intentionally NOT mirrored onto the customer copy remarks.
+      remarks: undefined,
     },
   }
 }

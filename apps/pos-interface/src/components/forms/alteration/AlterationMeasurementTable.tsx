@@ -82,12 +82,12 @@ export function AlterationMeasurementTable({
                                         onChange={(e) => onChange(col.name, e.target.value)}
                                         placeholder="-"
                                         className={cn(
-                                            "h-9 w-full text-center tabular-nums bg-transparent border-0 shadow-none px-1",
+                                            "h-9 w-full rounded-md text-center tabular-nums bg-transparent border-0 shadow-none px-1",
                                             "focus:ring-1 focus:ring-primary focus-visible:ring-1 focus-visible:ring-primary",
                                             changed && "font-semibold text-amber-900",
                                         )}
                                     />
-                                    <div className="flex h-4 items-center justify-center">
+                                    <div className="mt-1.5 flex h-4 items-center justify-center">
                                         {changed && <StackedFraction value={current!} />}
                                     </div>
                                 </td>

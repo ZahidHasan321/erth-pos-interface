@@ -17,6 +17,9 @@ export const ALTERATION_STYLE_FIELDS = [
     "wallet_pocket", "pen_holder", "mobile_pocket", "small_tabaggi",
     "jabzour_1", "jabzour_2", "jabzour_thickness",
     "lines",
+    // Categorical body measurements (§2.12) — kept in the style map so workshop
+    // QC picks them up from the sparse change record like any other option.
+    "shoulder_slope",
 ] as const;
 
 export type AlterationStyleField = (typeof ALTERATION_STYLE_FIELDS)[number];
@@ -55,8 +58,10 @@ export const alterationGarmentSchema = z.object({
         });
     }
     const measurementChanges = Object.keys(g.alteration_measurements ?? {}).length;
+    // A present boolean `false` is an explicit "remove this accessory" change,
+    // not an empty value — only null/blank/undefined mean "no change".
     const styleChanges = Object.entries(g.alteration_styles ?? {}).filter(
-        ([, v]) => v !== false && v !== null && v !== "" && v !== undefined,
+        ([, v]) => v !== null && v !== "" && v !== undefined,
     ).length;
     if (measurementChanges === 0 && styleChanges === 0) {
         ctx.addIssue({

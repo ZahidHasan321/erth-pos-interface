@@ -1202,7 +1202,8 @@ function NewWorkOrder() {
             // blank; a reprint from the cashier/order view shows the real method.
             // Home-based brands pay inline, so the form holds the actual method.
             paymentType: cashierHandlesPayment ? null : (orderData.payment_type ?? null),
-            specialRequest: null,
+            // The measurement "Notes for Workshop" prints in the card's Special Request box.
+            specialRequest: card2MeasurementResponse?.data?.notes ?? null,
             orderTakerName: orderTaker?.name ?? null,
             customerSignature: card2Signature || null,
         });

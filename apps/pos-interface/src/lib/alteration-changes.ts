@@ -1,4 +1,5 @@
 import { getLabel } from "@repo/database";
+import { SHOULDER_SLOPE_UI } from "@repo/ui/shoulder-slope";
 import {
     collarButtons,
     collarTypes,
@@ -37,6 +38,7 @@ const STYLE_LABEL: Record<string, string> = {
     jabzour_2: "Jabzour (2nd)",
     jabzour_thickness: "Jabzour Thickness",
     lines: "Lines",
+    shoulder_slope: "Shoulder Slope",
 };
 
 const STYLE_PICKER: Record<string, BaseOption[]> = {
@@ -51,11 +53,12 @@ const STYLE_PICKER: Record<string, BaseOption[]> = {
 // Plain-language value for a changed style field. Returns null for values that
 // mean "no change" (false / blank) so they never surface as a line.
 function styleValueText(field: string, v: AlterationStyleVal): string | null {
-    if (v === false || v === null || v === "" || v === undefined) return null;
-    if (typeof v === "boolean") return "Yes";
+    if (v === null || v === "" || v === undefined) return null;
+    if (typeof v === "boolean") return v ? "Yes" : "No";
     const picker = STYLE_PICKER[field];
     if (picker) return picker.find((o) => o.value === v)?.displayText ?? String(v);
-    if (field === "collar_position") return v === "up" ? "Up" : v === "down" ? "Down" : String(v);
+    if (field === "collar_position") return v === "up" ? "Up" : v === "down" ? "Down" : v === "standard" ? "Standard" : String(v);
+    if (field === "shoulder_slope") return SHOULDER_SLOPE_UI.find((o) => o.value === v)?.label ?? String(v);
     if (field.endsWith("_thickness")) {
         return thicknessOptions.find((o) => o.value === v)?.label ?? String(v);
     }

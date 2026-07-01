@@ -681,12 +681,30 @@ export function DishdashaOverlay({
                 widthLabel={qcLabel("top_pocket_width")}
                 widthTintClass={tintForKey("top_pocket_width")}
                 extras={
-                  <MeasureRow
-                    label="Pocket Dist"
-                    value={measureVal("top_pocket_distance")}
-                    tooltip={qcLabel("top_pocket_distance")}
-                    tintClass={tintForKey("top_pocket_distance")}
-                  />
+                  <>
+                    <MeasureRow
+                      label="Pocket Dist"
+                      value={measureVal("top_pocket_distance")}
+                      tooltip={qcLabel("top_pocket_distance")}
+                      tintClass={tintForKey("top_pocket_distance")}
+                    />
+                    {hasVal("pen_pocket_length") && (
+                      <MeasureRow
+                        label="Pen Pocket L"
+                        value={measureVal("pen_pocket_length")}
+                        tooltip={qcLabel("pen_pocket_length")}
+                        tintClass={tintForKey("pen_pocket_length")}
+                      />
+                    )}
+                    {hasVal("pen_pocket_width") && (
+                      <MeasureRow
+                        label="Pen Pocket W"
+                        value={measureVal("pen_pocket_width")}
+                        tooltip={qcLabel("pen_pocket_width")}
+                        tintClass={tintForKey("pen_pocket_width")}
+                      />
+                    )}
+                  </>
                 }
                 accessories={
                   g.pen_holder ? (
@@ -835,6 +853,15 @@ export function DishdashaOverlay({
                   Notes
                 </h4>
                 <p className="text-xs text-foreground whitespace-pre-wrap leading-snug">{notes}</p>
+              </div>
+            )}
+
+            {m?.notes && (
+              <div className="col-span-2 rounded-md border border-[color:var(--status-warn)]/30 bg-[var(--status-warn-bg)] p-2">
+                <h4 className="text-xs font-medium text-[var(--status-warn)] mb-1">
+                  Notes for Workshop
+                </h4>
+                <p className="text-xs text-foreground whitespace-pre-wrap leading-snug">{m.notes}</p>
               </div>
             )}
           </div>

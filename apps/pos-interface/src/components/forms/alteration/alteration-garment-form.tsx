@@ -10,7 +10,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@repo/ui/select";
-import { Check } from "lucide-react";
+import { SHOULDER_SLOPE_UI } from "@repo/ui/shoulder-slope";
+import { COLLAR_POSITION_UI } from "@repo/ui/collar-position";
 import { cn } from "@/lib/utils";
 
 import {
@@ -111,7 +112,11 @@ export function AlterationGarmentForm({
         const v = styles[field];
         return typeof v === "string" ? v : "";
     };
-    const styleBool = (field: AlterationStyleField): boolean => styles[field] === true;
+    // Tri-state: true = add, false = remove, null = not changing this accessory.
+    const styleTriBool = (field: AlterationStyleField): boolean | null => {
+        const v = styles[field];
+        return v === true ? true : v === false ? false : null;
+    };
     const styleNum = (field: AlterationStyleField): number | null => {
         const v = styles[field];
         return typeof v === "number" ? v : null;
@@ -302,6 +307,25 @@ export function AlterationGarmentForm({
                         onChange={setMeasurementField}
                         columns={alterationColumns(MANUAL_GROUP_2)}
                     />
+
+                    {/* Categorical body measurements (§2.12) — shoulder slope and
+                        collar position live on the measurement, not the options.
+                        Leave blank to keep the garment's current value. */}
+                    <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+                        <div className="flex flex-wrap items-start gap-4">
+                            <SlopeSelect
+                                label="Shoulder Slope"
+                                value={styleStr("shoulder_slope")}
+                                onChange={(v) => setStyle("shoulder_slope", v)}
+                            />
+                            <SegField
+                                label="Collar Position"
+                                value={styleStr("collar_position")}
+                                options={COLLAR_POSITION_UI}
+                                onChange={(v) => setStyle("collar_position", v || null)}
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -333,23 +357,14 @@ export function AlterationGarmentForm({
                             onChange={(v) => setStyle("collar_button", v)}
                             placeholder="Button"
                         />
-                        <SegField
-                            label="Position"
-                            value={styleStr("collar_position")}
-                            options={[
-                                { value: "up", label: "Up" },
-                                { value: "down", label: "Down" },
-                            ]}
-                            onChange={(v) => setStyle("collar_position", v || null)}
-                        />
                         <ThicknessField
                             label="Thickness"
                             value={styleStr("collar_thickness")}
                             onChange={(v) => setStyle("collar_thickness", v)}
                         />
-                        <IconToggle
+                        <BoolField
                             label="Small Tabbagi"
-                            checked={styleBool("small_tabaggi")}
+                            value={styleTriBool("small_tabaggi")}
                             onChange={(v) => setStyle("small_tabaggi", v)}
                             image={smallTabaggiImage}
                         />
@@ -389,8 +404,9 @@ export function AlterationGarmentForm({
                         />
                     </StyleGroup>
 
-                    {/* Jabzour — grows to full width when the second type appears */}
-                    <StyleGroup title="Jabzour" className={isShaab ? "lg:col-span-2" : undefined}>
+                    {/* Jabzour — the 2nd type wraps within the group so the second
+                        field appearing never reflows the surrounding grid. */}
+                    <StyleGroup title="Jabzour">
                         <ImagePickerField
                             label="Type"
                             value={styleStr("jabzour_1")}
@@ -415,23 +431,23 @@ export function AlterationGarmentForm({
                         />
                     </StyleGroup>
 
-                    {/* Accessories */}
+                    {/* Accessories — Yes adds, No removes; leave unset for no change */}
                     <StyleGroup title="Accessories">
-                        <IconToggle
+                        <BoolField
                             label="Wallet"
-                            checked={styleBool("wallet_pocket")}
+                            value={styleTriBool("wallet_pocket")}
                             onChange={(v) => setStyle("wallet_pocket", v)}
                             image={walletIcon}
                         />
-                        <IconToggle
+                        <BoolField
                             label="Pen"
-                            checked={styleBool("pen_holder")}
+                            value={styleTriBool("pen_holder")}
                             onChange={(v) => setStyle("pen_holder", v)}
                             image={penIcon}
                         />
-                        <IconToggle
+                        <BoolField
                             label="Mobile"
-                            checked={styleBool("mobile_pocket")}
+                            value={styleTriBool("mobile_pocket")}
                             onChange={(v) => setStyle("mobile_pocket", v)}
                             image={phoneIcon}
                         />
@@ -648,38 +664,83 @@ function SegField({
     );
 }
 
-// Labeled on/off toggle with the option's icon, matched to the field height.
-function IconToggle({
+// Explicit Yes/No accessory toggle. On an alteration a boolean accessory means
+// "add it" (Yes) or "remove it" (No); leaving both unset records no change.
+// Clicking the active choice clears it back to "no change".
+function BoolField({
     label,
-    checked,
+    value,
     onChange,
     image,
 }: {
     label: string;
-    checked: boolean;
-    onChange: (v: boolean) => void;
+    value: boolean | null;
+    onChange: (v: boolean | null) => void;
     image: string;
 }) {
     return (
         <Field label={label}>
-            <button
-                type="button"
-                onClick={() => onChange(!checked)}
-                aria-pressed={checked}
-                className={cn(
-                    "relative flex h-10 w-16 items-center justify-center rounded-md border transition",
-                    checked
-                        ? "border-slate-900 bg-slate-50 ring-1 ring-slate-900"
-                        : "border-slate-300 bg-white hover:bg-slate-50",
-                )}
+            <div className="flex items-center gap-2">
+                <img src={image} alt={label} className="h-6 w-6 shrink-0 object-contain" />
+                <div className="flex h-10 overflow-hidden rounded-md border border-slate-300">
+                    {[
+                        { v: true, label: "Yes" },
+                        { v: false, label: "No" },
+                    ].map((opt) => {
+                        const active = value === opt.v;
+                        return (
+                            <button
+                                key={opt.label}
+                                type="button"
+                                onClick={() => onChange(active ? null : opt.v)}
+                                className={cn(
+                                    "border-r border-slate-300 px-3 text-sm font-medium transition last:border-r-0",
+                                    active
+                                        ? opt.v
+                                            ? "bg-slate-900 text-white"
+                                            : "bg-red-600 text-white"
+                                        : "bg-white text-slate-700 hover:bg-slate-50",
+                                )}
+                            >
+                                {opt.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </Field>
+    );
+}
+
+// Shoulder slope — categorical body measurement (§2.12). A plain dropdown of the
+// ten fixed values plus a clear option; empty means "not changing the slope".
+function SlopeSelect({
+    label,
+    value,
+    onChange,
+}: {
+    label: string;
+    value: string;
+    onChange: (v: string | null) => void;
+}) {
+    return (
+        <Field label={label}>
+            <Select
+                value={value || ""}
+                onValueChange={(v) => onChange(v === "__clear" ? null : v)}
             >
-                <img src={image} alt={label} className="h-6 w-6 object-contain" />
-                {checked && (
-                    <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-slate-900 text-white">
-                        <Check className="size-3" />
-                    </span>
-                )}
-            </button>
+                <SelectTrigger className={cn("w-64 bg-background", TRIGGER_H)}>
+                    <SelectValue placeholder="No change" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="__clear">(No change)</SelectItem>
+                    {SHOULDER_SLOPE_UI.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         </Field>
     );
 }

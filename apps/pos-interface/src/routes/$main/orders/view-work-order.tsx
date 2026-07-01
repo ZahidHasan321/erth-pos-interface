@@ -297,7 +297,8 @@ function ViewWorkOrder() {
             paymentMethods: (orderResponse?.data?.payment_transactions ?? [])
                 .filter((t) => t.transaction_type === "payment")
                 .map((t) => t.payment_type),
-            specialRequest: null,
+            // The measurement "Notes for Workshop" prints in the card's Special Request box.
+            specialRequest: card2MeasurementResponse?.data?.notes ?? null,
             orderTakerName: orderTaker?.name ?? null,
             customerSignature: orderResponse?.data?.customer_signature_url ?? null,
         });

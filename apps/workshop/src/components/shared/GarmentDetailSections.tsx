@@ -482,6 +482,12 @@ export function MeasurementsSection({
         measurement={garment.measurement}
         corrections={getMeasurementCorrections(garment.trip_history)}
       />
+      {garment.measurement?.notes && (
+        <div className="bg-[var(--status-warn-bg)] border border-border rounded-md p-3 space-y-1">
+          <h4 className="text-sm font-medium text-[var(--status-warn)]">Notes for Workshop</h4>
+          <p className="text-base text-foreground whitespace-pre-wrap">{garment.measurement.notes}</p>
+        </div>
+      )}
     </div>
   );
 }
