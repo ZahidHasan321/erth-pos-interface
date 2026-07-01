@@ -1203,6 +1203,42 @@ function QcFailureDetails({
   );
 }
 
+// Shown on a PASSED attempt. A pass still records the six 1-5 workmanship
+// ratings the inspector gave (all >= threshold, or it would have failed), so
+// surface them as stars instead of leaving the panel empty.
+function QcPassDetails({
+  qc,
+}: {
+  qc: NonNullable<TripHistoryEntry["qc_attempts"]>[number];
+}) {
+  const ratings = qc.quality_ratings ?? qc.ratings ?? null;
+  const aspects = ratings
+    ? Object.entries(ratings).filter(([, v]) => typeof v === "number")
+    : [];
+  if (aspects.length === 0) return null;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+        <Star className="w-3.5 h-3.5" />
+        Workmanship ratings
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {aspects.map(([aspect, score]) => (
+          <span
+            key={aspect}
+            className="inline-flex items-center gap-1 text-sm bg-muted px-2 py-1 rounded-md"
+          >
+            <span className="capitalize text-muted-foreground">{aspect.replace(/_/g, " ")}</span>
+            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+            <span className="tabular-nums">{score}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function QcAttemptList({
   qcAttempts,
   reentryStage,
@@ -1249,6 +1285,7 @@ function QcAttemptList({
               )}
             </div>
             {qc.result === "fail" && <QcFailureDetails qc={qc} garment={garment} />}
+            {qc.result === "pass" && <QcPassDetails qc={qc} />}
           </div>
         );
       })}
