@@ -34,6 +34,7 @@ import {
   JABZOUR_WIDTH_NEW_DEFAULT,
   SLEEVE_HEMMING_NEW_DEFAULT,
   BOTTOM_HEMMING_NEW_DEFAULT,
+  SHOULDER_SLOPE_NEW_DEFAULT,
   type CustomerMeasurementsSchema,
 } from "./measurement-form.schema";
 import { getNumberedLabel, getLabel } from "@repo/database";
@@ -494,6 +495,9 @@ export function CustomerMeasurementsForm({
     }
     if (baseMeasurement.bottom_hemming == null) {
       baseMeasurement.bottom_hemming = BOTTOM_HEMMING_NEW_DEFAULT;
+    }
+    if (baseMeasurement.shoulder_slope == null) {
+      baseMeasurement.shoulder_slope = SHOULDER_SLOPE_NEW_DEFAULT;
     }
 
     addMeasurement(newId, baseMeasurement);

@@ -1086,6 +1086,14 @@ BEGIN
         cashier_processed_by = p_cashier_id
     WHERE order_id = p_order_id
       AND cashier_processed_at IS NULL;
+
+    -- ALTERATION orders (§3) share the same cashier-processing gate, but have no
+    -- work_orders row — the marker lives on alteration_orders. No-op for WORK/SALES.
+    UPDATE alteration_orders
+    SET cashier_processed_at = now(),
+        cashier_processed_by = p_cashier_id
+    WHERE order_id = p_order_id
+      AND cashier_processed_at IS NULL;
   END IF;
 
   -- Collect garments if any were selected (mark as collected + completed)
@@ -1310,6 +1318,22 @@ BEGIN
       AND o.checkout_status = 'confirmed'
       AND w.cashier_processed_at IS NULL;
     GET DIAGNOSTICS v_updated = ROW_COUNT;
+
+    -- ALTERATION orders (§3) share the gate on alteration_orders (no work_orders
+    -- row). Only reached when the WORK update matched nothing for this id.
+    IF v_updated = 0 THEN
+      UPDATE alteration_orders a
+      SET cashier_processed_at = now(),
+          cashier_processed_by = p_cashier_id
+      FROM orders o
+      WHERE a.order_id = v_order_id
+        AND o.id = a.order_id
+        AND o.order_type = 'ALTERATION'
+        AND o.checkout_status = 'confirmed'
+        AND a.cashier_processed_at IS NULL;
+      GET DIAGNOSTICS v_updated = ROW_COUNT;
+    END IF;
+
     IF v_updated > 0 THEN
       v_processed := array_append(v_processed, v_order_id);
     ELSE
@@ -1446,6 +1470,7 @@ BEGIN
   FROM (
     SELECT
       o.id AS order_id,
+      o.order_type::text AS order_type,
       w.invoice_number,
       c.name AS customer_name,
       c.phone AS customer_phone,
@@ -1472,7 +1497,39 @@ BEGIN
       AND o.checkout_status = 'confirmed'
       AND w.cashier_processed_at IS NULL
       AND (p_brand IS NULL OR lower(o.brand::text) = lower(p_brand))
-    ORDER BY o.order_date DESC
+
+    UNION ALL
+
+    -- §3 ALTERATION orders share the Pending queue. No work_orders row: invoice
+    -- lives on alteration_orders, there is no advance/linking, and the delivery
+    -- date is per-garment (surfaced as the earliest garment date).
+    SELECT
+      o.id AS order_id,
+      o.order_type::text AS order_type,
+      a.invoice_number,
+      c.name AS customer_name,
+      c.phone AS customer_phone,
+      o.order_date,
+      (SELECT MIN(g.delivery_date) FROM garments g WHERE g.order_id = o.id) AS delivery_date,
+      COALESCE(o.order_total, a.alteration_total, 0) AS order_total,
+      COALESCE(o.paid, 0) AS paid,
+      0 AS advance,
+      NULL::int AS linked_order_id,
+      c.account_type,
+      c.relation,
+      c.primary_customer_id,
+      pc.name AS primary_customer_name,
+      (SELECT COUNT(*) FROM garments g WHERE g.order_id = o.id) AS garment_count
+    FROM orders o
+    JOIN alteration_orders a ON a.order_id = o.id
+    JOIN customers c ON c.id = o.customer_id
+    LEFT JOIN customers pc ON pc.id = c.primary_customer_id
+    WHERE o.order_type = 'ALTERATION'
+      AND o.checkout_status = 'confirmed'
+      AND a.cashier_processed_at IS NULL
+      AND (p_brand IS NULL OR lower(o.brand::text) = lower(p_brand))
+
+    ORDER BY order_date DESC
     LIMIT p_limit
   ) t;
   RETURN v_rows;
@@ -1669,17 +1726,25 @@ BEGIN
     RAISE EXCEPTION 'Order % not found', p_order_id;
   END IF;
 
-  -- §3 cashier-processing gate: a WORK order cannot be dispatched to the
-  -- workshop until a cashier has processed it (confirm-without-payment or a
-  -- payment), which sets work_orders.cashier_processed_at. SALES/ALTERATION are
-  -- not gated. The marker is set once and never cleared, so later trips
-  -- (returns/alterations) of an already-processed order pass freely.
+  -- §3 cashier-processing gate: a WORK or ALTERATION order cannot be dispatched
+  -- to the workshop until a cashier has processed it (confirm-without-payment or
+  -- a payment), which sets cashier_processed_at (on work_orders / alteration_orders
+  -- respectively). SALES is not gated. The marker is set once and never cleared,
+  -- so later trips (returns/alterations) of an already-processed order pass freely.
   IF v_order_type = 'WORK'
      AND NOT EXISTS (
        SELECT 1 FROM work_orders
        WHERE order_id = p_order_id AND cashier_processed_at IS NOT NULL
      ) THEN
     RAISE EXCEPTION 'WORK order % cannot be dispatched: the cashier has not processed it yet (confirm-without-payment or take a payment first).', p_order_id;
+  END IF;
+
+  IF v_order_type = 'ALTERATION'
+     AND NOT EXISTS (
+       SELECT 1 FROM alteration_orders
+       WHERE order_id = p_order_id AND cashier_processed_at IS NOT NULL
+     ) THEN
+    RAISE EXCEPTION 'ALTERATION order % cannot be dispatched: the cashier has not processed it yet (confirm-without-payment or take a payment first).', p_order_id;
   END IF;
 
   -- 1. Flip first-time garments (trip_number = 0) to transit. The gate keeps

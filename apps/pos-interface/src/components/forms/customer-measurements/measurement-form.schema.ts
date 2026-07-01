@@ -28,9 +28,11 @@ export const customerMeasurementsSchema = z.object({
   reference: z.string({ message: "Required" }),
   notes: z.string().optional().nullable(),
 
-  // Shoulder slope — categorical body measurement, required (no silent default).
-  // Defaults to undefined so the picker shows "not filled" and submit is blocked
-  // until the operator picks one of the six values.
+  // Shoulder slope — categorical body measurement, required. A new measurement
+  // seeds the overwritable predicted default "normal" (SHOULDER_SLOPE_NEW_DEFAULT,
+  // applied in the form's new-measurement handler — not in the base defaults, so
+  // an empty/read-only view and legacy-null rows still read as unfilled). Submit
+  // is blocked until one of the ten values is chosen.
   shoulder_slope: z.enum(SHOULDER_SLOPE_VALUES, { error: "Pick a shoulder slope" }),
   // Collar position — categorical body measurement, required (no silent default).
   // "standard" is the neutral position and serializes to null in the DB.
@@ -64,6 +66,8 @@ export const JABZOUR_WIDTH_NEW_DEFAULT = 1.5;
 export const SLEEVE_HEMMING_NEW_DEFAULT = 4;
 /** Predicted seed for `bottom_hemming`, applied only when creating a new measurement. */
 export const BOTTOM_HEMMING_NEW_DEFAULT = 4;
+/** Predicted seed for `shoulder_slope` ("NORMAL"), applied only when creating a new measurement. */
+export const SHOULDER_SLOPE_NEW_DEFAULT = "normal" satisfies (typeof SHOULDER_SLOPE_VALUES)[number];
 
 export const customerMeasurementsDefaults: CustomerMeasurementsSchema = {
   measurement_id: "",

@@ -291,7 +291,12 @@ function ViewWorkOrder() {
             },
             orderTotal: orderData.order_total ?? 0,
             paid: orderData.paid ?? 0,
-            paymentType: orderData.payment_type ?? null,
+            // Use the actual recorded methods. orders.payment_type is forced to
+            // "cash" for ERTH at confirmation (the real method is recorded later
+            // at the cashier), so it must not be used as the source here.
+            paymentMethods: (orderResponse?.data?.payment_transactions ?? [])
+                .filter((t) => t.transaction_type === "payment")
+                .map((t) => t.payment_type),
             specialRequest: null,
             orderTakerName: orderTaker?.name ?? null,
             customerSignature: orderResponse?.data?.customer_signature_url ?? null,

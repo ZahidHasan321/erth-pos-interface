@@ -154,16 +154,22 @@ export const COLLAR_POSITION_LABELS: Record<CollarPositionChoice, string> = {
   standard: "Standard",
 };
 
-// Shoulder slope — a categorical body measurement (6 fixed values), entered as a
+// Shoulder slope — a categorical body measurement (10 fixed values), entered as a
 // required dropdown. Lives on `measurements` next to the numeric dimensions, but
 // is modelled as an enum so it stays OUT of the numeric MEASUREMENTS_SPEC machinery
 // (the Zod decimal builder, QC tolerance compare, and INPUT_MEASUREMENT_KEYS that
 // feeds the alteration form all assume numbers). The editable dropdown + read-out
 // live in @repo/ui (shoulder-slope.tsx) — keep these values/labels in sync.
+// `normal` is an explicit stored value (labelled "NORMAL" — no notable slope),
+// distinct from NULL (never filled) and from the *_straight values.
 export const SHOULDER_SLOPE_VALUES = [
+  "normal",
   "right_down",
   "right_up",
   "right_straight",
+  "left_down",
+  "left_up",
+  "left_straight",
   "both_down",
   "both_up",
   "both_straight",
@@ -171,9 +177,13 @@ export const SHOULDER_SLOPE_VALUES = [
 export const shoulderSlopeEnum = pgEnum("shoulder_slope", SHOULDER_SLOPE_VALUES);
 export type ShoulderSlope = (typeof SHOULDER_SLOPE_VALUES)[number];
 export const SHOULDER_SLOPE_LABELS: Record<ShoulderSlope, string> = {
+  normal: "NORMAL",
   right_down: "RIGHT SHOULDER DOWN",
   right_up: "RIGHT SHOULDER UP",
   right_straight: "RIGHT SHOULDER STRAIGHT",
+  left_down: "LEFT SHOULDER DOWN",
+  left_up: "LEFT SHOULDER UP",
+  left_straight: "LEFT SHOULDER STRAIGHT",
   both_down: "LEFT AND RIGHT SHOULDER DOWN",
   both_up: "LEFT AND RIGHT SHOULDER UP",
   both_straight: "LEFT AND RIGHT SHOULDER STRAIGHT",
@@ -800,6 +810,12 @@ export const alterationOrders = pgTable("alteration_orders", {
 
     // Meta
     comments: text("comments"),
+
+    // §3 cashier-processing gate (mirrors work_orders): set once when a cashier
+    // takes payment or confirms-without-payment. NULL ⇒ pending cashier
+    // processing (shows in the Pending queue, blocked from workshop dispatch).
+    cashier_processed_at: timestamp("cashier_processed_at", { withTimezone: true }),
+    cashier_processed_by: uuid("cashier_processed_by"),
 
     // Idempotent create: unique when present so a network retry / double-submit
     // returns the original row instead of duplicating. Same as orders.

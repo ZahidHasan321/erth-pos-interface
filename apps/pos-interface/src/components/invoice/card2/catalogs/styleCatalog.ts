@@ -80,6 +80,7 @@ export const card2StyleCatalog: Readonly<
       'sleeve-rounded': { en: 'Rounded Cuff', ar: 'كفة دائرية' },
       'sleeve-straight': { en: 'Straight Cuff', ar: 'كفة مستقيمة' },
       'sleeve-french': { en: 'French Cuff', ar: 'كفة فرنسية' },
+      CUF_NO_CUFF: { en: 'No Cuff', ar: 'بدون كفة' },
     },
   },
 }

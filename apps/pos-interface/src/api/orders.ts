@@ -103,7 +103,8 @@ const ORDER_DETAILS_QUERY = `
     workOrder:work_orders!order_id(*),
     customer:customers(*),
     garments:garments(*, fabric:fabrics(name, color)),
-    shelf_items:order_shelf_items(*, shelf:shelf(type, brand))
+    shelf_items:order_shelf_items(*, shelf:shelf(type, brand)),
+    payment_transactions:payment_transactions(payment_type, transaction_type, amount, created_at)
 `;
 
 export const getOrderById = async (id: number, includeRelations: boolean = false): Promise<ApiResponse<Order>> => {
@@ -643,20 +644,22 @@ export const getOrdersForDispatch = async (): Promise<ApiResponse<Order[]>> => {
         return { status: 'error', message: error.message, data: [] };
     }
 
-    // §3 cashier-processing gate: hide WORK orders still pending cashier
-    // processing (work_orders.cashier_processed_at IS NULL) — they cannot be
-    // dispatched until the cashier processes them (dispatch_order also rejects
-    // them server-side). ALTERATION has no work_orders row and is never gated.
+    // §3 cashier-processing gate: hide WORK and ALTERATION orders still pending
+    // cashier processing (cashier_processed_at IS NULL on work_orders /
+    // alteration_orders respectively) — they cannot be dispatched until the
+    // cashier processes them (dispatch_order also rejects them server-side).
     // Filtered client-side because a PostgREST embed filter would need an inner
-    // join on work_orders, which would wrongly drop ALTERATION rows.
+    // join, which would wrongly drop the other order type's rows.
     type DispatchRow = {
         order_type?: string | null;
         workOrder?: { cashier_processed_at?: string | null } | null;
+        alterationOrder?: { cashier_processed_at?: string | null } | null;
     };
     const visible = (data ?? []).filter((row) => {
         const r = row as DispatchRow;
-        if (r.order_type !== 'WORK') return true;
-        return r.workOrder?.cashier_processed_at != null;
+        if (r.order_type === 'WORK') return r.workOrder?.cashier_processed_at != null;
+        if (r.order_type === 'ALTERATION') return r.alterationOrder?.cashier_processed_at != null;
+        return true;
     });
 
     return { status: 'success', data: flattenOrder(visible) };

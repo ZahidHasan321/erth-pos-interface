@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, Inbox, Banknote, Check, Link2, Users } from "lucide-react";
+import { Search, Inbox, Banknote, Check, Link2, Users, Scissors } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Checkbox } from "@repo/ui/checkbox";
@@ -116,7 +116,7 @@ export function PendingQueueBody({
                     <div>
                         <h1 className="text-base font-bold">Pending Orders</h1>
                         <p className="text-xs text-muted-foreground">
-                            Confirmed work orders awaiting cashier processing
+                            Confirmed work and alteration orders awaiting cashier processing
                         </p>
                     </div>
                     <Badge variant="secondary" className="text-sm">
@@ -236,6 +236,12 @@ function PendingRow({
                         #{order.invoice_number ?? order.order_id}
                     </span>
                     <span className="text-sm truncate">{order.customer_name ?? "Unknown"}</span>
+                    {order.order_type === "ALTERATION" && (
+                        <Badge variant="outline" className="gap-1 text-[10px] font-medium border-amber-400 text-amber-700">
+                            <Scissors className="h-3 w-3" />
+                            Alteration
+                        </Badge>
+                    )}
                     {isLinked && (
                         <Badge variant="outline" className="gap-1 text-[10px] font-medium border-primary/40 text-primary">
                             <Link2 className="h-3 w-3" />

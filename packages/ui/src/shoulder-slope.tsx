@@ -10,25 +10,35 @@ import {
 } from "./select";
 
 /**
- * Shoulder slope — a categorical body measurement with six fixed values,
+ * Shoulder slope — a categorical body measurement with ten fixed values,
  * entered as a plain text dropdown (no shape glyphs).
  *
- * Self-contained (no @repo/database dependency): the six `value` strings here
+ * Self-contained (no @repo/database dependency): the ten `value` strings here
  * MUST stay in sync with `SHOULDER_SLOPE_VALUES` / `SHOULDER_SLOPE_LABELS` in
- * @repo/database (the DB enum + Zod validation source).
+ * @repo/database (the DB enum + Zod validation source). `normal` is an explicit
+ * stored value (labelled "NORMAL" — no notable slope), distinct from a
+ * never-filled NULL.
  */
 export type ShoulderSlopeValue =
+  | "normal"
   | "right_down"
   | "right_up"
   | "right_straight"
+  | "left_down"
+  | "left_up"
+  | "left_straight"
   | "both_down"
   | "both_up"
   | "both_straight";
 
 export const SHOULDER_SLOPE_UI: { value: ShoulderSlopeValue; label: string }[] = [
+  { value: "normal", label: "NORMAL" },
   { value: "right_down", label: "RIGHT SHOULDER DOWN" },
   { value: "right_up", label: "RIGHT SHOULDER UP" },
   { value: "right_straight", label: "RIGHT SHOULDER STRAIGHT" },
+  { value: "left_down", label: "LEFT SHOULDER DOWN" },
+  { value: "left_up", label: "LEFT SHOULDER UP" },
+  { value: "left_straight", label: "LEFT SHOULDER STRAIGHT" },
   { value: "both_down", label: "LEFT AND RIGHT SHOULDER DOWN" },
   { value: "both_up", label: "LEFT AND RIGHT SHOULDER UP" },
   { value: "both_straight", label: "LEFT AND RIGHT SHOULDER STRAIGHT" },

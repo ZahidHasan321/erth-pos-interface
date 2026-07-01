@@ -33,6 +33,9 @@ import {
 import { useAlterationOrderMutations } from "@/hooks/useAlterationOrderMutations";
 import { useAuth } from "@/context/auth";
 import { getAlterationOrderById } from "@/api/alteration-orders";
+import { viewAlterationForm, type AlterationPrintOrder } from "@/components/alteration/printAlterationForm";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@repo/ui/dialog";
+import { Printer } from "lucide-react";
 import type { Customer, Garment } from "@repo/database";
 
 type AlterationOrderSearch = { orderId?: number };
@@ -64,6 +67,7 @@ function NewAlterationOrder() {
     const [comments, setComments] = React.useState("");
     const [homeDelivery, setHomeDelivery] = React.useState(false);
     const [orderTotalRaw, setOrderTotalRaw] = React.useState("");
+    const [createdOrder, setCreatedOrder] = React.useState<AlterationPrintOrder | null>(null);
     const garmentSectionRef = React.useRef<HTMLElement>(null);
 
     const { data: existingOrderRes } = useQuery({
@@ -102,6 +106,7 @@ function NewAlterationOrder() {
                 notes: g.notes,
                 alteration_measurements: (g.alteration_measurements ?? {}) as Record<string, number>,
                 alteration_styles: (g.alteration_styles ?? {}) as Record<string, string | boolean | number>,
+                alteration_issues: (g.alteration_issues ?? {}) as Record<string, Record<string, boolean>>,
             })));
             setActiveTab(0);
 
@@ -232,17 +237,23 @@ function NewAlterationOrder() {
                     notes: g.notes,
                     alteration_measurements: g.alteration_measurements,
                     alteration_styles: g.alteration_styles,
+                    alteration_issues: g.alteration_issues ?? {},
                 })),
             });
 
-            navigate({
-                to: "/$main/orders/order-history",
-                params: (prev: Record<string, string>) => prev,
-            });
-            void order;
+            // Offer to print the alteration form before leaving the page.
+            setCreatedOrder(order as AlterationPrintOrder);
         } catch {
             // toast already shown in hook
         }
+    };
+
+    const goToHistory = () => {
+        setCreatedOrder(null);
+        navigate({
+            to: "/$main/orders/order-history",
+            params: (prev: Record<string, string>) => prev,
+        });
     };
 
     const active = garments[activeTab] ?? garments[0]!;
@@ -282,9 +293,21 @@ function NewAlterationOrder() {
                                 : "Customer-brought garments. Record only the changes to make."}
                         </p>
                     </div>
-                    <div className="text-right">
-                        <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
-                        <p className="text-2xl font-bold text-slate-900">{orderTotal.toFixed(3)} KWD</p>
+                    <div className="flex items-center gap-4">
+                        {isViewMode && existingOrder && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => viewAlterationForm(existingOrder as AlterationPrintOrder)}
+                            >
+                                <Printer className="mr-2 h-4 w-4" />
+                                Print form
+                            </Button>
+                        )}
+                        <div className="text-right">
+                            <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
+                            <p className="text-2xl font-bold text-slate-900">{orderTotal.toFixed(3)} KWD</p>
+                        </div>
                     </div>
                 </header>
 
@@ -525,6 +548,28 @@ function NewAlterationOrder() {
                     )}
                 </section>
             </div>
+
+            <Dialog open={createdOrder != null} onOpenChange={(open) => { if (!open) goToHistory(); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            Alteration order #{createdOrder?.invoice_number ?? createdOrder?.id} created
+                        </DialogTitle>
+                        <DialogDescription>
+                            Print the alteration form for the workshop, or continue to order history.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={goToHistory}>
+                            Go to order history
+                        </Button>
+                        <Button onClick={() => { if (createdOrder) void viewAlterationForm(createdOrder); }}>
+                            <Printer className="mr-2 h-4 w-4" />
+                            Print alteration form
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

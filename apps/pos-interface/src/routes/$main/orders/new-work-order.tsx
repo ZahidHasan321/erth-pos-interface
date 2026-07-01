@@ -1197,7 +1197,11 @@ function NewWorkOrder() {
             },
             orderTotal: orderData.order_total ?? 0,
             paid: orderData.paid ?? 0,
-            paymentType: orderData.payment_type ?? null,
+            // ERTH defers payment to the cashier, so no real method exists yet at
+            // confirmation (orders.payment_type is just a forced "cash") — leave it
+            // blank; a reprint from the cashier/order view shows the real method.
+            // Home-based brands pay inline, so the form holds the actual method.
+            paymentType: cashierHandlesPayment ? null : (orderData.payment_type ?? null),
             specialRequest: null,
             orderTakerName: orderTaker?.name ?? null,
             customerSignature: card2Signature || null,
@@ -1547,6 +1551,22 @@ function NewWorkOrder() {
                             cashierHandlesPayment={cashierHandlesPayment}
                             isHomeBased={isHomeBased}
                             onConfirm={(data) => {
+                                // A WORK order must have at least one garment, and every
+                                // garment must carry a measurement. The fabric step enforces
+                                // measurement_id per garment, but confirmation itself was
+                                // ungated, so an order with no garments could slip through.
+                                const confirmGarments = fabricSelectionForm.getValues().garments;
+                                if (!confirmGarments || confirmGarments.length === 0) {
+                                    toast.error("Add at least one garment in Fabric Selection before confirming.");
+                                    handleStepChange(2);
+                                    return;
+                                }
+                                if (confirmGarments.some((g) => !g.measurement_id)) {
+                                    toast.error("Every garment needs a measurement before you can confirm the order.");
+                                    handleStepChange(1);
+                                    return;
+                                }
+
                                 if (cashierHandlesPayment) {
                                     openDialog(
                                         "Confirm work order",
@@ -1557,6 +1577,23 @@ function NewWorkOrder() {
                                         },
                                     );
                                 } else {
+                                    // Inline-payment brands (home-based: QASS/SAKKBA) have no
+                                    // cashier, so payment must be captured here. Require a
+                                    // payment method and at least the advance (min. required)
+                                    // whenever there is a balance to collect.
+                                    const orderTotal = data.order_total ?? 0;
+                                    if (orderTotal > 0) {
+                                        if (!data.payment_type) {
+                                            toast.error("Select a payment method before confirming.");
+                                            return;
+                                        }
+                                        const minRequired = Math.min(data.advance ?? 0, orderTotal);
+                                        const paidNum = data.paid ?? 0;
+                                        if (paidNum < minRequired) {
+                                            toast.error(`A minimum payment of ${minRequired.toFixed(3)} KWD is required for this order.`);
+                                            return;
+                                        }
+                                    }
                                     const isZeroPayment = data.paid === 0 || data.paid === undefined || data.paid === null;
                                     openDialog(
                                         isZeroPayment ? "Confirm with Zero Payment?" : "Confirm new work order",

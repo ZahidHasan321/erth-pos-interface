@@ -37,6 +37,9 @@ export type AlterationGarmentInput = {
     notes: string | null;
     alteration_measurements: Record<string, number>;
     alteration_styles: Record<string, string | boolean | number>;
+    /** Reason/issue matrix (row id → column id → checked). Stored on
+     *  garments.alteration_issues; printed on the alteration form. */
+    alteration_issues: Record<string, Record<string, boolean>>;
 };
 
 export type CreateAlterationOrderInput = {
@@ -179,6 +182,7 @@ export const createAlterationOrder = async (
         bufi_ext: g.bufi_ext,
         alteration_measurements: g.alteration_measurements,
         alteration_styles: g.alteration_styles,
+        alteration_issues: g.alteration_issues,
         full_measurement_set_id: null,
         original_garment_id: g.original_garment_id,
         delivery_date: g.delivery_date,

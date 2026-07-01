@@ -12,6 +12,7 @@ import {
   resolveStyleOptionIconUrl,
   type Card2StyleGroupId,
 } from '../catalogs/styleIconAssetMapHtml'
+import { resolveStyleOptionLabel } from '../catalogs/styleCatalog'
 
 export interface Card2LineItemStyleMatrixTableHtmlProps {
   lineItems: readonly Card2LineItem[]
@@ -254,13 +255,6 @@ const renderFixedColumnValue = (
   }
 }
 
-const humanizeStyleOptionId = (optionId: string): string =>
-  optionId
-    .split(/[-_]/)
-    .filter((segment) => segment.length > 0)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ')
-
 interface StyleOptionHeaderProps {
   groupId: Card2StyleGroupId
   optionId: string
@@ -276,7 +270,7 @@ const StyleOptionHeader = ({ groupId, optionId }: StyleOptionHeaderProps) => {
   if (!iconUrl) {
     return (
       <span className="card2-style-matrix__option-fallback">
-        {humanizeStyleOptionId(optionId)}
+        {resolveStyleOptionLabel(groupId, optionId, 'en')}
       </span>
     )
   }

@@ -83,6 +83,18 @@ describe("QC scope: evaluateQc only checks enabled keys (CLAUDE.md §2.3/§2.14)
     expect(res.failed_measurements).toEqual([A]); // B (unchanged) is never QC'd
   });
 
+  it("a required field with NO expected value on file is observational, not an auto-fail", () => {
+    // Historical/imported snapshots may lack a required measurement (e.g.
+    // sleeve_hemming was captured only after it became required). A missing spec
+    // value has nothing to verify against — the operator's reading is recorded,
+    // never failed. Regression guard: Number(null) === 0 previously compared the
+    // reading against a phantom 0 and failed every non-zero value.
+    const noExpected = { [A]: null, [B]: undefined, [C]: "" } as Record<string, unknown>;
+    const res = evaluateQc(noExpected, {}, inputs({ [A]: 4, [B]: 4, [C]: 4 }), new Set([A, B, C]));
+    expect(res.failed_measurements).toEqual([]);
+    expect(res.result).toBe("pass");
+  });
+
   it("alteration's second QC is a SUBSET of its fixes", () => {
     // Alteration scoped to three fixes A, B, C.
     const fixes = new Set([A, B, C]);

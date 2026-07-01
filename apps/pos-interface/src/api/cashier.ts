@@ -439,6 +439,8 @@ export const recordPaymentTransaction = async (params: {
 
 export interface CashierPendingOrder {
     order_id: number;
+    /** 'WORK' | 'ALTERATION' — both share the Pending queue (§3). */
+    order_type: string;
     invoice_number: number | null;
     customer_name: string | null;
     customer_phone: string | null;

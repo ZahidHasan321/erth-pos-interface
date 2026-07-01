@@ -18,7 +18,7 @@ import {
 import { defaultTemplateFieldLayout } from "./field-layout";
 import type { AlterationPrintMeta } from "./alteration-print-types";
 
-type AlterationPdfDocumentProps = {
+export type AlterationSheet = {
   measurementValues: Record<string, string>;
   reasonValues: AlterationIssueMatrixValues;
   meta: AlterationPrintMeta;
@@ -379,11 +379,18 @@ const styles = StyleSheet.create({
   },
 });
 
-export function AlterationPdfDocument({
-  measurementValues,
-  reasonValues,
-  meta,
-}: AlterationPdfDocumentProps) {
+export function AlterationPdfDocument({ sheets }: { sheets: AlterationSheet[] }) {
+  return (
+    <Document title={`Alteration ${sheets[0]?.meta.nFat || "Form"}`}>
+      {sheets.map((sheet, index) => (
+        <AlterationSheetPage key={index} sheet={sheet} />
+      ))}
+    </Document>
+  );
+}
+
+function AlterationSheetPage({ sheet }: { sheet: AlterationSheet }) {
+  const { measurementValues, reasonValues, meta } = sheet;
   const typedCommentLines = meta.comments.split(/\r?\n/);
   const commentRows = commentsLineIndexes.map((lineIndex) => {
     if (
@@ -397,8 +404,7 @@ export function AlterationPdfDocument({
   });
 
   return (
-    <Document title={`Alteration ${meta.nFat || "Form"}`}>
-      <Page size="A4" style={styles.page} wrap={false}>
+    <Page size="A4" style={styles.page} wrap={false}>
         <View style={styles.sheet}>
           <View style={styles.sheetContent}>
             <View style={styles.mainColumn}>
@@ -626,6 +632,5 @@ export function AlterationPdfDocument({
           </View>
         </View>
       </Page>
-    </Document>
   );
 }

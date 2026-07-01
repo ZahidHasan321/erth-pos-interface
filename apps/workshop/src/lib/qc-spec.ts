@@ -345,17 +345,20 @@ export function evaluateQc(
   const failed_measurements = QC_MEASUREMENTS
     .filter((m) => enabledKeys.has(m.key))
     .filter((m) => {
-      const expected = Number(expectedMeasurements[m.key]);
-      const got = Number(inputs.measurements[m.key]);
-      // Optional fields never fail on a blank cell — operator's observation
-      // is "nothing to measure" (e.g. spec had a pen pocket but the actual
-      // garment doesn't, or the spec never asked for it). Only fail when both
-      // sides are present and out of tolerance.
-      if (m.optional) {
-        if (!Number.isFinite(expected) || !Number.isFinite(got)) return false;
-        return Math.abs(got - expected) > QC_TOLERANCE;
-      }
-      if (!Number.isFinite(expected) || !Number.isFinite(got)) return true;
+      // Coerce absent (null / undefined / "") to NaN, NOT 0. Number(null) is 0,
+      // which would compare a missing spec value against a phantom zero and fail
+      // every real reading — the sleeve/bottom-hemming false-fail on historical
+      // measurement snapshots that never captured a hemming value.
+      const toNum = (v: unknown) => (v == null || v === "" ? NaN : Number(v));
+      const expected = toNum(expectedMeasurements[m.key]);
+      const got = toNum(inputs.measurements[m.key]);
+      // Nothing to verify when either side is absent: a blank reading, or ANY
+      // field (required or optional) with no expected value on file — that is
+      // observational (the operator records what's on the piece; there is no
+      // spec number to match against). The completeness gate separately forces
+      // required fields to be entered, so this never lets a blank required
+      // reading slip through to a pass.
+      if (!Number.isFinite(expected) || !Number.isFinite(got)) return false;
       return Math.abs(got - expected) > QC_TOLERANCE;
     })
     .map((m) => m.key);

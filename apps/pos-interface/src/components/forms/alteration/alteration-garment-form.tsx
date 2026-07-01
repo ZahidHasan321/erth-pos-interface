@@ -22,6 +22,7 @@ import {
 import { AlterationMeasurementTable } from "./AlterationMeasurementTable";
 import { AlterationChangeSummary } from "./AlterationChangeSummary";
 import { OriginalSpecPanel } from "./OriginalSpecPanel";
+import { AlterationCheckboxMatrix } from "@/components/alteration/alteration-checkbox-matrix";
 import { getNumberedLabel, getLabel } from "@repo/database";
 
 // Same field grouping as the customer-measurements form — kept here so the
@@ -114,6 +115,23 @@ export function AlterationGarmentForm({
     const styleNum = (field: AlterationStyleField): number | null => {
         const v = styles[field];
         return typeof v === "number" ? v : null;
+    };
+
+    const issues = value.alteration_issues ?? {};
+    const setIssue = (rowId: string, columnId: string, checked: boolean) => {
+        const next = { ...issues };
+        const row = { ...(next[rowId] ?? {}) };
+        if (checked) {
+            row[columnId] = true;
+        } else {
+            delete row[columnId];
+        }
+        if (Object.keys(row).length > 0) {
+            next[rowId] = row;
+        } else {
+            delete next[rowId];
+        }
+        update({ alteration_issues: next });
     };
 
     const setMeasurementField = (field: AlterationMeasurementField, raw: string) => {
@@ -432,6 +450,23 @@ export function AlterationGarmentForm({
                         />
                     </StyleGroup>
                 </div>
+            </div>
+
+            {/* Reason matrix — printed on the alteration form for the workshop */}
+            <div className="space-y-3">
+                <div>
+                    <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                        Alteration Reasons
+                    </h4>
+                    <p className="text-sm text-slate-500">
+                        Mark why each part is being altered. Prints on the alteration form.
+                    </p>
+                </div>
+                <AlterationCheckboxMatrix
+                    values={issues}
+                    onValueChange={setIssue}
+                    className="max-w-md"
+                />
             </div>
 
             <div className="space-y-1">

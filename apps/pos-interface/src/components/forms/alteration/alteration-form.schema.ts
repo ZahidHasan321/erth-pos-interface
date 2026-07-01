@@ -35,6 +35,9 @@ export const alterationGarmentSchema = z.object({
     // Sparse maps. Empty = no changes. String values for free-form, number for measurements.
     alteration_measurements: z.record(z.string(), z.number()).default({}),
     alteration_styles: z.record(z.string(), z.union([z.string(), z.boolean(), z.number()])).default({}),
+    // Reason/issue matrix (row id → column id → checked). Persisted to
+    // garments.alteration_issues and printed on the alteration form PDF.
+    alteration_issues: z.record(z.string(), z.record(z.string(), z.boolean())).default({}),
 }).superRefine((g, ctx) => {
     if (!g.source) {
         ctx.addIssue({
@@ -86,4 +89,5 @@ export const createEmptyAlterationGarment = (): AlterationGarmentSchema => ({
     notes: null,
     alteration_measurements: {},
     alteration_styles: {},
+    alteration_issues: {},
 });

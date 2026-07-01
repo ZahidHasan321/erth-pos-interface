@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, Info, Receipt, User, XCircle } from "lucide-react";
+import { ArrowLeft, CalendarDays, Info, Printer, Receipt, User, XCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "@repo/ui/alert";
 import { Button } from "@repo/ui/button";
 import { Card } from "@repo/ui/card";
@@ -13,6 +14,8 @@ import {
     usePaymentTransactions,
 } from "@/hooks/useCashier";
 import { PaymentHistory } from "@/components/cashier/payment-history";
+import { getOrderDetails } from "@/api/orders";
+import { useCard2Print } from "@/components/invoice/card2/useCard2Print";
 import type { InvoiceData, AlterationInvoiceData } from "@/components/invoice";
 import { formatAlterationChanges } from "@/lib/alteration-changes";
 import { PaymentMode } from "@/components/cashier/payment-mode";
@@ -42,6 +45,19 @@ export function OrderDetailShell({ orderId, onBack, canTakeMoney = true }: { ord
     const { data: txResult } = usePaymentTransactions(order?.id);
     const txData = txResult?.status === "success" ? txResult.data : [];
     const transactions = Array.isArray(txData) ? txData : [];
+
+    // Production card (card2) print. The cashier order query is intentionally
+    // lightweight, so fetch the full order (all garment columns + real
+    // payment_transactions) the same way the order view does — shared cache key.
+    const isWorkOrder = order?.order_type === "WORK";
+    const { data: fullOrderResult } = useQuery({
+        queryKey: ["order-details", order?.id],
+        queryFn: () => getOrderDetails(order!.id as number, true),
+        enabled: !!order?.id && isWorkOrder,
+        staleTime: 1000 * 60,
+    });
+    const fullOrder = fullOrderResult?.status === "success" ? fullOrderResult.data : null;
+    const { printCard, canPrint } = useCard2Print(fullOrder);
 
     const orderTotal = Number(order?.order_total) || 0;
     const totalPaid = Number(order?.paid) || 0;
@@ -248,6 +264,16 @@ export function OrderDetailShell({ orderId, onBack, canTakeMoney = true }: { ord
                 </Button>
                 <CustomerHeaderInline order={order} isCancelled={!!isCancelled} />
                 <div className="flex-1" />
+                {isWorkOrder && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={printCard}
+                        disabled={!canPrint}
+                    >
+                        <Printer className="h-4 w-4 mr-1" /> Print Card
+                    </Button>
+                )}
                 {modeOptions.length > 1 && (
                     <SlidingPillSwitcher
                         value={mode}

@@ -181,14 +181,24 @@ describe("SPEC §3: WORK cashier-processing gate", () => {
     });
   });
 
-  it("SPEC: ALTERATION dispatch is NOT gated by cashier processing", async () => {
+  it("SPEC: ALTERATION dispatch is ALSO gated by cashier processing (parity with WORK)", async () => {
     await inRolledBackTx(async (tx) => {
       const { orderId, garments } = await wf.createAlterationOrder(tx, [
         { garment_type: "alteration" },
       ]);
-      // No cashier step; the gate must not block a non-WORK order.
+      // Raw dispatch (no cashier step) is rejected by the gate — the marker
+      // lives on alteration_orders (no work_orders row for ALTERATION).
+      const err = await tryInSavepoint(tx, (sp) =>
+        wf.dispatchOrder(sp, orderId, undefined, { skipCashierProcess: true }),
+      );
+      expect(err).not.toBeNull();
+      let gs = await wf.getGarments(tx, orderId);
+      expect(gs.every((g) => g.trip_number === 0 && g.location === "shop")).toBe(true);
+
+      // Confirm-without-payment clears the alteration gate and unlocks dispatch.
+      await wf.cashierProcess(tx, orderId);
       await wf.dispatchOrder(tx, orderId, undefined, { skipCashierProcess: true });
-      const gs = await wf.getGarments(tx, orderId);
+      gs = await wf.getGarments(tx, orderId);
       expect(gs.every((g) => g.trip_number === 1 && g.location === "transit_to_workshop")).toBe(true);
       void garments;
     });

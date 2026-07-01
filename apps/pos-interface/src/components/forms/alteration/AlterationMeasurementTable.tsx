@@ -1,10 +1,32 @@
 import { Input } from "@repo/ui/input";
+import { parseMeasurementParts } from "@repo/database";
 import { cn } from "@/lib/utils";
 import type { AlterationMeasurementField } from "./alteration-form.schema";
 
 export interface AlterationMeasurementColumn {
     name: AlterationMeasurementField;
     label: string;
+}
+
+/** Compact stacked fraction shown under an input, mirroring the new measurement
+ *  form's read-out (12.5 → "12 1/2"). Nothing rendered for empty/zero values. */
+function StackedFraction({ value }: { value: number }) {
+    const parts = parseMeasurementParts(value);
+    if (!parts) return null;
+    return (
+        <span className="inline-flex items-center justify-center gap-0.5 text-xs font-semibold text-muted-foreground tabular-nums">
+            {parts.negative && <span>-</span>}
+            {(parts.whole > 0 || parts.numerator === 0) && <span>{parts.whole}</span>}
+            {parts.numerator > 0 && (
+                <span className="inline-flex flex-col items-center leading-none">
+                    <span className="text-[10px]">{parts.numerator}</span>
+                    <span className="h-px w-full bg-muted-foreground" />
+                    <span className="text-[10px]">{parts.denominator}</span>
+                </span>
+            )}
+            {parts.hasDegree && <span>°</span>}
+        </span>
+    );
 }
 
 interface Props {
@@ -48,7 +70,7 @@ export function AlterationMeasurementTable({
                                 <td
                                     key={col.name}
                                     className={cn(
-                                        "border border-border px-1.5 py-1.5",
+                                        "border border-border px-1.5 py-1.5 align-top",
                                         changed && "bg-amber-50",
                                     )}
                                 >
@@ -65,6 +87,9 @@ export function AlterationMeasurementTable({
                                             changed && "font-semibold text-amber-900",
                                         )}
                                     />
+                                    <div className="flex h-4 items-center justify-center">
+                                        {changed && <StackedFraction value={current!} />}
+                                    </div>
                                 </td>
                             );
                         })}

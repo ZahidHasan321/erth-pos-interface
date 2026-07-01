@@ -30,7 +30,17 @@ export interface MapToCard2Input {
   }
   orderTotal?: number
   paid?: number
+  /**
+   * Fallback single payment method (db value). For ERTH this is forced to
+   * "cash" at confirmation and is NOT the real method, so prefer
+   * `paymentMethods` (derived from the actual payment_transactions).
+   */
   paymentType?: string | null
+  /**
+   * The actual methods recorded against the order (db values from
+   * payment_transactions). Takes precedence over `paymentType` when present.
+   */
+  paymentMethods?: (string | null | undefined)[]
   specialRequest?: string | null
   orderTakerName?: string | null
   customerSignature?: string | null
@@ -200,8 +210,19 @@ export const mapToCard2Data = (input: MapToCard2Input): Card2PdfData => {
   // Delivery is shown in the totals block (not as a line item) only when charged.
   const delivery = deliveryCharge > 0 ? deliveryCharge : undefined
 
-  const paymentMethod = input.paymentType ? paymentMethodByDbValue[input.paymentType] : undefined
-  const paymentMethods: Card2PaymentMethod[] = paymentMethod ? [paymentMethod] : []
+  // Prefer the actual recorded methods (payment_transactions). Fall back to the
+  // single `paymentType` only when no transactions were supplied. orders.payment_type
+  // is forced to "cash" for ERTH at confirmation, so it is not a reliable source.
+  const rawMethods = input.paymentMethods && input.paymentMethods.length > 0
+    ? input.paymentMethods
+    : [input.paymentType]
+  const paymentMethods: Card2PaymentMethod[] = Array.from(
+    new Set(
+      rawMethods
+        .map((m) => (m ? paymentMethodByDbValue[m] : undefined))
+        .filter((m): m is Card2PaymentMethod => Boolean(m)),
+    ),
+  )
 
   const inHouseTotal = input.garments
     .filter((g) => g.fabric_source === 'IN')

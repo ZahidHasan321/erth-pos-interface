@@ -395,7 +395,9 @@ export function QualityCheckForm({
   );
 
   // Completeness — every enabled input must have a value before submit.
-  // Optional measures (sleeve hem, bottom hem, pen pkt) never gate submit.
+  // Optional measures (bottom hem, pen pkt, 2nd button) never gate submit;
+  // sleeve hem stays required to enter (it's just observational at eval time
+  // when the snapshot has no expected value on file).
   const missing: { key: string; label: string }[] = [];
   for (const m of QC_MEASUREMENTS) {
     if (!enabledKeys.has(m.key)) continue;
