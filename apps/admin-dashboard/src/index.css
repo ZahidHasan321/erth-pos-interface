@@ -1,0 +1,1019 @@
+/* Fonts loaded via index.html <link> for faster initial paint (no CSS @import chain) */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@source "../../../packages/ui/src";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* Softened radii — 8px base, scaled gently.
+     4px on inputs/badges, 8px default cards, 12px max on modals/popovers.
+     Tailwind's rounded-2xl/3xl utilities are clamped to 12px so legacy classes
+     don't punch through the design language. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
+
+  /* Line-height overrides — Tailwind defaults (1.5 on text-base) make Inter
+     feel airy in dense data UIs. Tighten globally; larger sizes get
+     proportionally tighter leading (standard practice for headings). */
+  --text-xs--line-height:   1.4;
+  --text-sm--line-height:   1.4;
+  --text-base--line-height: 1.4;
+  --text-lg--line-height:   1.35;
+  --text-xl--line-height:   1.3;
+  --text-2xl--line-height:  1.25;
+  --text-3xl--line-height:  1.2;
+  --text-4xl--line-height:  1.15;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.5rem; /* 8px — softened. Cards default to this. */
+
+  /* ── Semantic status tokens ──────────────────────────
+     Color reserved for meaning, not decoration. Deep, saturated foregrounds
+     (L ≈ 0.45-0.50, C ≈ 0.16-0.22) so each status reads instantly distinct
+     on a white card. Backgrounds are very pale tinted versions of the same
+     hue so the bg + fg pair always feels harmonised. */
+  --status-ok:     oklch(0.48 0.16 150);  /* deep green   — done / ready */
+  --status-ok-bg:  oklch(0.95 0.05 150);
+  --status-warn:   oklch(0.55 0.16 65);   /* deep amber   — waiting / action */
+  --status-warn-bg: oklch(0.96 0.05 75);
+  --status-bad:    oklch(0.50 0.22 27);   /* deep red     — express / fail */
+  --status-bad-bg: oklch(0.96 0.04 27);
+  --status-info:   oklch(0.45 0.18 255);  /* deep blue    — in progress */
+  --status-info-bg: oklch(0.95 0.05 250);
+
+  /* ── Atelier palette ─────────────────────────────────
+     Warm off-white background, pure-white elevated surfaces (cards, sidebar,
+     header). Same pattern as POS: background has the tint, surfaces pop above it. */
+
+  /* Page background — neutral light gray, clearly distinct from white card surfaces */
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.2 0.018 55);
+
+  /* Cards / popovers — pure white, visibly elevated above the background */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.018 55);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.018 55);
+
+  /* Primary — deep bronze. Dark enough to feel premium, used only for CTAs & active states. */
+  --primary: oklch(0.42 0.12 58);
+  --primary-foreground: oklch(0.99 0 0);
+
+  /* Secondary — neutral gray. */
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: oklch(0.24 0 0);
+
+  /* Muted — neutral gray, zero chroma. */
+  --muted: oklch(0.94 0 0);
+  --muted-foreground: oklch(0.48 0 0);
+
+  /* Accent — very subtle bronze for intentional hover on white surfaces only. */
+  --accent: oklch(0.94 0.03 58);
+  --accent-foreground: oklch(0.28 0.08 55);
+
+  /* Utility */
+  --destructive: oklch(0.52 0.19 28);
+  --border: oklch(0.88 0 0);
+  --input: oklch(0.85 0 0);
+  --ring: oklch(0.42 0.12 58);
+
+  /* Sidebar — pure white (elevated surface, same as cards) */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.2 0.018 55);
+  --sidebar-primary: oklch(0.42 0.12 58);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  /* Accent: clear bronze tint for active/hover — legible on white sidebar */
+  --sidebar-accent: oklch(0.92 0.05 58);
+  --sidebar-accent-foreground: oklch(0.28 0.10 55);
+  --sidebar-border: oklch(0.90 0 0);
+  --sidebar-ring: oklch(0.42 0.12 58);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY SYSTEM — workshop app
+   ════════════════════════════════════════════════════════════════════════════
+
+   One source of truth. Match every text element to a role below. If a new
+   case doesn't fit a role, add a role here first — don't invent ad-hoc sizes.
+
+   ROLE              CLASS                                            USE
+   ──────────────────────────────────────────────────────────────────────────
+   Page title        text-2xl font-semibold tracking-tight            <h1> page headers
+   Section title     text-base font-medium                            <h2> groups in a page
+   Card title        text-sm font-medium                              <h3> inside cards
+   Primary data      text-base                                        names, statuses, key values
+   Secondary data    text-sm text-muted-foreground                    metadata next to primary
+   Caption           text-xs text-muted-foreground                    timestamps, footnotes
+   Table header      text-sm font-medium text-muted-foreground        <th> — NOT bold, not uppercase
+   Table cell        text-base                                        <td> primary value
+   Table cell meta   text-sm text-muted-foreground                    <td> secondary value
+   Mono ID           font-mono text-base                              order #, garment ID
+   Mono meta         font-mono text-sm text-muted-foreground          INV-####, phone numbers
+   Pill / chip       text-xs font-medium                              status pills, badges
+   Button label      text-sm font-medium                              buttons, links
+   Micro             text-[11px]                                      dense sub-caption: count
+                                                                      badges, pipeline-rail labels,
+                                                                      compact-card footnotes. Use
+                                                                      ONLY where text-xs is too
+                                                                      large for a dense rail/badge;
+                                                                      never for primary body text.
+
+   WEIGHT RULES
+   ──────────────────────────────────────────────────────────────────────────
+   • 600 (semibold)  page titles only
+   • 500 (medium)    section/card titles, table headers, emphasis, button labels
+   • 400 (regular)   body, all data, captions
+   • NEVER use 700 (bold) or 900 (black) in UI — fake hierarchy. If a value
+     looks weak, fix it with color contrast, size, or surrounding whitespace
+     instead.
+
+   COLOR RULES
+   ──────────────────────────────────────────────────────────────────────────
+   • text-foreground          primary data
+   • text-muted-foreground    labels, metadata, headers (the hierarchy comes
+                              from color contrast against primary data, not
+                              from font weight)
+   • text-[var(--status-*)]   semantic status only (ok/warn/bad/info)
+   • Brand colors             dark-saturated shades only (-900) — see BrandBadge
+
+   CASE & TRACKING RULES
+   ──────────────────────────────────────────────────────────────────────────
+   • NEVER use uppercase + tracking-wider for UI labels. That's a sticker
+     pattern from marketing pages. Sentence case is always correct.
+   • The one exception is true acronyms (INV-, QC, ID).
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    touch-action: manipulation;
+    /* Root size bumped from 16 → 17px. Every rem-based utility scales up ~6%,
+       so text-xs (0.75rem) reads ~12.75px and text-sm (0.875rem) reads ~14.9px.
+       Inter has a smaller x-height than Montserrat — the bump compensates so
+       data labels stay legible at a distance from a workshop monitor.
+
+       Line-height 1.4 (not 1.5) — Inter renders taller than Montserrat at the
+       same px. 1.5 makes data rows feel airy and double-line cells eat
+       vertical real estate. 1.4 matches Linear / Datadog density. */
+    font-size: 17px;
+    line-height: 1.4;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", "Cairo", system-ui, -apple-system, sans-serif;
+    overscroll-behavior: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Inter", "Cairo", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    letter-spacing: -0.01em;
+  }
+
+  /* IDs, order numbers, measurements — use JetBrains Mono for that
+     warehouse-terminal feel. Tabular numerals also avoid digit jitter. */
+  .font-mono,
+  code,
+  pre,
+  kbd {
+    font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    font-feature-settings: "tnum";
+  }
+
+  button,
+  [role="button"],
+  a,
+  label[for],
+  select,
+  summary {
+    font-family: "Inter", "Cairo", system-ui, -apple-system, sans-serif;
+    touch-action: manipulation;
+  }
+
+  button {
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  label {
+    font-family: "Inter", "Cairo", system-ui, -apple-system, sans-serif;
+    font-weight: 500;
+  }
+
+  /* Touch-optimized scrollable areas */
+  [data-slot="select-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="sheet-content"],
+  [data-slot="dialog-content"] {
+    overscroll-behavior: contain;
+  }
+
+  /* Prevent text selection on interactive elements during touch */
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  a,
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"],
+  [role="menuitem"],
+  [role="option"],
+  select,
+  summary,
+  [role="combobox"] {
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+}
+
+/* Hide spin buttons for number inputs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ── Touch feedback for interactive elements ────────── */
+/* Scale/opacity on :active only for touch devices (coarse pointer).
+   Mouse users get color/bg transitions but no press-in scale. */
+
+@layer base {
+  button:not(:disabled) {
+    transition:
+      transform 0.12s ease,
+      opacity 0.12s ease,
+      color 0.12s ease,
+      background-color 0.12s ease,
+      border-color 0.12s ease,
+      box-shadow 0.12s ease;
+  }
+
+  a[href]:not([data-slot="button"]) {
+    transition:
+      transform 0.12s ease,
+      opacity 0.12s ease;
+  }
+
+  /* Clickable cards */
+  [data-slot="card"][role="button"],
+  [data-slot="card"].cursor-pointer {
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  /* Generic role="button" elements */
+  [role="button"]:not(button):not(tr):not([data-slot="card"]):not(
+      [data-slot="checkbox"]
+    ):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not(
+      [data-slot="sidebar-menu-button"]
+    ) {
+    transition:
+      transform 0.12s ease,
+      opacity 0.12s ease;
+  }
+
+  /* Clickable table rows — bg change only, no scale (both touch & mouse) */
+  tr.cursor-pointer,
+  tr:has(> td > a) {
+    transition: background-color 0.1s ease;
+    &:active {
+      background-color: var(--accent) !important;
+    }
+  }
+}
+
+/* ── Mouse click feedback (fine pointer / desktop) ── */
+@media (pointer: fine) {
+  @layer base {
+    button:not(:disabled) {
+      transition:
+        opacity 0.1s ease,
+        color 0.1s ease,
+        background-color 0.1s ease,
+        border-color 0.1s ease;
+      &:active {
+        opacity: 0.85;
+      }
+    }
+
+    a[href]:not([data-slot="button"]) {
+      transition: opacity 0.1s ease;
+      &:active {
+        opacity: 0.75;
+      }
+    }
+  }
+}
+
+/* Touch-only press-in feedback */
+@media (pointer: coarse) {
+  @layer base {
+    button:not(:disabled):active {
+      transform: scale(0.97);
+      opacity: 0.92;
+    }
+
+    a[href]:not([data-slot="button"]):active {
+      transform: scale(0.98);
+      opacity: 0.8;
+    }
+
+    [data-slot="card"][role="button"]:active,
+    [data-slot="card"].cursor-pointer:active {
+      transform: scale(0.985);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    }
+
+    [role="button"]:not(button):not(tr):not([data-slot="card"]):not(
+        [data-slot="checkbox"]
+      ):not([data-slot="switch"]):not([data-slot="radio-group-item"]):not(
+        [data-slot="sidebar-menu-button"]
+      ):active:not(:disabled) {
+      transform: scale(0.97);
+      opacity: 0.9;
+    }
+  }
+}
+
+/* ── CSS Animations ────────────────────────────────── */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out both;
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.2s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out both;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes soak-start {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  40%  { transform: scale(1.03); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.15); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.animate-soak-start {
+  animation: soak-start 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Staggered children — add to parent, children auto-stagger */
+.stagger-children > * {
+  animation: fade-in 0.2s ease-out both;
+}
+.stagger-children > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.stagger-children > *:nth-child(2) {
+  animation-delay: 30ms;
+}
+.stagger-children > *:nth-child(3) {
+  animation-delay: 60ms;
+}
+.stagger-children > *:nth-child(4) {
+  animation-delay: 90ms;
+}
+.stagger-children > *:nth-child(5) {
+  animation-delay: 120ms;
+}
+.stagger-children > *:nth-child(6) {
+  animation-delay: 150ms;
+}
+.stagger-children > *:nth-child(7) {
+  animation-delay: 180ms;
+}
+.stagger-children > *:nth-child(8) {
+  animation-delay: 210ms;
+}
+.stagger-children > *:nth-child(9) {
+  animation-delay: 240ms;
+}
+.stagger-children > *:nth-child(10) {
+  animation-delay: 270ms;
+}
+.stagger-children > *:nth-child(n + 11) {
+  animation-delay: 300ms;
+}
+
+/* Shimmer skeleton effect */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(1 0 260 / 35%),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+/* ── Terminal Template Print ───────────────────────── */
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  body.terminal-printing {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.terminal-printing * {
+    visibility: hidden !important;
+  }
+
+  body.terminal-printing .terminal-print-only,
+  body.terminal-printing .terminal-print-only * {
+    visibility: visible !important;
+  }
+
+  body.terminal-printing .terminal-print-only {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 99999 !important;
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* ── Sheet container ── */
+  body.terminal-printing .terminal-qc-print-sheet {
+    width: 194mm;
+    min-height: 276mm;
+    margin: 0 auto;
+    padding: 4mm;
+    border: 0.7mm solid #000;
+    border-radius: 0;
+    box-sizing: border-box;
+    background: #fff;
+    font-family: "Montserrat", "Cairo", "Arial", sans-serif;
+    color: #000;
+  }
+
+  /* ── Header ── */
+  body.terminal-printing .terminal-qc-print-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: stretch;
+    gap: 0;
+    margin-bottom: 3mm;
+    border: 0.5mm solid #000;
+    border-radius: 1mm;
+    overflow: hidden;
+  }
+
+  body.terminal-printing .terminal-qc-print-id-block {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.5mm;
+    border-right: 0.5mm solid #000;
+    padding: 1.5mm 2mm;
+    min-width: 32mm;
+    background: #fff;
+  }
+
+  body.terminal-printing .terminal-qc-print-id-label {
+    font-size: 2mm;
+    font-weight: 900;
+    letter-spacing: 0.35mm;
+    text-transform: uppercase;
+    color: #000;
+  }
+
+  body.terminal-printing .terminal-qc-print-id-value {
+    font-size: 5.5mm;
+    font-weight: 900;
+    letter-spacing: 0.1mm;
+    line-height: 1;
+    color: #000;
+  }
+
+  body.terminal-printing .terminal-qc-print-id-meta {
+    font-size: 1.9mm;
+    font-weight: 800;
+    letter-spacing: 0.2mm;
+    text-transform: uppercase;
+    line-height: 1.2;
+    color: #000;
+    margin-top: 0.3mm;
+  }
+
+  body.terminal-printing .terminal-qc-print-customer {
+    padding: 1.5mm 2mm;
+    font-size: 3mm;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  body.terminal-printing .terminal-qc-print-customer p {
+    margin: 0;
+    color: #000;
+  }
+
+  body.terminal-printing .terminal-qc-print-customer span {
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 2mm;
+    letter-spacing: 0.2mm;
+    margin-right: 0.8mm;
+  }
+
+  body.terminal-printing .terminal-qc-print-brand {
+    border-left: 0.5mm solid #000;
+    padding: 1.5mm 3mm;
+    font-size: 3.2mm;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.4mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000;
+  }
+
+  body.terminal-printing .terminal-qc-print-brand-logo {
+    height: 7mm;
+    width: auto;
+    object-fit: contain;
+  }
+
+  /* ── Body: template + style panel ── */
+  body.terminal-printing .terminal-qc-print-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 3mm;
+  }
+
+  body.terminal-printing .terminal-qc-template-frame {
+    position: relative;
+    width: 114mm;
+    outline: 0.5mm solid #000;
+    border-radius: 0;
+    background: #fff;
+    flex-shrink: 0;
+  }
+
+  body.terminal-printing .terminal-qc-template-frame-inner {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 793.76001 / 1122.5601;
+    overflow: hidden;
+  }
+
+  body.terminal-printing .terminal-qc-template-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: grayscale(1) contrast(1.1);
+  }
+
+  body.terminal-printing .terminal-qc-measure-cell {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0.35mm solid #000;
+    border-radius: 0;
+    background: #fff;
+    font-size: 2.7mm;
+    font-weight: 900;
+    line-height: 1;
+    text-align: center;
+    color: #000;
+  }
+
+  body.terminal-printing .terminal-qc-measure-cell-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    letter-spacing: 0.04mm;
+  }
+
+  /* Alteration fault tints — match shop feedback DIFFERENCE_REASONS palette. */
+  body.terminal-printing .terminal-qc-measure-cell-reason-customer {
+    background: #d1fae5;
+    border-color: #10b981;
+    color: #064e3b;
+  }
+  body.terminal-printing .terminal-qc-measure-cell-reason-workshop {
+    background: #fee2e2;
+    border-color: #ef4444;
+    color: #7f1d1d;
+  }
+  body.terminal-printing .terminal-qc-measure-cell-reason-shop {
+    background: #e4e4e7;
+    border-color: #71717a;
+    color: #18181b;
+  }
+
+  /* Workshop correction or last-QC-fail mismatch — flag in red so the worker
+     spots cells that need fixing at a glance. */
+  body.terminal-printing .terminal-qc-measure-cell-issue {
+    background: #fee2e2;
+    border-color: #ef4444;
+    color: #7f1d1d;
+  }
+
+  /* When showing both expected and qc-measured value, stack vertically. */
+  body.terminal-printing .terminal-qc-measure-cell-stacked {
+    flex-direction: column;
+    gap: 0.2mm;
+  }
+
+  body.terminal-printing .terminal-qc-measure-cell-actual {
+    color: #b91c1c;
+    font-size: 1.8mm;
+    line-height: 1;
+  }
+
+  /* ── Style panel ── */
+  body.terminal-printing .terminal-qc-style-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5mm;
+    min-width: 0;
+  }
+
+  body.terminal-printing .terminal-qc-style-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    border: 0.5mm solid #000;
+    border-radius: 0;
+    overflow: hidden;
+  }
+
+  body.terminal-printing .terminal-qc-style-meta span {
+    text-align: center;
+    font-size: 2.6mm;
+    font-weight: 900;
+    padding: 1.2mm 0.8mm;
+    text-transform: uppercase;
+    letter-spacing: 0.15mm;
+    color: #000;
+    border-right: 0.5mm solid #000;
+  }
+
+  body.terminal-printing .terminal-qc-style-meta span:last-child {
+    border-right: none;
+  }
+
+  body.terminal-printing .terminal-qc-style-block {
+    border: 0.4mm solid #000;
+    border-radius: 0;
+    padding: 1mm 1.2mm;
+  }
+
+  body.terminal-printing .terminal-qc-style-block h4 {
+    margin: 0;
+    font-size: 2mm;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.3mm;
+    color: #000;
+  }
+
+  body.terminal-printing .terminal-qc-style-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5mm;
+    margin-bottom: 0.8mm;
+    border-bottom: 0.3mm solid #000;
+    padding-bottom: 0.5mm;
+  }
+
+  body.terminal-printing .terminal-qc-thickness-badge {
+    display: inline-flex;
+    align-items: center;
+    border: 0.3mm solid #000;
+    border-radius: 999px;
+    padding: 0.3mm 1.4mm;
+    font-size: 1.8mm;
+    font-weight: 900;
+    letter-spacing: 0.18mm;
+    text-transform: uppercase;
+    color: #000;
+    background: #fff;
+  }
+
+  body.terminal-printing .terminal-qc-measure-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8mm;
+    padding-top: 0.4mm;
+  }
+
+  body.terminal-printing .terminal-qc-measure-row {
+    display: grid;
+    grid-template-columns: 20mm auto;
+    gap: 1.5mm;
+    align-items: flex-start;
+  }
+
+  body.terminal-printing .terminal-qc-style-image,
+  body.terminal-printing .terminal-qc-style-placeholder {
+    width: 100%;
+    height: 14mm;
+    border: 0.3mm solid #555;
+    border-radius: 0;
+    object-fit: contain;
+    background: #fff;
+    filter: grayscale(1) contrast(1.1);
+  }
+
+  body.terminal-printing .terminal-qc-style-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2mm;
+    font-weight: 700;
+    color: #555;
+    letter-spacing: 0.1mm;
+    filter: none;
+  }
+
+  body.terminal-printing .terminal-qc-height-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 7mm;
+    height: 14mm;
+    border: 0.3mm solid #000;
+    background: #fff;
+    color: #000;
+    font-size: 2.6mm;
+    font-weight: 900;
+  }
+
+  body.terminal-printing .terminal-qc-height-box-text {
+    display: inline-block;
+    transform: rotate(90deg);
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  body.terminal-printing .terminal-qc-width-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20mm;
+    padding: 0.8mm 1.2mm;
+    border: 0.3mm solid #000;
+    background: #fff;
+    color: #000;
+    font-size: 2.6mm;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  body.terminal-printing .terminal-qc-jabzour-secondary {
+    display: block;
+    margin-top: 0.8mm;
+    width: 20mm;
+    height: 10mm;
+    border: 0.3mm solid #555;
+    object-fit: contain;
+    background: #fff;
+    filter: grayscale(1) contrast(1.1);
+  }
+
+  body.terminal-printing .terminal-qc-cuffs-image-wrap {
+    width: 20mm;
+    padding-top: 0.4mm;
+  }
+
+  body.terminal-printing .terminal-qc-accessories-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 1mm;
+    margin-top: 0.8mm;
+  }
+
+  body.terminal-printing .terminal-qc-accessory-rotate {
+    transform: rotate(-90deg);
+  }
+
+  body.terminal-printing .terminal-qc-accessories-row span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8mm;
+    font-size: 2mm;
+    font-weight: 700;
+    border: 0.3mm solid #000;
+    border-radius: 999px;
+    padding: 0.4mm 1.2mm;
+    background: #fff;
+    color: #000;
+  }
+
+  body.terminal-printing .terminal-qc-accessories-row img {
+    width: 3.4mm;
+    height: 3.4mm;
+    object-fit: contain;
+    filter: grayscale(1) contrast(1.2);
+  }
+
+  /* Extras — secondary measurements like Pocket Dist, 2nd Bottom Dist, Basma. */
+  body.terminal-printing .terminal-qc-extras-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1mm;
+    margin-top: 0.8mm;
+  }
+
+  body.terminal-printing .terminal-qc-extra-row {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1mm;
+    border: 0.3mm solid #000;
+    background: #fff;
+    padding: 0.4mm 1.4mm;
+    font-size: 2.2mm;
+    color: #000;
+  }
+
+  body.terminal-printing .terminal-qc-extra-row-label {
+    font-size: 1.6mm;
+    font-weight: 900;
+    letter-spacing: 0.15mm;
+    text-transform: uppercase;
+  }
+
+  body.terminal-printing .terminal-qc-extra-row-value {
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Notes ── */
+  body.terminal-printing .terminal-qc-print-notes {
+    margin-top: 3mm;
+    border-top: 0.4mm solid #000;
+    padding-top: 1.5mm;
+    font-size: 2.8mm;
+    font-weight: 500;
+    line-height: 1.4;
+    color: #000;
+  }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-slide-in-left,
+  .animate-scale-in,
+  .animate-slide-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .stagger-children > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .skeleton-shimmer::after {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
