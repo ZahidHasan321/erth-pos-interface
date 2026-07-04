@@ -2,10 +2,11 @@
  * Home-based brand delivery + brand-attributed consumption (SPEC §1/§4/§5).
  *
  * Home-based brands (SAKKBA/QASS) have no cashier; a whole order is handed over
- * on the Delivery page via deliver_order. These tests drive a real no-brova
- * final lifecycle to ready_for_pickup (the same spine the shop uses) and assert
- * deliver_order's contract: whole-order, all-or-nothing, idempotent, and that
- * fabric consumption is stamped with the consuming brand.
+ * on the Delivery page via deliver_order. These tests drive real lifecycles to a
+ * deliverable state (a no-brova final spine, and a brova order tried + accepted
+ * at the shop) and assert deliver_order's contract: whole-order, all-or-nothing,
+ * idempotent, an accepted brova (brova_trialed) is deliverable while an untried
+ * one is not, and fabric consumption is stamped with the consuming brand.
  *
  * Runs under `pnpm test:workflow` (Docker postgres via global-setup).
  */
@@ -77,6 +78,87 @@ describe("home-based brand delivery (SPEC §1/§5)", () => {
       expect(row.r.status).toBe("noop");
       const gs = await wf.getGarments(tx, orderId);
       expect(gs.every((g) => g.piece_stage === "completed")).toBe(true);
+    });
+  });
+});
+
+/**
+ * Drive a home-brand-style order [brova, final] to the point where the brova is
+ * back at the shop awaiting its trial (finals still parked). home_delivery is
+ * forced, as an actual home brand does.
+ */
+async function toBrovaAwaitingTrial(tx: Tx) {
+  const { orderId } = await wf.createWorkOrder(tx, [
+    { garment_type: "brova" as const },
+    { garment_type: "final" as const },
+  ]);
+  await tx`UPDATE garments SET home_delivery = true WHERE order_id = ${orderId}`;
+  const gs = await wf.getGarments(tx, orderId);
+  const brovaId = gs.find((g) => g.garment_type === "brova")!.id;
+  const finalIds = gs.filter((g) => g.garment_type === "final").map((g) => g.id);
+
+  await wf.dispatchOrder(tx, orderId, [brovaId]);
+  await wf.workshopReceive(tx, [brovaId], { start: true });
+  await wf.runProduction(tx, [brovaId]);
+  await wf.submitQc(tx, brovaId, { pass: true });
+  await wf.workshopDispatch(tx, [brovaId]);
+  await wf.shopReceive(tx, [brovaId]); // brova -> awaiting_trial
+  return { orderId, brovaId, finalIds };
+}
+
+/** Continue from an awaiting-trial brova: accept it at the shop, then produce
+ *  the released finals through to ready_for_pickup. */
+async function acceptAndFinishFinals(tx: Tx, orderId: number, finalIds: string[]) {
+  const brovaId = (await wf.getGarments(tx, orderId)).find(
+    (g) => g.garment_type === "brova",
+  )!.id;
+  await wf.brovaFeedback(tx, orderId, brovaId, "accepted"); // -> brova_trialed, acceptance=true
+  await wf.releaseFinals(tx, orderId); // finals -> waiting_cut
+  await wf.dispatchOrder(tx, orderId, finalIds, { skipCashierProcess: true });
+  await wf.workshopReceive(tx, finalIds, { start: true });
+  await wf.runProduction(tx, finalIds);
+  for (const id of finalIds) await wf.submitQc(tx, id, { pass: true });
+  await wf.workshopDispatch(tx, finalIds);
+  await wf.shopReceive(tx, finalIds); // finals -> ready_for_pickup
+}
+
+describe("home-based brand brova delivery (SPEC §1/§2.5/§5)", () => {
+  it("deliver_order hands over an accepted brova (brova_trialed) together with its finals", async () => {
+    await inRolledBackTx(async (tx) => {
+      const { orderId, finalIds } = await toBrovaAwaitingTrial(tx);
+      await acceptAndFinishFinals(tx, orderId, finalIds);
+
+      const before = await wf.getGarments(tx, orderId);
+      expect(before.find((g) => g.garment_type === "brova")!.piece_stage).toBe("brova_trialed");
+      expect(
+        before.filter((g) => g.garment_type === "final").every((g) => g.piece_stage === "ready_for_pickup"),
+      ).toBe(true);
+
+      await tx`SELECT deliver_order(${orderId})`;
+
+      const gs = await wf.getGarments(tx, orderId);
+      expect(gs.every((g) => g.piece_stage === "completed")).toBe(true);
+      expect(gs.every((g) => g.fulfillment_type === "delivered")).toBe(true);
+      expect((await wf.getOrder(tx, orderId)).order_phase).toBe("completed");
+    });
+  });
+
+  it("deliver_order refuses while the brova is only awaiting_trial: it must be tried at the shop first", async () => {
+    await inRolledBackTx(async (tx) => {
+      const { orderId, brovaId, finalIds } = await toBrovaAwaitingTrial(tx);
+      // Force the finals ready but leave the brova untried -> still not deliverable.
+      await tx`UPDATE garments SET piece_stage='ready_for_pickup', location='shop'
+               WHERE id = ANY(${tx.array(finalIds)}::uuid[])`;
+      expect(
+        (await wf.getGarments(tx, orderId)).find((g) => g.id === brovaId)!.piece_stage,
+      ).toBe("awaiting_trial");
+
+      const err = await tryInSavepoint(tx, (sp) => sp`SELECT deliver_order(${orderId})`);
+      expect(err).not.toBeNull();
+      expect(String((err as { message?: string }).message ?? err)).toMatch(/not yet back at the shop/i);
+      // Nothing handed over.
+      const gs = await wf.getGarments(tx, orderId);
+      expect(gs.some((g) => g.piece_stage === "completed")).toBe(false);
     });
   });
 });

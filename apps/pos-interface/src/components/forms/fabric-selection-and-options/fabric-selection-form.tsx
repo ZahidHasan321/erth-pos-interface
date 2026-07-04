@@ -313,11 +313,12 @@ export function FabricSelectionForm({
             let totalStitchingCharge = 0;
             let totalStyleCharge = 0;
 
-            // Home-based brands never create brova (finals only, SPEC §1) — force
-            // final + home delivery at save so a stray default can't slip a trial
-            // garment or a pickup through.
+            // Home-based brands run the same brova trial lifecycle as the showroom
+            // (SPEC §1/§2.5: brova tried at the shop, only finals delivered) — they
+            // differ only in that fulfillment is always home delivery, so force
+            // home_delivery at save while leaving the garment type as chosen.
             const homeBased = isHomeBasedBrand(getBrand());
-            const hasBrova = !homeBased && data.garments.some(g => g.garment_type === 'brova');
+            const hasBrova = data.garments.some(g => g.garment_type === 'brova');
 
             const garmentsToSave = data.garments.map((garment) => {
                 const stitchingSnapshot = stitchingPrice;
@@ -345,7 +346,6 @@ export function FabricSelectionForm({
 
                 return mapFormValuesToGarment({
                     ...garment,
-                    garment_type: homeBased ? 'final' : garment.garment_type,
                     piece_stage: pieceStage,
                     location: location,
                     trip_number: tripNumber
@@ -595,12 +595,9 @@ export function FabricSelectionForm({
     }
 
     const isFormDisabled = (isSaved && !isEditing) || !orderId || isOrderClosed;
-    // Home-based brands have no brova (SPEC §1): drop the Brova column entirely.
-    const fabricColumns = isHomeBasedBrand(getBrand())
-        ? fabricSelectionColumns.filter(
-              (c) => (c as { accessorKey?: string }).accessorKey !== "garment_type",
-          )
-        : fabricSelectionColumns;
+    // Brova is available for every brand (SPEC §1/§2.5): home brands run the same
+    // brova trial, they just deliver the finals instead of handing them over.
+    const fabricColumns = fabricSelectionColumns;
 
     const copyFabricToAll = () => {
         const garments = form.getValues("garments");

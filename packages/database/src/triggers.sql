@@ -8497,10 +8497,16 @@ BEGIN
     RAISE EXCEPTION 'Order % not found', p_order_id;
   END IF;
 
+  -- Deliverable = back at the shop and either a finished final (ready_for_pickup)
+  -- or an already-accepted brova (brova_trialed + acceptance_status). A brova that
+  -- is only awaiting_trial, or one rejected back to the workshop, is NOT
+  -- deliverable: the brova must be tried at the shop and accepted first (SPEC §2.5).
   SELECT
     count(*) FILTER (WHERE piece_stage NOT IN ('completed','discarded')),
     count(*) FILTER (WHERE piece_stage NOT IN ('completed','discarded')
-                     AND location = 'shop' AND piece_stage = 'ready_for_pickup')
+                     AND location = 'shop'
+                     AND (piece_stage = 'ready_for_pickup'
+                          OR (piece_stage = 'brova_trialed' AND acceptance_status IS TRUE)))
   INTO v_total, v_ready
   FROM garments
   WHERE order_id = p_order_id;
@@ -8520,7 +8526,8 @@ BEGIN
   FROM garments
   WHERE order_id = p_order_id
     AND location = 'shop'
-    AND piece_stage = 'ready_for_pickup';
+    AND (piece_stage = 'ready_for_pickup'
+         OR (piece_stage = 'brova_trialed' AND acceptance_status IS TRUE));
 
   RETURN collect_garments(p_order_id, v_ids, NULL);
 END;
@@ -8528,7 +8535,8 @@ $$ LANGUAGE plpgsql;
 
 -- List a home-based brand's WORK orders for the Delivery page. p_status:
 --   'ready'     -> confirmed, not yet completed, and EVERY non-terminal garment
---                  is back at the shop ready_for_pickup (deliverable now).
+--                  is deliverable now: a finished final (ready_for_pickup) or an
+--                  accepted brova tried at the shop (brova_trialed + acceptance).
 --   'delivered' -> already handed over (order_phase = completed), newest first.
 -- Read-only; SECURITY INVOKER so RLS fences the brand, plus an explicit filter.
 CREATE OR REPLACE FUNCTION get_delivery_orders(
@@ -8541,8 +8549,11 @@ RETURNS JSONB AS $$
       order_id,
       count(*) AS total_garments,
       count(*) FILTER (WHERE piece_stage NOT IN ('completed','discarded')) AS active_garments,
+      -- Deliverable now: a finished final, or an accepted (tried) brova at the shop.
       count(*) FILTER (WHERE piece_stage NOT IN ('completed','discarded')
-                       AND location = 'shop' AND piece_stage = 'ready_for_pickup') AS ready_garments,
+                       AND location = 'shop'
+                       AND (piece_stage = 'ready_for_pickup'
+                            OR (piece_stage = 'brova_trialed' AND acceptance_status IS TRUE))) AS ready_garments,
       min(delivery_date) AS delivery_date,
       max(collected_at)  AS last_delivered_at
     FROM garments
