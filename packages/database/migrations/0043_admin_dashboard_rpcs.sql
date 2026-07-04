@@ -207,9 +207,12 @@ BEGIN
     'terminal_timing', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
                'stage', stage,
-               'avg_seconds', ROUND(AVG(secs)::numeric, 0),
-               'piece_count', COUNT(*)) ORDER BY stage)
-      FROM timing GROUP BY stage
+               'avg_seconds', avg_seconds,
+               'piece_count', piece_count) ORDER BY stage)
+      FROM (
+        SELECT stage, ROUND(AVG(secs)::numeric, 0) AS avg_seconds, COUNT(*) AS piece_count
+        FROM timing GROUP BY stage
+      ) t
     ), '[]'::jsonb),
     'fabric_by_brand', get_consumption_by_brand(p_from, p_to, 'fabric', 'shop'),
     'top_customers', COALESCE((
@@ -313,24 +316,25 @@ BEGIN
        OR (order_date, id) < (v_cur_date, v_cur_id)
     ORDER BY order_date DESC, id DESC
     LIMIT v_size + 1
+  ),
+  numbered AS (
+    SELECT p.*, row_number() OVER (ORDER BY order_date DESC, id DESC) AS rn FROM page p
   )
   SELECT
-    COALESCE(jsonb_agg(row_to_json(pg)) FILTER (WHERE rn <= v_size), '[]'::jsonb),
+    COALESCE(jsonb_agg(row_to_json(numbered) ORDER BY rn) FILTER (WHERE rn <= v_size), '[]'::jsonb),
     (SELECT to_jsonb(x) FROM (
        SELECT order_date, id FROM page ORDER BY order_date DESC, id DESC OFFSET v_size LIMIT 1
-     ) x)
-  INTO v_rows, v_next
-  FROM (SELECT p.*, row_number() OVER (ORDER BY order_date DESC, id DESC) AS rn FROM page p) pg;
-
-  -- stats only on the first page (full-scan cost paid once, not per page).
-  IF p_cursor IS NULL THEN
-    SELECT jsonb_build_object(
-      'total_orders', COUNT(*),
-      'total_value',  COALESCE(SUM(order_total::numeric), 0),
-      'total_outstanding', COALESCE(SUM(GREATEST(order_total::numeric - COALESCE(paid::numeric, 0), 0)), 0)
-    ) INTO v_stats
-    FROM filtered;
-  END IF;
+     ) x),
+    -- stats only on the first page (full-scan cost paid once, not per page).
+    CASE WHEN p_cursor IS NULL THEN (
+      SELECT jsonb_build_object(
+        'total_orders', COUNT(*),
+        'total_value',  COALESCE(SUM(order_total::numeric), 0),
+        'total_outstanding', COALESCE(SUM(GREATEST(order_total::numeric - COALESCE(paid::numeric, 0), 0)), 0)
+      ) FROM filtered
+    ) ELSE NULL END
+  INTO v_rows, v_next, v_stats
+  FROM numbered;
 
   RETURN jsonb_build_object(
     'data', v_rows,

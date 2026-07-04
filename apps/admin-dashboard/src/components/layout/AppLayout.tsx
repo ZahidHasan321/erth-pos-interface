@@ -1,12 +1,15 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { LayoutDashboard, Table2, LogOut, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Table2, Shirt, Boxes, Users, LogOut, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/auth";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/orders", label: "Explorer", icon: Table2 },
+  { to: "/orders", label: "Orders", icon: Table2 },
+  { to: "/garments", label: "Garments", icon: Shirt },
+  { to: "/inventory", label: "Inventory", icon: Boxes },
+  { to: "/people", label: "People", icon: Users },
 ] as const;
 
 export function AppLayout({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {
