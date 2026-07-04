@@ -88,17 +88,24 @@ function StyleImage({
   image,
   alt,
   fallback,
+  rotate,
 }: {
   image: string | null | undefined;
   alt: string;
   fallback: string;
+  /** Rotate the artwork 90 clockwise (open side on top). Uses a square box so
+   * object-contain refits the rotated image without overflowing. */
+  rotate?: boolean;
 }) {
   if (image) {
     return (
       <img
         src={image}
         alt={alt}
-        className="h-14 w-full rounded-md border border-border bg-card object-contain"
+        className={cn(
+          "h-14 rounded-md border border-border bg-card object-contain",
+          rotate ? "w-14 mx-auto rotate-90" : "w-full",
+        )}
       />
     );
   }
@@ -135,6 +142,7 @@ function MeasureLayout({
   image,
   imageAlt,
   imageFallback,
+  rotateImage,
   height,
   heightLabel,
   heightTintClass,
@@ -147,6 +155,7 @@ function MeasureLayout({
   image: string | null | undefined;
   imageAlt: string;
   imageFallback: string;
+  rotateImage?: boolean;
   height: React.ReactNode;
   heightLabel?: string;
   /** Tailwind class string applied to the height value box. Empty = default white. */
@@ -171,7 +180,7 @@ function MeasureLayout({
         <div className="space-y-1.5 shrink-0">
           <div className="flex items-stretch gap-1.5">
             <div className="w-20 shrink-0">
-              <StyleImage image={image} alt={imageAlt} fallback={imageFallback} />
+              <StyleImage image={image} alt={imageAlt} fallback={imageFallback} rotate={rotateImage} />
             </div>
             <HoverValueBox
               label={heightLabel}
@@ -722,6 +731,7 @@ export function DishdashaOverlay({
                 image={jabzourMain?.image}
                 imageAlt={jabzourMain?.label ?? "Jabzour"}
                 imageFallback="JAB"
+                rotateImage
                 height={measureVal("jabzour_width")}
                 heightLabel={qcLabel("jabzour_width")}
                 heightTintClass={tintForKey("jabzour_width")}

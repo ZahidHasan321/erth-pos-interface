@@ -19,6 +19,7 @@ import {
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
 import { HISTORY_KEY_MAP, GarmentHeader } from "@/components/shared/GarmentDetailSections";
 import { DishdashaOverlay } from "@/components/shared/DishdashaOverlay";
+import { BrandBadge } from "@/components/shared/StageBadge";
 import { TerminalQualityTemplatePrint } from "@/components/print/TerminalQualityTemplatePrint";
 import { QualityCheckForm } from "@/components/terminals/QualityCheckForm";
 import { StatusBanner } from "@/components/shared/PageShell";
@@ -182,6 +183,7 @@ function TerminalGarmentPage() {
 
         {!isQC && (
           <div className="mb-3 flex items-center gap-2.5 flex-wrap rounded-md border bg-card px-3 py-2">
+            <BrandBadge brand={garment.order_brand} />
             <span className={cn(
               "text-xs font-medium capitalize px-2 py-0.5 rounded-md border border-transparent shrink-0",
               garment.garment_type === "brova"
