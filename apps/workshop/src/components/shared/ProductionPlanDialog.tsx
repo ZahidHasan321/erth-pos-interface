@@ -287,20 +287,6 @@ export function ProductionPlanDialog(props: ProductionPlanDialogProps) {
             </p>
           )}
 
-          {/* Rework context */}
-          {isRework && (
-            <ReworkContextBanner
-              feedbackStatus={reworkProps?.feedbackStatus}
-              tripNumber={reworkProps?.tripNumber}
-              feedbackNotes={priorFeedback?.notes ?? reworkProps?.feedbackNotes}
-              measurementDiffs={measurementDiffs}
-              optionsChecklist={optionsChecklist}
-              photoUrls={photoUrls}
-              voiceNoteUrls={voiceNoteUrls}
-              tripHistory={reworkProps?.tripHistory}
-            />
-          )}
-
           {/* Dates */}
           <div className={cn("grid gap-3", showDeliveryDate ? "grid-cols-2" : "grid-cols-1")}>
             <div className="space-y-1">
@@ -347,6 +333,23 @@ export function ProductionPlanDialog(props: ProductionPlanDialogProps) {
             </span>
           </div>
         </div>
+
+        {/* Rework context — in normal scroll flow (not the sticky header) so a
+            tall banner scrolls away and never hides the stage list below. */}
+        {isRework && (
+          <div className="px-4 pt-3">
+            <ReworkContextBanner
+              feedbackStatus={reworkProps?.feedbackStatus}
+              tripNumber={reworkProps?.tripNumber}
+              feedbackNotes={priorFeedback?.notes ?? reworkProps?.feedbackNotes}
+              measurementDiffs={measurementDiffs}
+              optionsChecklist={optionsChecklist}
+              photoUrls={photoUrls}
+              voiceNoteUrls={voiceNoteUrls}
+              tripHistory={reworkProps?.tripHistory}
+            />
+          </div>
+        )}
 
         {/* Stage list */}
         <div className="px-4 py-3 space-y-1.5">

@@ -855,15 +855,6 @@ export function DishdashaOverlay({
                 <p className="text-xs text-foreground whitespace-pre-wrap leading-snug">{notes}</p>
               </div>
             )}
-
-            {m?.notes && (
-              <div className="col-span-2 rounded-md border border-[color:var(--status-warn)]/30 bg-[var(--status-warn-bg)] p-2">
-                <h4 className="text-xs font-medium text-[var(--status-warn)] mb-1">
-                  Notes for Workshop
-                </h4>
-                <p className="text-xs text-foreground whitespace-pre-wrap leading-snug">{m.notes}</p>
-              </div>
-            )}
           </div>
         </div>
     </div>
