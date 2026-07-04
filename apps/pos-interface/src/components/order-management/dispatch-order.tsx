@@ -29,6 +29,7 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 // API and Types
 import { getOrdersForDispatch, dispatchOrder, getInTransitToWorkshopOrders, getDispatchHistory, getBrand, type DispatchHistoryRow } from "@/api/orders";
 import { getGarmentsForRedispatch, dispatchGarmentToWorkshop, resumeRedoReplacement } from "@/api/garments";
+import { runUndoable, showUndoToast } from "@/lib/undo";
 import type { Order, Customer, Garment } from "@repo/database";
 import { isMeasurementFlagged } from "@repo/database";
 import type { ApiResponse } from "@/types/api";
@@ -371,8 +372,16 @@ function ReturnToWorkshopTab({
   const handleDispatchGarment = async (garment: RedispatchGarment) => {
     setDispatchingIds(prev => new Set(prev).add(garment.id));
     try {
-      await dispatchGarmentToWorkshop(garment.id);
+      const token = await runUndoable('dispatch_to_workshop', [garment.id], async () => {
+        const res = await dispatchGarmentToWorkshop(garment.id);
+        if (res.status === "error") throw new Error(res.message);
+      });
       await queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
+      showUndoToast(
+        `Garment ${garment.garment_id || garment.id.slice(0, 8)} dispatched to workshop`,
+        token,
+        () => queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] }),
+      );
     } catch (err) {
       toast.error(`Could not dispatch garment ${garment.garment_id || garment.id}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -388,10 +397,18 @@ function ReturnToWorkshopTab({
     if (garments.length === 0 || isBulkDispatching) return;
     setIsBulkDispatching(true);
     try {
-      await Promise.all(
-        garments.map(g => dispatchGarmentToWorkshop(g.id))
-      );
+      const ids = garments.map(g => g.id);
+      const token = await runUndoable('dispatch_to_workshop', ids, async () => {
+        const results = await Promise.all(garments.map(g => dispatchGarmentToWorkshop(g.id)));
+        const failed = results.find(r => r.status === "error");
+        if (failed) throw new Error(failed.message);
+      });
       await queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] });
+      showUndoToast(
+        `${ids.length} garment${ids.length > 1 ? "s" : ""} dispatched to workshop`,
+        token,
+        () => queryClient.invalidateQueries({ queryKey: ["redispatchGarments"] }),
+      );
     } catch (err) {
       toast.error(`Bulk dispatch failed for some garments: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -1174,10 +1191,23 @@ export default function DispatchOrderPage() {
   const handleDispatch = async (orderId: number, garmentIds?: string[]) => {
     setUpdatingOrderIds((prev) => new Set(prev).add(orderId));
     try {
-      await dispatchOrder(orderId, garmentIds);
+      // Snapshot the garments this dispatch will actually move. When no explicit
+      // subset is passed, dispatch_order moves the order's first-trip garments —
+      // the ones surfaced in the dispatch list (all trip_number = 0 here).
+      const order = orders.find((o) => o.id === orderId);
+      const ids = garmentIds ?? (order?.garments?.map((g) => g.id) ?? []);
+      const token = await runUndoable('dispatch_to_workshop', ids, async () => {
+        const res = await dispatchOrder(orderId, garmentIds);
+        if (res.status === "error") throw new Error(res.message);
+      });
       await queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
       await queryClient.invalidateQueries({ queryKey: ["inTransitToWorkshop"] });
       await queryClient.invalidateQueries({ queryKey: ["dispatchHistory"] });
+      showUndoToast(`Order #${orderId} dispatched to workshop`, token, () => {
+        queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+        queryClient.invalidateQueries({ queryKey: ["inTransitToWorkshop"] });
+        queryClient.invalidateQueries({ queryKey: ["dispatchHistory"] });
+      });
     } catch (err) {
       console.error("Failed to dispatch order:", err);
       toast.error(`Could not dispatch Order #${orderId}: ${err instanceof Error ? err.message : String(err)}`);

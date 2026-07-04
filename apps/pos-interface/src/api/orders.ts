@@ -310,6 +310,7 @@ export const getDispatchHistory = async (
                 customers(name, phone)
             )
         `)
+        .is('undone_at', null)
         .gte('dispatched_at', fromIso)
         .lt('dispatched_at', toIso)
         .eq('orders.brand', getBrand())

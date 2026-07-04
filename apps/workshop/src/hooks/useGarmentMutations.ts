@@ -7,6 +7,7 @@ import {
   sendToScheduler,
   sendReturnToProduction,
   scheduleGarments,
+  getScheduleSiblingFinalIds,
   startGarment,
   cancelStartGarment,
   completeAndAdvance,
@@ -32,6 +33,7 @@ import {
   COMPLETED_VIEW_KEY,
 } from './useWorkshopGarments';
 import { SIDEBAR_COUNTS_KEY } from './useSidebarCounts';
+import { runUndoable, showUndoToast } from '@/lib/undo';
 import type { WorkshopGarment, Location } from '@repo/database';
 import type { PieceStage, QcDefectAttribution } from '@repo/database';
 import type { QcInputs } from '@/lib/qc-spec';
@@ -95,13 +97,13 @@ function useMut<TArgs>(fn: (args: TArgs) => Promise<void>, errorLabel?: string) 
 export function useReceiveGarments() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (ids: string[]) => receiveGarments(ids),
+    mutationFn: (ids: string[]) => runUndoable('receive_at_workshop', ids, () => receiveGarments(ids)),
     onMutate: (ids) => optimisticPatch(qc, ids, {
       location: 'workshop' as Location,
       in_production: false,
     }),
-    onSuccess: (_data, ids) => {
-      toast.success(`${ids.length} garment${ids.length > 1 ? 's' : ''} received`);
+    onSuccess: (token, ids) => {
+      showUndoToast(`${ids.length} garment${ids.length > 1 ? 's' : ''} received`, token, () => invalidateAll(qc));
     },
     onError: (err, _ids, rollback) => {
       rollback?.();
@@ -114,13 +116,13 @@ export function useReceiveGarments() {
 export function useReceiveAndStart() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (ids: string[]) => receiveAndStartGarments(ids),
+    mutationFn: (ids: string[]) => runUndoable('receive_at_workshop', ids, () => receiveAndStartGarments(ids)),
     onMutate: (ids) => optimisticPatch(qc, ids, {
       location: 'workshop' as Location,
       in_production: true,
     }),
-    onSuccess: (_data, ids) => {
-      toast.success(`${ids.length} garment${ids.length > 1 ? 's' : ''} received & started`);
+    onSuccess: (token, ids) => {
+      showUndoToast(`${ids.length} garment${ids.length > 1 ? 's' : ''} received & started`, token, () => invalidateAll(qc));
     },
     onError: (err, _ids, rollback) => {
       rollback?.();
@@ -151,10 +153,10 @@ export function useMarkLostInTransit() {
 export function useSendToScheduler() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (ids: string[]) => sendToScheduler(ids),
+    mutationFn: (ids: string[]) => runUndoable('send_to_scheduler', ids, () => sendToScheduler(ids)),
     onMutate: (ids) => optimisticPatch(qc, ids, { in_production: true }),
-    onSuccess: (_data, ids) => {
-      toast.success(`${ids.length} garment${ids.length > 1 ? 's' : ''} sent to scheduler`);
+    onSuccess: (token, ids) => {
+      showUndoToast(`${ids.length} garment${ids.length > 1 ? 's' : ''} sent to scheduler`, token, () => invalidateAll(qc));
     },
     onError: (err, _ids, rollback) => {
       rollback?.();
@@ -195,8 +197,15 @@ export function useScheduleGarments() {
       plan: Record<string, string>;
       date: string;
       reentryStage?: PieceStage;
-    }) =>
-      scheduleGarments(args.ids, args.plan, args.date, undefined, args.reentryStage),
+    }) => (async () => {
+      // A first-time schedule also stamps the plan onto the order's parked
+      // waiting_for_acceptance finals; include them in the undo snapshot so an
+      // undo restores their plan too (a re-entry schedule touches no siblings).
+      const siblingIds = args.reentryStage ? [] : await getScheduleSiblingFinalIds(args.ids);
+      const undoIds = [...args.ids, ...siblingIds];
+      return runUndoable('schedule', undoIds, () =>
+        scheduleGarments(args.ids, args.plan, args.date, undefined, args.reentryStage));
+    })(),
     onMutate: (args) => {
       // Scheduled garments get a production_plan and move out of waiting_cut,
       // so they'll no longer match the scheduler filter — optimistically patch them.
@@ -220,8 +229,8 @@ export function useScheduleGarments() {
       }
       return () => { if (prev) qc.setQueryData(WORKSHOP_GARMENTS_KEY, prev); };
     },
-    onSuccess: (_data, args) => {
-      toast.success(`${args.ids.length} garment${args.ids.length > 1 ? 's' : ''} scheduled`);
+    onSuccess: (token, args) => {
+      showUndoToast(`${args.ids.length} garment${args.ids.length > 1 ? 's' : ''} scheduled`, token, () => invalidateAll(qc));
     },
     onError: (err, _args, rollback) => {
       rollback?.();
@@ -267,11 +276,15 @@ export function useCompleteAndAdvance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (args: { id: string; worker: string; stage: string; nextStage: string }) =>
-      completeAndAdvance(args.id, args.worker, args.stage, args.nextStage),
+      runUndoable('advance_stage', [args.id], () =>
+        completeAndAdvance(args.id, args.worker, args.stage, args.nextStage)),
     onMutate: (args) => optimisticPatch(qc, [args.id], {
       piece_stage: args.nextStage as PieceStage,
       start_time: null,
     }),
+    onSuccess: (token) => {
+      showUndoToast('Stage advanced', token, () => invalidateAll(qc));
+    },
     onError: (err, _args, rollback) => {
       rollback?.();
       toast.error(`Failed to advance garment: ${errorMsg(err)}`);
@@ -303,13 +316,13 @@ export function useSubmitQc() {
 export function useDispatchGarments() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (ids: string[]) => dispatchGarments(ids),
+    mutationFn: (ids: string[]) => runUndoable('dispatch_to_shop', ids, () => dispatchGarments(ids)),
     onMutate: (ids) => optimisticPatch(qc, ids, {
       location: 'transit_to_shop' as Location,
       in_production: false,
     }),
-    onSuccess: (_data, ids) => {
-      toast.success(`${ids.length} garment${ids.length > 1 ? 's' : ''} dispatched`);
+    onSuccess: (token, ids) => {
+      showUndoToast(`${ids.length} garment${ids.length > 1 ? 's' : ''} dispatched`, token, () => invalidateAll(qc));
     },
     onError: (err, _ids, rollback) => {
       rollback?.();

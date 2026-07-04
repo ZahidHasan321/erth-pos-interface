@@ -632,6 +632,10 @@ export function ProductionTerminal({
     navigate({
       to: "/terminals/garment/$garmentId",
       params: { garmentId: g.id },
+      // Carry the originating station so the detail page can lock completion to
+      // this stage: a garment that has already advanced past it can't be
+      // completed from here (see TerminalActions station-lock).
+      search: { station: terminalStage },
     });
   };
 

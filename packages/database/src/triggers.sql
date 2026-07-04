@@ -1873,6 +1873,119 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- 11d-2. Reconcile a rejected brova's finals (SPEC §2.5 "Reversing an acceptance
+-- re-parks — or blocks on — the released finals"). When a brova's feedback is
+-- edited from an accepting verdict back to a rejecting one, its acceptance no
+-- longer backs the order's released finals. If NO other brova in the order still
+-- accepts (acceptance_status true or completed), every final is classified under a
+-- FOR UPDATE lock (so a concurrent workshop release cannot slip past between the
+-- check and the flip):
+--   * waiting_for_acceptance          -> already parked, left as-is
+--   * waiting_cut, no production_plan  -> re-parked to waiting_for_acceptance
+--   * waiting_cut WITH a plan (scheduled), or any cutting-or-later stage -> RAISE
+--     (blocks the whole reversal; staff reverse it at the workshop first)
+-- production_plan (a scheduler slot), NOT in_production, is the "scheduled" signal:
+-- the live release (sendToScheduler) sets in_production=true the moment a final is
+-- released, before any slot, so an un-slotted final is still re-parkable. Returns
+-- the ids that were re-parked (empty when another brova still accepts or nothing
+-- had been released yet).
+CREATE OR REPLACE FUNCTION repark_finals_for_rejected_brova(p_brova_id UUID)
+RETURNS UUID[] AS $$
+DECLARE
+  v_order_id INT;
+  v_other_accepts BOOLEAN;
+  v_blocked TEXT[] := ARRAY[]::TEXT[];
+  v_reparked UUID[] := ARRAY[]::UUID[];
+  v_final RECORD;
+BEGIN
+  SELECT order_id INTO v_order_id FROM garments WHERE id = p_brova_id;
+  IF v_order_id IS NULL THEN
+    RAISE EXCEPTION 'repark_finals_for_rejected_brova: brova % not found', p_brova_id;
+  END IF;
+
+  -- Any OTHER brova still backing the release? (Excludes this brova, whose verdict
+  -- the caller is flipping.) Mirrors evaluateBrovaFeedback's "any brova accepted".
+  SELECT EXISTS (
+    SELECT 1 FROM garments
+     WHERE order_id = v_order_id
+       AND garment_type = 'brova'
+       AND id <> p_brova_id
+       AND (acceptance_status = true OR piece_stage = 'completed')
+  ) INTO v_other_accepts;
+
+  IF v_other_accepts THEN
+    RETURN v_reparked;  -- finals belong to the still-accepting brova; leave released
+  END IF;
+
+  FOR v_final IN
+    SELECT id, garment_id, piece_stage, production_plan
+      FROM garments
+     WHERE order_id = v_order_id
+       AND garment_type = 'final'
+       AND piece_stage <> 'discarded'
+     FOR UPDATE
+  LOOP
+    IF v_final.piece_stage = 'waiting_for_acceptance' THEN
+      CONTINUE;  -- already parked
+    ELSIF v_final.piece_stage = 'waiting_cut' AND v_final.production_plan IS NULL THEN
+      v_reparked := v_reparked || v_final.id;
+    ELSE
+      v_blocked := v_blocked || COALESCE(v_final.garment_id, v_final.id::text);
+    END IF;
+  END LOOP;
+
+  IF array_length(v_blocked, 1) IS NOT NULL THEN
+    RAISE EXCEPTION 'Cannot reject this brova: final(s) % are already scheduled or in production at the workshop. Reverse them at the workshop before rejecting this brova.',
+      array_to_string(v_blocked, ', ');
+  END IF;
+
+  IF array_length(v_reparked, 1) IS NOT NULL THEN
+    UPDATE garments
+       SET piece_stage = 'waiting_for_acceptance',
+           in_production = false,
+           production_plan = NULL,
+           assigned_date = NULL
+     WHERE id = ANY(v_reparked);
+  END IF;
+
+  RETURN v_reparked;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 11d-3. RPC: Shop rejects a previously-accepting brova (SPEC §2.5). Reconciles the
+-- released finals (repark/block via the helper above) and, when p_apply_brova, flips
+-- the brova to brova_trialed / acceptance_status=false / p_feedback_status in the
+-- SAME transaction — the atomic guarantee the plain client UPDATE could not give.
+-- p_apply_brova=false is the reconcile-only entry the Reject-Redo path uses (it
+-- discards/replaces the brova through its own RPCs). Returns the re-parked final ids
+-- so the caller can report them.
+CREATE OR REPLACE FUNCTION reject_brova_repark_finals(
+  p_brova_id UUID,
+  p_apply_brova BOOLEAN DEFAULT true,
+  p_feedback_status TEXT DEFAULT 'needs_repair'
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_reparked UUID[];
+BEGIN
+  v_reparked := repark_finals_for_rejected_brova(p_brova_id);
+
+  IF p_apply_brova THEN
+    UPDATE garments
+       SET piece_stage = 'brova_trialed',
+           acceptance_status = false,
+           feedback_status = p_feedback_status
+     WHERE id = p_brova_id
+       AND garment_type = 'brova';
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'reject_brova_repark_finals: brova % not found', p_brova_id;
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object('reparked_ids', to_jsonb(v_reparked));
+END;
+$$ LANGUAGE plpgsql;
+
 -- 11e. RPC: Workshop dispatches finished garments to the shop.
 -- Promoted from apps/workshop/src/api/garments.ts dispatchGarments (:1336).
 -- feedback_status is cleared (the trip's verdict is consumed on dispatch).
@@ -1945,6 +2058,219 @@ BEGIN
     'dispatched', v_trip IS NOT NULL,
     'trip_number', v_trip
   );
+END;
+$$ LANGUAGE plpgsql;
+
+-- 11e-3. Undo window for garment logistics actions (workshop + shop).
+-- Canonical copy of migration 0045_undo_tokens.sql (kept here so a full
+-- triggers re-apply reinstates the RPCs). The undo_tokens TABLE + dispatch_log
+-- .undone_at column live in schema.ts (drizzle push); the migration also
+-- creates them for a live incremental apply. See migration 0045 for the full
+-- rationale. In one line: the client captures a pre-action before-image and,
+-- after the action, calls record_undo_token (which computes the post-action
+-- guard server-side); perform_undo restores the before-image iff the token is
+-- live AND every garment still matches its guard (no downstream progress).
+CREATE OR REPLACE FUNCTION record_undo_token(
+  p_action_type   text,
+  p_entity_ids    uuid[],
+  p_before_image  jsonb,
+  p_window_seconds integer DEFAULT 60,
+  p_created_by    text DEFAULT NULL,
+  p_expected_location text DEFAULT NULL
+)
+RETURNS uuid AS $$
+DECLARE
+  v_guard jsonb;
+  v_id uuid;
+BEGIN
+  IF p_entity_ids IS NULL OR array_length(p_entity_ids, 1) IS NULL THEN
+    RAISE EXCEPTION 'record_undo_token: no entity ids provided';
+  END IF;
+
+  -- Arm-time safety (closes the non-atomic-capture race for location actions):
+  -- record_undo_token is a SEPARATE round-trip from the action, so if the
+  -- counterpart already consumed the garment in the gap (e.g. the shop received
+  -- a just-dispatched garment), the current location no longer matches what the
+  -- action left. Don't arm the token in that case — returning NULL means "no
+  -- Undo offered", never a token that could restore over newer state. Combined
+  -- with the guard re-check in perform_undo, both sub-windows are covered.
+  IF p_expected_location IS NOT NULL
+     AND EXISTS (
+       SELECT 1 FROM garments g
+        WHERE g.id = ANY(p_entity_ids) AND g.location::text <> p_expected_location
+     ) THEN
+    RETURN NULL;
+  END IF;
+
+  -- Guard = the full post-action fingerprint of every column undo restores, so
+  -- ANY intervening change (counterpart move OR an in-place spec/plan edit that
+  -- touches none of the movement columns) closes the window at perform_undo.
+  SELECT jsonb_object_agg(g.id::text, jsonb_build_object(
+    'location',           g.location::text,
+    'piece_stage',        g.piece_stage::text,
+    'in_production',      g.in_production,
+    'start_time',         to_jsonb(g.start_time),
+    'completion_time',    to_jsonb(g.completion_time),
+    'feedback_status',    g.feedback_status,
+    'acceptance_status',  g.acceptance_status,
+    'trip_number',        g.trip_number,
+    'assigned_date',      to_jsonb(g.assigned_date),
+    'production_plan',    g.production_plan,
+    'qc_rework_stages',   to_jsonb(g.qc_rework_stages),
+    'shop_received_date', to_jsonb(g.shop_received_date)
+  ))
+  INTO v_guard
+  FROM garments g
+  WHERE g.id = ANY(p_entity_ids);
+
+  INSERT INTO undo_tokens (action_type, entity_ids, before_image, guard, created_by, expires_at)
+  VALUES (
+    p_action_type,
+    p_entity_ids,
+    p_before_image,
+    COALESCE(v_guard, '{}'::jsonb),
+    p_created_by,
+    now() + make_interval(secs => GREATEST(p_window_seconds, 1))
+  )
+  RETURNING id INTO v_id;
+
+  RETURN v_id;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION perform_undo(p_token_id uuid)
+RETURNS jsonb AS $$
+DECLARE
+  v_token undo_tokens;
+  v_id uuid;
+  v_before jsonb;
+  v_guard jsonb;
+  v_restored integer := 0;
+  v_order integer;
+BEGIN
+  SELECT * INTO v_token FROM undo_tokens WHERE id = p_token_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'perform_undo: undo token not found (it may have already expired and been purged)';
+  END IF;
+  IF v_token.consumed_at IS NOT NULL THEN
+    RAISE EXCEPTION 'perform_undo: this action was already undone';
+  END IF;
+  IF now() > v_token.expires_at THEN
+    RAISE EXCEPTION 'perform_undo: the undo window has expired';
+  END IF;
+
+  -- Gate: every garment must still match the FULL post-action fingerprint. Any
+  -- change since — a counterpart move OR an in-place spec/plan/date edit that
+  -- never touched a movement column — closes the window and the undo is refused.
+  FOREACH v_id IN ARRAY v_token.entity_ids LOOP
+    v_guard := v_token.guard -> v_id::text;
+    PERFORM 1 FROM garments g
+     WHERE g.id = v_id
+       AND g.location::text            IS NOT DISTINCT FROM (v_guard->>'location')
+       AND g.piece_stage::text         IS NOT DISTINCT FROM (v_guard->>'piece_stage')
+       AND g.in_production             IS NOT DISTINCT FROM (v_guard->>'in_production')::boolean
+       AND g.feedback_status           IS NOT DISTINCT FROM (v_guard->>'feedback_status')
+       AND g.acceptance_status         IS NOT DISTINCT FROM (v_guard->>'acceptance_status')::boolean
+       AND g.trip_number               IS NOT DISTINCT FROM (v_guard->>'trip_number')::integer
+       -- NULL-able values: guard stores jsonb 'null' but to_jsonb(NULL) is SQL
+       -- NULL, so coalesce both sides to jsonb 'null' before comparing.
+       AND COALESCE(to_jsonb(g.start_time), 'null'::jsonb)         IS NOT DISTINCT FROM COALESCE(v_guard->'start_time', 'null'::jsonb)
+       AND COALESCE(to_jsonb(g.completion_time), 'null'::jsonb)    IS NOT DISTINCT FROM COALESCE(v_guard->'completion_time', 'null'::jsonb)
+       AND COALESCE(to_jsonb(g.assigned_date), 'null'::jsonb)      IS NOT DISTINCT FROM COALESCE(v_guard->'assigned_date', 'null'::jsonb)
+       AND COALESCE(g.production_plan, 'null'::jsonb)              IS NOT DISTINCT FROM COALESCE(v_guard->'production_plan', 'null'::jsonb)
+       AND COALESCE(to_jsonb(g.qc_rework_stages), 'null'::jsonb)   IS NOT DISTINCT FROM COALESCE(v_guard->'qc_rework_stages', 'null'::jsonb)
+       AND COALESCE(to_jsonb(g.shop_received_date), 'null'::jsonb) IS NOT DISTINCT FROM COALESCE(v_guard->'shop_received_date', 'null'::jsonb);
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'perform_undo: garment % has already moved on (received by the other side, production progressed, or edited since) - cannot undo', v_id;
+    END IF;
+  END LOOP;
+
+  -- Suppress the garment location-change notification for the restore: reverting
+  -- a receive flips location back into transit_* and must NOT re-fire a
+  -- "dispatched" toast to the other side. Transaction-local.
+  PERFORM set_config('app.undo_in_progress', 'on', true);
+
+  FOREACH v_id IN ARRAY v_token.entity_ids LOOP
+    v_before := v_token.before_image -> v_id::text;
+    -- Defensive: a token must carry a before-image for every entity id. If one
+    -- is missing (should be impossible — the guard above matched all ids), skip
+    -- rather than blank the row to NULLs.
+    IF v_before IS NULL THEN
+      CONTINUE;
+    END IF;
+    UPDATE garments SET
+      location         = (v_before->>'location')::location,
+      piece_stage      = (v_before->>'piece_stage')::piece_stage,
+      in_production     = COALESCE((v_before->>'in_production')::boolean, false),
+      feedback_status   = v_before->>'feedback_status',
+      acceptance_status = (v_before->>'acceptance_status')::boolean,
+      trip_number       = (v_before->>'trip_number')::integer,
+      assigned_date     = (v_before->>'assigned_date')::date,
+      start_time        = (v_before->>'start_time')::timestamptz,
+      completion_time   = (v_before->>'completion_time')::timestamptz,
+      shop_received_date = (v_before->>'shop_received_date')::timestamptz,
+      production_plan   = NULLIF(v_before->'production_plan', 'null'::jsonb),
+      worker_history    = NULLIF(v_before->'worker_history', 'null'::jsonb),
+      trip_history      = NULLIF(v_before->'trip_history', 'null'::jsonb),
+      stage_timings     = NULLIF(v_before->'stage_timings', 'null'::jsonb),
+      qc_rework_stages  = CASE
+                            WHEN v_before->'qc_rework_stages' IS NULL
+                              OR jsonb_typeof(v_before->'qc_rework_stages') = 'null'
+                            THEN NULL
+                            ELSE ARRAY(SELECT jsonb_array_elements_text(v_before->'qc_rework_stages'))
+                          END
+    WHERE id = v_id;
+    v_restored := v_restored + 1;
+  END LOOP;
+
+  -- Dispatch undo: void the audit rows this dispatch created (append-only
+  -- preserved) AND retract the "dispatched" notification it fired, so the other
+  -- side isn't left told about a dispatch that no longer happened (audit #7).
+  IF v_token.action_type IN ('dispatch_to_shop', 'dispatch_to_workshop') THEN
+    UPDATE dispatch_log
+       SET undone_at = now()
+     WHERE garment_id = ANY(v_token.entity_ids)
+       AND undone_at IS NULL
+       AND dispatched_at >= v_token.created_at - INTERVAL '5 seconds';
+
+    UPDATE notifications
+       SET expires_at = now()   -- retract (get_my_notifications filters expires_at > now())
+     WHERE type::text = CASE v_token.action_type
+                          WHEN 'dispatch_to_shop' THEN 'garment_dispatched_to_shop'
+                          ELSE 'garment_dispatched_to_workshop' END
+       AND metadata->>'garment_id' IN (SELECT unnest(v_token.entity_ids)::text)
+       AND expires_at > now()
+       AND created_at >= v_token.created_at - INTERVAL '5 seconds';
+  END IF;
+
+  -- First shop->workshop dispatch undo: dispatch_order flips order_phase to
+  -- 'in_progress' unconditionally and nothing flips it back, so an order whose
+  -- only dispatch was just undone would read 'in_progress' while sitting
+  -- un-dispatched in the queue (audit #2). Reset to 'new' ONLY when no garment
+  -- of the order remains dispatched (all trip_number = 0) — a RETURN-trip undo
+  -- leaves trip_number >= 1, so that order legitimately stays in_progress.
+  IF v_token.action_type = 'dispatch_to_workshop' THEN
+    FOR v_order IN SELECT DISTINCT order_id FROM garments WHERE id = ANY(v_token.entity_ids) LOOP
+      IF NOT EXISTS (SELECT 1 FROM garments WHERE order_id = v_order AND trip_number > 0) THEN
+        UPDATE work_orders       SET order_phase = 'new' WHERE order_id = v_order AND order_phase = 'in_progress';
+        UPDATE alteration_orders SET order_phase = 'new' WHERE order_id = v_order AND order_phase = 'in_progress';
+      END IF;
+    END LOOP;
+  END IF;
+
+  UPDATE undo_tokens SET consumed_at = now() WHERE id = p_token_id;
+
+  RETURN jsonb_build_object('undone', true, 'restored_count', v_restored, 'action_type', v_token.action_type);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION purge_old_undo_tokens(p_keep_interval INTERVAL DEFAULT INTERVAL '1 day')
+RETURNS INTEGER AS $$
+DECLARE v_deleted INTEGER;
+BEGIN
+  DELETE FROM undo_tokens WHERE created_at < now() - p_keep_interval;
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN v_deleted;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -4955,6 +5281,13 @@ RETURNS TRIGGER AS $$
 DECLARE
   v_brand brand;
 BEGIN
+  -- Suppressed during perform_undo: reverting a receive flips location back into
+  -- a transit_* state, which must NOT re-fire a "dispatched" notification to the
+  -- other side (the dispatch is being taken back, not repeated).
+  IF current_setting('app.undo_in_progress', true) = 'on' THEN
+    RETURN NEW;
+  END IF;
+
   IF NEW.location = 'transit_to_workshop' AND (OLD.location IS NULL OR OLD.location != 'transit_to_workshop') THEN
     SELECT o.brand INTO v_brand FROM orders o WHERE o.id = NEW.order_id;
     INSERT INTO notifications (department, brand, type, title, body, metadata, expires_at)
@@ -7742,6 +8075,12 @@ CREATE POLICY "stocktake_counts_select" ON stocktake_counts FOR SELECT USING (is
 ALTER TABLE garment_investigations ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "garment_investigations_select" ON garment_investigations;
 CREATE POLICY "garment_investigations_select" ON garment_investigations FOR SELECT USING (is_active_user());
+
+ALTER TABLE undo_tokens ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "undo_tokens_select" ON undo_tokens;
+CREATE POLICY "undo_tokens_select" ON undo_tokens FOR SELECT USING (is_active_user());
+DROP POLICY IF EXISTS "undo_tokens_modify" ON undo_tokens;
+CREATE POLICY "undo_tokens_modify" ON undo_tokens FOR ALL USING (is_active_user()) WITH CHECK (is_active_user());
 
 -- ─── Low-stock threshold + crossing notification ─────────────────────────
 -- Per-item override else per-type default (must match LOW_STOCK_THRESHOLDS in

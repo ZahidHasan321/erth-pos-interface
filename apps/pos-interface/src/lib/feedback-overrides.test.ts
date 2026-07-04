@@ -21,6 +21,7 @@ import {
   orderFinalsInProduction,
   brovaEditable,
   isBrovaFeedbackSubject,
+  planFinalsReparkOnReject,
   type StagedMeasurement,
 } from "./feedback-overrides";
 
@@ -763,4 +764,84 @@ describe("isBrovaFeedbackSubject", () => {
       expect(isBrovaFeedbackSubject(g(partial))).toBe(expected);
     });
   }
+});
+
+// ─── planFinalsReparkOnReject (§2.5 "Reversing an acceptance") ────────────────
+
+describe("planFinalsReparkOnReject", () => {
+  it("re-parks a final released but not yet scheduled (waiting_cut, no plan)", () => {
+    const b = brova({ id: "b1", acceptance_status: true });
+    const f = g({ id: "f1", piece_stage: "waiting_cut", production_plan: null, in_production: false });
+    const plan = planFinalsReparkOnReject({ allGarments: [b, f], brova: b });
+    expect(plan.otherAccepts).toBe(false);
+    expect(plan.repark.map(x => x.id)).toEqual(["f1"]);
+    expect(plan.blocked).toEqual([]);
+  });
+
+  it("re-parks an un-slotted final even when in_production (live sendToScheduler sets it before a slot)", () => {
+    const b = brova({ id: "b1", acceptance_status: true });
+    const f = g({ id: "f1", piece_stage: "waiting_cut", production_plan: null, in_production: true });
+    const plan = planFinalsReparkOnReject({ allGarments: [b, f], brova: b });
+    expect(plan.repark.map(x => x.id)).toEqual(["f1"]);
+    expect(plan.blocked).toEqual([]);
+  });
+
+  it("blocks a final already SCHEDULED (waiting_cut WITH a production_plan)", () => {
+    const b = brova({ id: "b1", acceptance_status: true });
+    const f = g({ id: "f1", piece_stage: "waiting_cut", production_plan: { day: "mon" } });
+    const plan = planFinalsReparkOnReject({ allGarments: [b, f], brova: b });
+    expect(plan.repark).toEqual([]);
+    expect(plan.blocked.map(x => x.id)).toEqual(["f1"]);
+  });
+
+  it("blocks a final that reached cutting (in production)", () => {
+    const b = brova({ id: "b1", acceptance_status: true });
+    const f = g({ id: "f1", piece_stage: "cutting", in_production: true });
+    const plan = planFinalsReparkOnReject({ allGarments: [b, f], brova: b });
+    expect(plan.blocked.map(x => x.id)).toEqual(["f1"]);
+    expect(plan.repark).toEqual([]);
+  });
+
+  it("leaves a still-parked final untouched (waiting_for_acceptance)", () => {
+    const b = brova({ id: "b1", acceptance_status: true });
+    const f = g({ id: "f1", piece_stage: "waiting_for_acceptance" });
+    const plan = planFinalsReparkOnReject({ allGarments: [b, f], brova: b });
+    expect(plan.repark).toEqual([]);
+    expect(plan.blocked).toEqual([]);
+  });
+
+  it("is a no-op when ANOTHER brova still accepts (finals belong to that acceptance)", () => {
+    const b1 = brova({ id: "b1", acceptance_status: true });
+    const b2 = brova({ id: "b2", acceptance_status: true });
+    const f = g({ id: "f1", piece_stage: "waiting_cut", production_plan: null });
+    const plan = planFinalsReparkOnReject({ allGarments: [b1, b2, f], brova: b1 });
+    expect(plan.otherAccepts).toBe(true);
+    expect(plan.repark).toEqual([]);
+    expect(plan.blocked).toEqual([]);
+  });
+
+  it("treats a completed sibling brova as still accepting (no-op)", () => {
+    const b1 = brova({ id: "b1", acceptance_status: true });
+    const b2 = brova({ id: "b2", piece_stage: "completed", acceptance_status: null });
+    const f = g({ id: "f1", piece_stage: "waiting_cut", production_plan: null });
+    const plan = planFinalsReparkOnReject({ allGarments: [b1, b2, f], brova: b1 });
+    expect(plan.otherAccepts).toBe(true);
+  });
+
+  it("ignores a discarded final", () => {
+    const b = brova({ id: "b1", acceptance_status: true });
+    const f = g({ id: "f1", piece_stage: "discarded" });
+    const plan = planFinalsReparkOnReject({ allGarments: [b, f], brova: b });
+    expect(plan.repark).toEqual([]);
+    expect(plan.blocked).toEqual([]);
+  });
+
+  it("mixes: re-parks the safe final and blocks the scheduled one together", () => {
+    const b = brova({ id: "b1", acceptance_status: true });
+    const safe = g({ id: "f1", piece_stage: "waiting_cut", production_plan: null });
+    const scheduled = g({ id: "f2", piece_stage: "waiting_cut", production_plan: { day: "tue" } });
+    const plan = planFinalsReparkOnReject({ allGarments: [b, safe, scheduled], brova: b });
+    expect(plan.repark.map(x => x.id)).toEqual(["f1"]);
+    expect(plan.blocked.map(x => x.id)).toEqual(["f2"]);
+  });
 });

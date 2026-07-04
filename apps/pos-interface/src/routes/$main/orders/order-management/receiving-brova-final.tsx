@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 import { updateGarment } from "@/api/garments";
+import { runUndoable, showUndoToast } from "@/lib/undo";
 import { useDispatchedOrders } from "@/hooks/useDispatchedOrders";
 import type { Order, Garment, PieceStage } from "@repo/database";
 
@@ -48,23 +49,26 @@ function ReceivingInterface() {
 
     const receiveMutation = useMutation({
         mutationFn: async ({ garments, orderId }: { garments: Garment[]; orderId: number }) => {
-            const promises = garments.map((garment) =>
-                updateGarment(garment.id, {
-                    // Only a not-yet-accepted brova lands at the trial. An already
-                    // accepted brova (Accept-with-Fix returning from its fix) is
-                    // collect-only — it goes straight to ready_for_pickup, no
-                    // re-trial (§2.5). Finals are always collect-only too.
-                    piece_stage: (garment.garment_type === "brova" &&
-                        garment.acceptance_status !== true
-                        ? "awaiting_trial"
-                        : "ready_for_pickup") as PieceStage,
-                    location: "shop",
-                })
-            );
-            const results = await Promise.all(promises);
-            const error = results.find((r) => r.status === "error");
-            if (error) throw new Error(`receiveGarments: failed to mark garments received: ${error.message}`);
-            return { count: garments.length, orderId };
+            const ids = garments.map((g) => g.id);
+            const token = await runUndoable('receive_at_shop', ids, async () => {
+                const promises = garments.map((garment) =>
+                    updateGarment(garment.id, {
+                        // Only a not-yet-accepted brova lands at the trial. An already
+                        // accepted brova (Accept-with-Fix returning from its fix) is
+                        // collect-only — it goes straight to ready_for_pickup, no
+                        // re-trial (§2.5). Finals are always collect-only too.
+                        piece_stage: (garment.garment_type === "brova" &&
+                            garment.acceptance_status !== true
+                            ? "awaiting_trial"
+                            : "ready_for_pickup") as PieceStage,
+                        location: "shop",
+                    })
+                );
+                const results = await Promise.all(promises);
+                const error = results.find((r) => r.status === "error");
+                if (error) throw new Error(`receiveGarments: failed to mark garments received: ${error.message}`);
+            });
+            return { count: garments.length, orderId, token };
         },
         onMutate: async ({ garments, orderId }) => {
             await queryClient.cancelQueries({ queryKey: ["dispatched-orders"] });
@@ -85,9 +89,17 @@ function ReceivingInterface() {
             }
             return { prev };
         },
-        onSuccess: () => {
+        onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ["dispatched-orders"] });
             queryClient.invalidateQueries({ queryKey: ["orders"] });
+            showUndoToast(
+                `${data.count} garment${data.count > 1 ? "s" : ""} received`,
+                data.token,
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ["dispatched-orders"] });
+                    queryClient.invalidateQueries({ queryKey: ["orders"] });
+                },
+            );
         },
         onError: (err: Error, _vars, context) => {
             if (context?.prev) {

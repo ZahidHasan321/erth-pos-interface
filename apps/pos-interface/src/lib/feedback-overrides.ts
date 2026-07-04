@@ -372,6 +372,51 @@ export function brovaEditable(g: Garment): boolean {
 }
 
 /**
+ * Client-side preview of the server-side finals reconcile that runs when a brova's
+ * feedback is edited from an accepting verdict to a rejecting one (§2.5 "Reversing
+ * an acceptance"). Mirrors `repark_finals_for_rejected_brova` so the confirm dialog
+ * can list what will be re-parked and the submit can block early with a name. The
+ * authoritative guard is server-side (this reads possibly-stale order data).
+ *
+ * When another brova still accepts (`acceptance_status === true` or `completed`),
+ * the finals belong to that acceptance and nothing reconciles (`otherAccepts`).
+ * Otherwise each non-discarded final is classified:
+ *  - `waiting_for_acceptance` → already parked, ignored.
+ *  - `waiting_cut` with no `production_plan` → will be re-parked (`repark`).
+ *  - `waiting_cut` WITH a plan (scheduled), or any later stage / `in_production`
+ *    → `blocked` (the reversal is refused until reversed at the workshop).
+ */
+export function planFinalsReparkOnReject({
+  allGarments,
+  brova,
+}: {
+  allGarments: Garment[];
+  brova: Garment;
+}): { otherAccepts: boolean; repark: Garment[]; blocked: Garment[] } {
+  const otherAccepts = allGarments.some(
+    (g) =>
+      g.garment_type === "brova" &&
+      g.id !== brova.id &&
+      (g.acceptance_status === true || g.piece_stage === "completed"),
+  );
+  if (otherAccepts) return { otherAccepts: true, repark: [], blocked: [] };
+
+  const repark: Garment[] = [];
+  const blocked: Garment[] = [];
+  for (const g of allGarments) {
+    if (g.garment_type !== "final") continue;
+    if (g.piece_stage === "discarded") continue;
+    if (g.piece_stage === "waiting_for_acceptance") continue;
+    if (g.piece_stage === "waiting_cut" && g.production_plan == null) {
+      repark.push(g);
+    } else {
+      blocked.push(g);
+    }
+  }
+  return { otherAccepts: false, repark, blocked };
+}
+
+/**
  * True when a garment is a feedback subject — i.e. it should appear on the brova
  * trial feedback page and surface a feedback action at the showroom (§2.5).
  *

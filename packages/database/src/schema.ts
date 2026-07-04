@@ -1148,9 +1148,32 @@ export const dispatchLog = pgTable("dispatch_log", {
     direction: text("direction").notNull(), // 'to_workshop' | 'to_shop'
     trip_number: integer("trip_number"),    // snapshot at dispatch time
     dispatched_at: timestamp("dispatched_at").defaultNow().notNull(),
+    // Stamped when the dispatch is undone within its window (see undoTokens /
+    // perform_undo). Voided rows are filtered out of Dispatch History so the
+    // audit reads as if the dispatch never happened, without deleting the row.
+    undone_at: timestamp("undone_at", { withTimezone: true }),
 }, (t) => ({
     dispatchedAtIdx: index("dispatch_log_dispatched_at_idx").on(t.dispatched_at),
     orderIdx: index("dispatch_log_order_idx").on(t.order_id),
+}));
+
+// --- 6.5b UNDO TOKENS ---
+// Short-window undo for high-regret garment logistics moves (dispatch/receive
+// both sides, schedule, park->scheduler, advance a stage). Snapshot-based: the
+// before_image is restored by perform_undo iff the token is live and every
+// garment still matches its post-action `guard`. See migration 0045 / triggers.
+export const undoTokens = pgTable("undo_tokens", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    action_type: text("action_type").notNull(),
+    entity_ids: uuid("entity_ids").array().notNull(),
+    before_image: jsonb("before_image").notNull(),
+    guard: jsonb("guard").notNull(),
+    created_by: text("created_by"),
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumed_at: timestamp("consumed_at", { withTimezone: true }),
+}, (t) => ({
+    createdAtIdx: index("undo_tokens_created_at_idx").on(t.created_at),
 }));
 
 // --- 6.5 GARMENT FEEDBACK ---

@@ -1071,6 +1071,27 @@ export const scheduleGarments = async (
   }
 };
 
+/**
+ * The `waiting_for_acceptance` finals in the same orders as `ids` — the sibling
+ * parked finals that scheduleGarments also stamps with the production_plan (see
+ * its !reentryStage branch). They are not in the scheduled `ids`, so the undo
+ * snapshot must include them or an undo would leave them carrying an orphaned
+ * plan. Returns [] for a re-entry schedule (which never touches siblings).
+ */
+export const getScheduleSiblingFinalIds = async (ids: string[]): Promise<string[]> => {
+  if (ids.length === 0) return [];
+  const { data: scheduled } = await db.from('garments').select('order_id').in('id', ids);
+  const orderIds = [...new Set((scheduled ?? []).map((g: { order_id: number }) => g.order_id))];
+  if (orderIds.length === 0) return [];
+  const { data: sibs } = await db
+    .from('garments')
+    .select('id')
+    .in('order_id', orderIds)
+    .eq('piece_stage', 'waiting_for_acceptance');
+  const idSet = new Set(ids);
+  return (sibs ?? []).map((g: { id: string }) => g.id).filter((sid: string) => !idSet.has(sid));
+};
+
 export const startGarment = async (id: string): Promise<void> => {
   // Idempotency: don't overwrite if already started
   const { data: existing } = await db
@@ -1344,6 +1365,7 @@ export const getDispatchHistory = async (
       )
     `)
     .eq('direction', 'to_shop')
+    .is('undone_at', null)
     .gte('dispatched_at', fromIso)
     .lt('dispatched_at', toIso)
     .order('dispatched_at', { ascending: false })

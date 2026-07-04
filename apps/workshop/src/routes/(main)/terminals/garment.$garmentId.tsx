@@ -58,12 +58,19 @@ import { isAlteration, getAlterationNumber } from "@repo/database";
 
 export const Route = createFileRoute("/(main)/terminals/garment/$garmentId")({
   component: TerminalGarmentPage,
+  // `station` = the stage of the terminal the operator came from. Optional so
+  // other entry points (history, direct links) still resolve; when present it
+  // locks completion to that stage (TerminalActions).
+  validateSearch: (search: Record<string, unknown>): { station?: string } => ({
+    station: typeof search.station === "string" ? search.station : undefined,
+  }),
 });
 
 // ── Main Page ──────────────────────────────────────────────────
 
 function TerminalGarmentPage() {
   const { garmentId } = Route.useParams();
+  const { station } = Route.useSearch();
   const { data: garment, isLoading } = useGarment(garmentId);
   const router = useRouter();
 
@@ -299,7 +306,7 @@ function TerminalGarmentPage() {
               alterationFilter={baseAlterationFilter}
             />
           ) : isProductionStage ? (
-            <TerminalActions garment={garment} />
+            <TerminalActions garment={garment} station={station} />
           ) : null}
         </div>
       </div>
@@ -345,13 +352,25 @@ function ElapsedTimer({ since }: { since: string | Date }) {
 
 // ── Terminal Actions (floating buttons) ─────────────────────────
 
-function TerminalActions({ garment }: { garment: WorkshopGarment }) {
+function TerminalActions({
+  garment,
+  station,
+}: {
+  garment: WorkshopGarment;
+  station?: string;
+}) {
   const router = useRouter();
   const startMut = useStartGarment();
   const cancelMut = useCancelStartGarment();
   const completeMut = useCompleteAndAdvance();
 
   const stage = garment.piece_stage ?? "";
+  // Station-lock: this screen may only complete the stage of the terminal the
+  // operator arrived from. If the garment has already advanced past it (e.g. a
+  // slow write let it move on), completion is blocked here — the next station
+  // handles it. This makes a wrong-stage advance impossible regardless of write
+  // timing or double-taps, not merely unlikely.
+  const stationMismatch = !!station && station !== stage;
   const isSewing = stage === "sewing";
   const plan = garment.production_plan as ProductionPlan | null;
   const nextStage = getNextPlanStage(
@@ -385,6 +404,31 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
 
   if (!nextStage) return null;
 
+  // Garment already moved past this terminal's stage — lock completion here.
+  if (stationMismatch) {
+    const stationLabel =
+      PIECE_STAGE_LABELS[station as keyof typeof PIECE_STAGE_LABELS] ?? station;
+    const currentLabel =
+      PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
+    return (
+      <div className="fixed bottom-6 right-6 z-50 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-center gap-3 rounded-md border border-[color:var(--status-warn)]/30 bg-[var(--status-warn-bg)] px-4 py-3 shadow-md max-w-md">
+          <AlertTriangle className="w-5 h-5 text-[var(--status-warn)] shrink-0" />
+          <div className="min-w-0 text-sm">
+            <p className="font-medium text-foreground">Moved on from {stationLabel}</p>
+            <p className="text-muted-foreground">
+              Now at {currentLabel} — completed at that station.
+            </p>
+          </div>
+          <Button size="lg" className="h-14 px-7 text-lg font-medium shrink-0" disabled>
+            <Check className="w-5 h-5 mr-2" />
+            Done
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   const nextLabel =
     PIECE_STAGE_LABELS[nextStage as keyof typeof PIECE_STAGE_LABELS] ??
     nextStage;
@@ -411,20 +455,22 @@ function TerminalActions({ garment }: { garment: WorkshopGarment }) {
     });
   };
 
-  const handleComplete = async () => {
+  const handleComplete = () => {
     if (!worker) return;
     setConfirmOpen(false);
-    try {
-      await completeMut.mutateAsync({
-        id: garment.id,
-        worker,
-        stage,
-        nextStage,
-      });
-      router.history.back();
-    } catch (err: unknown) {
-      toast.error(`Could not advance garment to next stage: ${err instanceof Error ? err.message : (String(err) || "no error message")}`);
-    }
+    // Navigate away IMMEDIATELY instead of awaiting the write. On a slow write the
+    // optimistic cache advances this garment to the next stage and resets it to an
+    // un-started state; staying on the page made a successful-but-slow completion
+    // look failed, so a tailor would re-run Start/Done against the now-advanced
+    // stage and skip it. The mutation runs to completion in the background;
+    // useCompleteAndAdvance handles the error toast + optimistic rollback.
+    completeMut.mutate({
+      id: garment.id,
+      worker,
+      stage,
+      nextStage,
+    });
+    router.history.back();
   };
 
   const showStarted = visualMode === "started" || visualMode === "cancelling";

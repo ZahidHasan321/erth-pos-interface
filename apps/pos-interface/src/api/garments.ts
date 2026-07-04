@@ -27,6 +27,37 @@ export const updateGarment = async (
   return { status: 'success', data: data as Garment };
 };
 
+/**
+ * reject_brova_repark_finals RPC (§2.5 "Reversing an acceptance"). When a brova's
+ * feedback is edited from an accepting verdict back to a rejecting one, its
+ * acceptance no longer backs the order's released finals. This reconciles them
+ * atomically: re-parks finals that were released but not yet scheduled, and RAISES
+ * (naming the final) if any released final is already scheduled/in production.
+ * `applyBrova=true` also flips the brova to brova_trialed / acceptance false /
+ * `feedbackStatus` in the same transaction (Reject-Repair). `applyBrova=false` is
+ * the reconcile-only guard the Reject-Redo path runs before its own discard.
+ * Returns the ids of the finals that were re-parked.
+ */
+export const rejectBrovaReparkFinals = async (
+  brovaId: string,
+  opts: { applyBrova?: boolean; feedbackStatus?: string } = {},
+): Promise<ApiResponse<{ reparked_ids: string[] }>> => {
+  const { data, error } = await withWriteRetry(
+    () => db.rpc('reject_brova_repark_finals', {
+      p_brova_id: brovaId,
+      p_apply_brova: opts.applyBrova ?? true,
+      p_feedback_status: opts.feedbackStatus ?? 'needs_repair',
+    }),
+    (r) => isTransientNetworkError(r.error),
+  );
+  if (error) {
+    console.error('rejectBrovaReparkFinals: failed to reconcile finals on brova reject:', error);
+    return { status: 'error', message: error.message };
+  }
+  const result = (data as { reparked_ids?: string[] } | null) ?? {};
+  return { status: 'success', data: { reparked_ids: result.reparked_ids ?? [] } };
+};
+
 export const getGarmentsForRedispatch = async (): Promise<ApiResponse<Garment[]>> => {
   // Find garments at shop that have a feedback record requesting "workshop" distribution
   // for the garment's current trip number

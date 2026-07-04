@@ -55,7 +55,7 @@ import { SignaturePad } from "@/components/forms/signature-pad";
 // API and Types
 import { getOrderById, repriceOrderStyles, bumpInvoiceRevision } from "@/api/orders";
 import { getMeasurementById, getMeasurementsByCustomer, createMeasurement } from "@/api/measurements";
-import { updateGarment, createRedoReplacement, redoPromoteFinalToBrova } from "@/api/garments";
+import { updateGarment, createRedoReplacement, redoPromoteFinalToBrova, rejectBrovaReparkFinals } from "@/api/garments";
 import { getFabrics } from "@/api/fabrics";
 import { createFeedback, updateFeedback, getFeedbackByGarmentId, getFeedbackByGarmentAndTrip } from "@/api/feedback";
 import { uploadFeedbackPhoto, uploadFeedbackVoiceNote, uploadFeedbackSignature } from "@/lib/storage";
@@ -86,6 +86,7 @@ import {
   orderFinalsInProduction,
   brovaEditable,
   isBrovaFeedbackSubject,
+  planFinalsReparkOnReject,
 } from "@/lib/feedback-overrides";
 import { MeasurementOverrideSection, FinalsCardOverride, GarmentTagLabel } from "@/components/feedback/override-section";
 import { MeasurementSheet } from "@/components/feedback/measurement-sheet";
@@ -1689,6 +1690,17 @@ function UnifiedFeedbackInterface() {
     if (removed?.startsWith("blob:")) URL.revokeObjectURL(removed);
   };
 
+  // Preview of the finals reconcile a Reject outcome triggers (§2.5 "Reversing an
+  // acceptance"). Mirrors the server guard on possibly-stale order data so the
+  // confirm dialog can list what will be re-parked and the submit can block early
+  // by name. Null for non-reject outcomes. The server call is authoritative.
+  const reparkPlan = useMemo(() => {
+    if (!activeGarment || activeGarment.garment_type !== "brova") return null;
+    const action = currentState.feedbackAction;
+    if (action !== "needs_repair_rejected" && action !== "needs_redo") return null;
+    return planFinalsReparkOnReject({ allGarments: activeOrder?.garments ?? [], brova: activeGarment });
+  }, [activeGarment, activeOrder?.garments, currentState.feedbackAction]);
+
   const onConfirmClick = () => {
     if (isReadOnly) return;
     if (!currentState.satisfaction || !currentState.feedbackAction || !currentState.distributionAction) {
@@ -1771,6 +1783,17 @@ function UnifiedFeedbackInterface() {
         }
       }
     }
+    // Rejecting a previously-accepted brova cannot strand a released final that is
+    // already scheduled or in production (§2.5). Block early with the name (the
+    // server enforces this too); the still-safe finals are re-parked on submit.
+    if (reparkPlan && reparkPlan.blocked.length > 0) {
+      const names = reparkPlan.blocked.map(g => g.garment_id || g.id.slice(0, 8)).join(", ");
+      toast.error(
+        `Cannot reject: final(s) ${names} are already scheduled or in production. Reverse them at the workshop first.`,
+        { duration: 7000 },
+      );
+      return;
+    }
     setIsConfirmDialogOpen(true);
   };
 
@@ -1808,11 +1831,30 @@ function UnifiedFeedbackInterface() {
                 activeGarment.id
             );
 
-            // needs_redo: the discard + outcome (replacement / promote) runs at the
-            // END of handleSave, after any spec correction is applied, so the cloned
-            // replacement / promoted final inherits it (§2.5). Other verdicts persist
-            // their stage now.
-            if (state.feedbackAction !== "needs_redo") {
+            // Reject outcomes reverse any prior acceptance, so they run through
+            // reject_brova_repark_finals (§2.5 "Reversing an acceptance"): it
+            // reconciles the order's released finals ATOMICALLY — re-parking any that
+            // were released but not yet scheduled, and blocking (naming the final) if
+            // one is already scheduled or in production. Reject-Repair also flips the
+            // brova in the same call. Reject-Redo only reconciles here (its discard +
+            // replacement/promote runs at the END of handleSave, after the corrected
+            // measurement is minted, so the clone inherits it); running the guard now
+            // means a blocked final aborts before any spec write. Accept /
+            // Accept-with-Fix keep the plain stage write (they set acceptance true).
+            if (state.feedbackAction === "needs_repair_rejected") {
+                const res = await rejectBrovaReparkFinals(activeGarment.id, {
+                    applyBrova: true,
+                    feedbackStatus: result.feedbackStatus,
+                });
+                if (res.status === "error") { toast.error(res.message); return; }
+                const n = res.data?.reparked_ids.length ?? 0;
+                if (n > 0) toast.info(`${n} final${n > 1 ? "s" : ""} returned to parked (waiting for the next trial).`);
+            } else if (state.feedbackAction === "needs_redo") {
+                const res = await rejectBrovaReparkFinals(activeGarment.id, { applyBrova: false });
+                if (res.status === "error") { toast.error(res.message); return; }
+                const n = res.data?.reparked_ids.length ?? 0;
+                if (n > 0) toast.info(`${n} final${n > 1 ? "s" : ""} returned to parked (waiting for the new brova).`);
+            } else {
                 await updateGarment(activeGarment.id, {
                     piece_stage: result.newStage,
                     acceptance_status: result.acceptanceStatus,
@@ -4102,6 +4144,10 @@ function UnifiedFeedbackInterface() {
               description={`You are about to submit feedback for garment ${activeGarment?.garment_id || activeGarment?.id || ""}. This will update its status and save the feedback record.${
                 repricePreview?.changed
                   ? ` Order total changes from KWD ${repricePreview.oldOrderTotal.toFixed(3)} to KWD ${repricePreview.newOrderTotal.toFixed(3)} (${repricePreview.delta >= 0 ? "+" : ""}${repricePreview.delta.toFixed(3)}).`
+                  : ""
+              }${
+                reparkPlan && reparkPlan.repark.length > 0
+                  ? ` ${reparkPlan.repark.length} released final${reparkPlan.repark.length > 1 ? "s" : ""} (${reparkPlan.repark.map(g => g.garment_id || g.id.slice(0, 8)).join(", ")}) will be returned to parked, waiting for the next trial.`
                   : ""
               }`}
               confirmText="Submit Feedback"
