@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -32,14 +32,26 @@ import {
   LoadingSkeleton,
 } from "@/components/shared/PageShell";
 import { BrandBadge } from "@/components/shared/StageBadge";
-import { BrandFilter, RangeFilter } from "@/components/Filters";
+import { FilterBar, FilterField } from "@/components/shared/FilterBar";
+import { BrandSelect, RangeFilter } from "@/components/Filters";
 import { useDashboardSummary, useCustomerBrandMatrix } from "@/hooks/useAdmin";
 import { getRangeBounds, type RangePreset } from "@/lib/date-range";
 import { formatKwd, formatNum, formatDuration, titleCase } from "@/lib/format";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
 import type { RangeBounds } from "@/lib/date-range";
 
+interface DashboardSearch {
+  range?: RangePreset;
+  brands?: string;
+}
+
 export const Route = createFileRoute("/(main)/")({
+  validateSearch: (s: Record<string, unknown>): DashboardSearch => ({
+    range: (["today", "week", "month", "quarter", "all"] as const).includes(s.range as RangePreset)
+      ? (s.range as RangePreset)
+      : undefined,
+    brands: typeof s.brands === "string" && s.brands ? s.brands : undefined,
+  }),
   component: DashboardPage,
 });
 
@@ -68,14 +80,19 @@ function fmtDay(day: string): string {
 }
 
 function DashboardPage() {
-  const [preset, setPreset] = useState<RangePreset>("month");
-  const [brands, setBrands] = useState<string[]>([]);
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const patch = (next: Partial<DashboardSearch>) =>
+    navigate({ search: (prev) => ({ ...prev, ...next }), replace: true });
+
+  const preset = (search.range ?? "month") as RangePreset;
+  const brands = useMemo(() => (search.brands ? [search.brands] : []), [search.brands]);
   const range: RangeBounds = useMemo(() => getRangeBounds(preset), [preset]);
 
   const { data, isLoading, isError, error, isFetching } = useDashboardSummary(range, brands);
   const matrix = useCustomerBrandMatrix(range);
 
-  const brandParam = brands.length ? brands.join(",") : undefined;
+  const brandParam = search.brands;
 
   return (
     <div>
@@ -85,10 +102,14 @@ function DashboardPage() {
         subtitle="Cross-brand analytics across ERTH, SAKKBA and QASS"
       />
 
-      <div className="flex flex-col gap-2 mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <RangeFilter value={preset} onChange={setPreset} />
-        <BrandFilter selected={brands} onChange={setBrands} />
-      </div>
+      <FilterBar>
+        <FilterField label="Period">
+          <RangeFilter value={preset} onChange={(p) => patch({ range: p === "month" ? undefined : p })} />
+        </FilterField>
+        <FilterField label="Brand">
+          <BrandSelect value={search.brands ?? ""} onChange={(b) => patch({ brands: b || undefined })} />
+        </FilterField>
+      </FilterBar>
 
       {isError ? (
         <EmptyState icon={AlertTriangle} message={(error as Error)?.message ?? "Failed to load dashboard"} />

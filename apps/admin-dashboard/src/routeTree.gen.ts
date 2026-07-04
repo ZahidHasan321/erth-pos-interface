@@ -13,12 +13,22 @@ import { Route as AccessDeniedRouteImport } from './routes/access-denied'
 import { Route as mainRouteRouteImport } from './routes/(main)/route'
 import { Route as mainIndexRouteImport } from './routes/(main)/index'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
-import { Route as mainPeopleIndexRouteImport } from './routes/(main)/people/index'
+import { Route as mainFinanceRouteRouteImport } from './routes/(main)/finance/route'
+import { Route as mainTeamIndexRouteImport } from './routes/(main)/team/index'
 import { Route as mainOrdersIndexRouteImport } from './routes/(main)/orders/index'
 import { Route as mainInventoryIndexRouteImport } from './routes/(main)/inventory/index'
 import { Route as mainGarmentsIndexRouteImport } from './routes/(main)/garments/index'
+import { Route as mainFinanceIndexRouteImport } from './routes/(main)/finance/index'
+import { Route as mainCustomersIndexRouteImport } from './routes/(main)/customers/index'
 import { Route as mainOrdersOrderIdRouteImport } from './routes/(main)/orders/$orderId'
 import { Route as mainGarmentsGarmentIdRouteImport } from './routes/(main)/garments/$garmentId'
+import { Route as mainFinanceTransactionsRouteImport } from './routes/(main)/finance/transactions'
+import { Route as mainCustomersCustomerIdRouteImport } from './routes/(main)/customers/$customerId'
+import { Route as mainFinanceRegistersIndexRouteImport } from './routes/(main)/finance/registers/index'
+import { Route as mainFinancePurchasesIndexRouteImport } from './routes/(main)/finance/purchases/index'
+import { Route as mainTeamStaffUserIdRouteImport } from './routes/(main)/team/staff/$userId'
+import { Route as mainFinanceRegistersSessionIdRouteImport } from './routes/(main)/finance/registers/$sessionId'
+import { Route as mainFinancePurchasesPurchaseIdRouteImport } from './routes/(main)/finance/purchases/$purchaseId'
 
 const AccessDeniedRoute = AccessDeniedRouteImport.update({
   id: '/access-denied',
@@ -39,9 +49,14 @@ const authLoginRoute = authLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const mainPeopleIndexRoute = mainPeopleIndexRouteImport.update({
-  id: '/people/',
-  path: '/people/',
+const mainFinanceRouteRoute = mainFinanceRouteRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainTeamIndexRoute = mainTeamIndexRouteImport.update({
+  id: '/team/',
+  path: '/team/',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const mainOrdersIndexRoute = mainOrdersIndexRouteImport.update({
@@ -59,6 +74,16 @@ const mainGarmentsIndexRoute = mainGarmentsIndexRouteImport.update({
   path: '/garments/',
   getParentRoute: () => mainRouteRoute,
 } as any)
+const mainFinanceIndexRoute = mainFinanceIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => mainFinanceRouteRoute,
+} as any)
+const mainCustomersIndexRoute = mainCustomersIndexRouteImport.update({
+  id: '/customers/',
+  path: '/customers/',
+  getParentRoute: () => mainRouteRoute,
+} as any)
 const mainOrdersOrderIdRoute = mainOrdersOrderIdRouteImport.update({
   id: '/orders/$orderId',
   path: '/orders/$orderId',
@@ -69,77 +94,174 @@ const mainGarmentsGarmentIdRoute = mainGarmentsGarmentIdRouteImport.update({
   path: '/garments/$garmentId',
   getParentRoute: () => mainRouteRoute,
 } as any)
+const mainFinanceTransactionsRoute = mainFinanceTransactionsRouteImport.update({
+  id: '/transactions',
+  path: '/transactions',
+  getParentRoute: () => mainFinanceRouteRoute,
+} as any)
+const mainCustomersCustomerIdRoute = mainCustomersCustomerIdRouteImport.update({
+  id: '/customers/$customerId',
+  path: '/customers/$customerId',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainFinanceRegistersIndexRoute =
+  mainFinanceRegistersIndexRouteImport.update({
+    id: '/registers/',
+    path: '/registers/',
+    getParentRoute: () => mainFinanceRouteRoute,
+  } as any)
+const mainFinancePurchasesIndexRoute =
+  mainFinancePurchasesIndexRouteImport.update({
+    id: '/purchases/',
+    path: '/purchases/',
+    getParentRoute: () => mainFinanceRouteRoute,
+  } as any)
+const mainTeamStaffUserIdRoute = mainTeamStaffUserIdRouteImport.update({
+  id: '/team/staff/$userId',
+  path: '/team/staff/$userId',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainFinanceRegistersSessionIdRoute =
+  mainFinanceRegistersSessionIdRouteImport.update({
+    id: '/registers/$sessionId',
+    path: '/registers/$sessionId',
+    getParentRoute: () => mainFinanceRouteRoute,
+  } as any)
+const mainFinancePurchasesPurchaseIdRoute =
+  mainFinancePurchasesPurchaseIdRouteImport.update({
+    id: '/purchases/$purchaseId',
+    path: '/purchases/$purchaseId',
+    getParentRoute: () => mainFinanceRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/access-denied': typeof AccessDeniedRoute
+  '/finance': typeof mainFinanceRouteRouteWithChildren
   '/login': typeof authLoginRoute
   '/': typeof mainIndexRoute
+  '/customers/$customerId': typeof mainCustomersCustomerIdRoute
+  '/finance/transactions': typeof mainFinanceTransactionsRoute
   '/garments/$garmentId': typeof mainGarmentsGarmentIdRoute
   '/orders/$orderId': typeof mainOrdersOrderIdRoute
+  '/customers/': typeof mainCustomersIndexRoute
+  '/finance/': typeof mainFinanceIndexRoute
   '/garments/': typeof mainGarmentsIndexRoute
   '/inventory/': typeof mainInventoryIndexRoute
   '/orders/': typeof mainOrdersIndexRoute
-  '/people/': typeof mainPeopleIndexRoute
+  '/team/': typeof mainTeamIndexRoute
+  '/finance/purchases/$purchaseId': typeof mainFinancePurchasesPurchaseIdRoute
+  '/finance/registers/$sessionId': typeof mainFinanceRegistersSessionIdRoute
+  '/team/staff/$userId': typeof mainTeamStaffUserIdRoute
+  '/finance/purchases/': typeof mainFinancePurchasesIndexRoute
+  '/finance/registers/': typeof mainFinanceRegistersIndexRoute
 }
 export interface FileRoutesByTo {
   '/access-denied': typeof AccessDeniedRoute
   '/login': typeof authLoginRoute
   '/': typeof mainIndexRoute
+  '/customers/$customerId': typeof mainCustomersCustomerIdRoute
+  '/finance/transactions': typeof mainFinanceTransactionsRoute
   '/garments/$garmentId': typeof mainGarmentsGarmentIdRoute
   '/orders/$orderId': typeof mainOrdersOrderIdRoute
+  '/customers': typeof mainCustomersIndexRoute
+  '/finance': typeof mainFinanceIndexRoute
   '/garments': typeof mainGarmentsIndexRoute
   '/inventory': typeof mainInventoryIndexRoute
   '/orders': typeof mainOrdersIndexRoute
-  '/people': typeof mainPeopleIndexRoute
+  '/team': typeof mainTeamIndexRoute
+  '/finance/purchases/$purchaseId': typeof mainFinancePurchasesPurchaseIdRoute
+  '/finance/registers/$sessionId': typeof mainFinanceRegistersSessionIdRoute
+  '/team/staff/$userId': typeof mainTeamStaffUserIdRoute
+  '/finance/purchases': typeof mainFinancePurchasesIndexRoute
+  '/finance/registers': typeof mainFinanceRegistersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/(main)': typeof mainRouteRouteWithChildren
   '/access-denied': typeof AccessDeniedRoute
+  '/(main)/finance': typeof mainFinanceRouteRouteWithChildren
   '/(auth)/login': typeof authLoginRoute
   '/(main)/': typeof mainIndexRoute
+  '/(main)/customers/$customerId': typeof mainCustomersCustomerIdRoute
+  '/(main)/finance/transactions': typeof mainFinanceTransactionsRoute
   '/(main)/garments/$garmentId': typeof mainGarmentsGarmentIdRoute
   '/(main)/orders/$orderId': typeof mainOrdersOrderIdRoute
+  '/(main)/customers/': typeof mainCustomersIndexRoute
+  '/(main)/finance/': typeof mainFinanceIndexRoute
   '/(main)/garments/': typeof mainGarmentsIndexRoute
   '/(main)/inventory/': typeof mainInventoryIndexRoute
   '/(main)/orders/': typeof mainOrdersIndexRoute
-  '/(main)/people/': typeof mainPeopleIndexRoute
+  '/(main)/team/': typeof mainTeamIndexRoute
+  '/(main)/finance/purchases/$purchaseId': typeof mainFinancePurchasesPurchaseIdRoute
+  '/(main)/finance/registers/$sessionId': typeof mainFinanceRegistersSessionIdRoute
+  '/(main)/team/staff/$userId': typeof mainTeamStaffUserIdRoute
+  '/(main)/finance/purchases/': typeof mainFinancePurchasesIndexRoute
+  '/(main)/finance/registers/': typeof mainFinanceRegistersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/access-denied'
+    | '/finance'
     | '/login'
     | '/'
+    | '/customers/$customerId'
+    | '/finance/transactions'
     | '/garments/$garmentId'
     | '/orders/$orderId'
+    | '/customers/'
+    | '/finance/'
     | '/garments/'
     | '/inventory/'
     | '/orders/'
-    | '/people/'
+    | '/team/'
+    | '/finance/purchases/$purchaseId'
+    | '/finance/registers/$sessionId'
+    | '/team/staff/$userId'
+    | '/finance/purchases/'
+    | '/finance/registers/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/access-denied'
     | '/login'
     | '/'
+    | '/customers/$customerId'
+    | '/finance/transactions'
     | '/garments/$garmentId'
     | '/orders/$orderId'
+    | '/customers'
+    | '/finance'
     | '/garments'
     | '/inventory'
     | '/orders'
-    | '/people'
+    | '/team'
+    | '/finance/purchases/$purchaseId'
+    | '/finance/registers/$sessionId'
+    | '/team/staff/$userId'
+    | '/finance/purchases'
+    | '/finance/registers'
   id:
     | '__root__'
     | '/(main)'
     | '/access-denied'
+    | '/(main)/finance'
     | '/(auth)/login'
     | '/(main)/'
+    | '/(main)/customers/$customerId'
+    | '/(main)/finance/transactions'
     | '/(main)/garments/$garmentId'
     | '/(main)/orders/$orderId'
+    | '/(main)/customers/'
+    | '/(main)/finance/'
     | '/(main)/garments/'
     | '/(main)/inventory/'
     | '/(main)/orders/'
-    | '/(main)/people/'
+    | '/(main)/team/'
+    | '/(main)/finance/purchases/$purchaseId'
+    | '/(main)/finance/registers/$sessionId'
+    | '/(main)/team/staff/$userId'
+    | '/(main)/finance/purchases/'
+    | '/(main)/finance/registers/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -178,11 +300,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof authLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/(main)/people/': {
-      id: '/(main)/people/'
-      path: '/people'
-      fullPath: '/people/'
-      preLoaderRoute: typeof mainPeopleIndexRouteImport
+    '/(main)/finance': {
+      id: '/(main)/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof mainFinanceRouteRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/team/': {
+      id: '/(main)/team/'
+      path: '/team'
+      fullPath: '/team/'
+      preLoaderRoute: typeof mainTeamIndexRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/orders/': {
@@ -206,6 +335,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainGarmentsIndexRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/finance/': {
+      id: '/(main)/finance/'
+      path: '/'
+      fullPath: '/finance/'
+      preLoaderRoute: typeof mainFinanceIndexRouteImport
+      parentRoute: typeof mainFinanceRouteRoute
+    }
+    '/(main)/customers/': {
+      id: '/(main)/customers/'
+      path: '/customers'
+      fullPath: '/customers/'
+      preLoaderRoute: typeof mainCustomersIndexRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/orders/$orderId': {
       id: '/(main)/orders/$orderId'
       path: '/orders/$orderId'
@@ -220,27 +363,105 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainGarmentsGarmentIdRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/finance/transactions': {
+      id: '/(main)/finance/transactions'
+      path: '/transactions'
+      fullPath: '/finance/transactions'
+      preLoaderRoute: typeof mainFinanceTransactionsRouteImport
+      parentRoute: typeof mainFinanceRouteRoute
+    }
+    '/(main)/customers/$customerId': {
+      id: '/(main)/customers/$customerId'
+      path: '/customers/$customerId'
+      fullPath: '/customers/$customerId'
+      preLoaderRoute: typeof mainCustomersCustomerIdRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/finance/registers/': {
+      id: '/(main)/finance/registers/'
+      path: '/registers'
+      fullPath: '/finance/registers/'
+      preLoaderRoute: typeof mainFinanceRegistersIndexRouteImport
+      parentRoute: typeof mainFinanceRouteRoute
+    }
+    '/(main)/finance/purchases/': {
+      id: '/(main)/finance/purchases/'
+      path: '/purchases'
+      fullPath: '/finance/purchases/'
+      preLoaderRoute: typeof mainFinancePurchasesIndexRouteImport
+      parentRoute: typeof mainFinanceRouteRoute
+    }
+    '/(main)/team/staff/$userId': {
+      id: '/(main)/team/staff/$userId'
+      path: '/team/staff/$userId'
+      fullPath: '/team/staff/$userId'
+      preLoaderRoute: typeof mainTeamStaffUserIdRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/finance/registers/$sessionId': {
+      id: '/(main)/finance/registers/$sessionId'
+      path: '/registers/$sessionId'
+      fullPath: '/finance/registers/$sessionId'
+      preLoaderRoute: typeof mainFinanceRegistersSessionIdRouteImport
+      parentRoute: typeof mainFinanceRouteRoute
+    }
+    '/(main)/finance/purchases/$purchaseId': {
+      id: '/(main)/finance/purchases/$purchaseId'
+      path: '/purchases/$purchaseId'
+      fullPath: '/finance/purchases/$purchaseId'
+      preLoaderRoute: typeof mainFinancePurchasesPurchaseIdRouteImport
+      parentRoute: typeof mainFinanceRouteRoute
+    }
   }
 }
 
+interface mainFinanceRouteRouteChildren {
+  mainFinanceTransactionsRoute: typeof mainFinanceTransactionsRoute
+  mainFinanceIndexRoute: typeof mainFinanceIndexRoute
+  mainFinancePurchasesPurchaseIdRoute: typeof mainFinancePurchasesPurchaseIdRoute
+  mainFinanceRegistersSessionIdRoute: typeof mainFinanceRegistersSessionIdRoute
+  mainFinancePurchasesIndexRoute: typeof mainFinancePurchasesIndexRoute
+  mainFinanceRegistersIndexRoute: typeof mainFinanceRegistersIndexRoute
+}
+
+const mainFinanceRouteRouteChildren: mainFinanceRouteRouteChildren = {
+  mainFinanceTransactionsRoute: mainFinanceTransactionsRoute,
+  mainFinanceIndexRoute: mainFinanceIndexRoute,
+  mainFinancePurchasesPurchaseIdRoute: mainFinancePurchasesPurchaseIdRoute,
+  mainFinanceRegistersSessionIdRoute: mainFinanceRegistersSessionIdRoute,
+  mainFinancePurchasesIndexRoute: mainFinancePurchasesIndexRoute,
+  mainFinanceRegistersIndexRoute: mainFinanceRegistersIndexRoute,
+}
+
+const mainFinanceRouteRouteWithChildren =
+  mainFinanceRouteRoute._addFileChildren(mainFinanceRouteRouteChildren)
+
 interface mainRouteRouteChildren {
+  mainFinanceRouteRoute: typeof mainFinanceRouteRouteWithChildren
   mainIndexRoute: typeof mainIndexRoute
+  mainCustomersCustomerIdRoute: typeof mainCustomersCustomerIdRoute
   mainGarmentsGarmentIdRoute: typeof mainGarmentsGarmentIdRoute
   mainOrdersOrderIdRoute: typeof mainOrdersOrderIdRoute
+  mainCustomersIndexRoute: typeof mainCustomersIndexRoute
   mainGarmentsIndexRoute: typeof mainGarmentsIndexRoute
   mainInventoryIndexRoute: typeof mainInventoryIndexRoute
   mainOrdersIndexRoute: typeof mainOrdersIndexRoute
-  mainPeopleIndexRoute: typeof mainPeopleIndexRoute
+  mainTeamIndexRoute: typeof mainTeamIndexRoute
+  mainTeamStaffUserIdRoute: typeof mainTeamStaffUserIdRoute
 }
 
 const mainRouteRouteChildren: mainRouteRouteChildren = {
+  mainFinanceRouteRoute: mainFinanceRouteRouteWithChildren,
   mainIndexRoute: mainIndexRoute,
+  mainCustomersCustomerIdRoute: mainCustomersCustomerIdRoute,
   mainGarmentsGarmentIdRoute: mainGarmentsGarmentIdRoute,
   mainOrdersOrderIdRoute: mainOrdersOrderIdRoute,
+  mainCustomersIndexRoute: mainCustomersIndexRoute,
   mainGarmentsIndexRoute: mainGarmentsIndexRoute,
   mainInventoryIndexRoute: mainInventoryIndexRoute,
   mainOrdersIndexRoute: mainOrdersIndexRoute,
-  mainPeopleIndexRoute: mainPeopleIndexRoute,
+  mainTeamIndexRoute: mainTeamIndexRoute,
+  mainTeamStaffUserIdRoute: mainTeamStaffUserIdRoute,
 }
 
 const mainRouteRouteWithChildren = mainRouteRoute._addFileChildren(

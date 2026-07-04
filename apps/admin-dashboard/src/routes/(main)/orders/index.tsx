@@ -11,8 +11,12 @@ import {
 import { BrandBadge } from "@/components/shared/StageBadge";
 import { StatusPill } from "@/components/shared/StatusPill";
 import { SearchInput } from "@/components/shared/SearchInput";
-import { FilterChip, FilterChipGroup } from "@/components/shared/FilterChip";
-import { BrandFilter } from "@/components/Filters";
+import {
+  FilterBar,
+  FilterField,
+  Segmented,
+} from "@/components/shared/FilterBar";
+import { BrandSelect } from "@/components/Filters";
 import { Button } from "@repo/ui/button";
 import { useOrdersPage } from "@/hooks/useAdmin";
 import { formatKwd, formatNum, titleCase } from "@/lib/format";
@@ -36,18 +40,25 @@ export const Route = createFileRoute("/(main)/orders/")({
   component: OrdersPage,
 });
 
-const TYPES = ["WORK", "SALES", "ALTERATION"];
-const PHASES = [
+const TYPE_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "WORK", label: "Work" },
+  { value: "SALES", label: "Sales" },
+  { value: "ALTERATION", label: "Alteration" },
+] as const;
+
+const PHASE_OPTIONS = [
+  { value: "", label: "All" },
   { value: "new", label: "New" },
   { value: "in_progress", label: "In progress" },
   { value: "completed", label: "Completed" },
-];
+] as const;
 
 function OrdersPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
 
-  const brands = useMemo(() => (search.brands ? search.brands.split(",") : []), [search.brands]);
+  const brands = useMemo(() => (search.brands ? [search.brands] : []), [search.brands]);
 
   const filters = useMemo(
     () => ({
@@ -75,31 +86,37 @@ function OrdersPage() {
       <PageHeader icon={Table2} title="Order explorer" subtitle="Every order across all brands" />
 
       {/* Filters */}
-      <div className="space-y-2 mb-4">
-        <BrandFilter selected={brands} onChange={(b) => patch({ brands: b.length ? b.join(",") : undefined })} />
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <FilterChipGroup>
-              <FilterChip active={!search.type} onClick={() => patch({ type: undefined })}>All types</FilterChip>
-              {TYPES.map((t) => (
-                <FilterChip key={t} active={search.type === t} onClick={() => patch({ type: t })}>{titleCase(t)}</FilterChip>
-              ))}
-            </FilterChipGroup>
-            <FilterChipGroup>
-              <FilterChip active={!search.phase} onClick={() => patch({ phase: undefined })}>All phases</FilterChip>
-              {PHASES.map((p) => (
-                <FilterChip key={p.value} active={search.phase === p.value} onClick={() => patch({ phase: p.value })}>{p.label}</FilterChip>
-              ))}
-            </FilterChipGroup>
-          </div>
+      <FilterBar
+        search={
           <SearchInput
             value={search.q ?? ""}
             onChange={(v) => patch({ q: v || undefined })}
             placeholder="Order #, invoice, name, phone…"
             className="sm:w-72"
           />
-        </div>
-      </div>
+        }
+      >
+        <FilterField label="Brand">
+          <BrandSelect
+            value={search.brands ?? ""}
+            onChange={(b) => patch({ brands: b || undefined })}
+          />
+        </FilterField>
+        <FilterField label="Type">
+          <Segmented
+            value={search.type ?? ""}
+            onChange={(v) => patch({ type: v || undefined })}
+            options={TYPE_OPTIONS}
+          />
+        </FilterField>
+        <FilterField label="Phase">
+          <Segmented
+            value={search.phase ?? ""}
+            onChange={(v) => patch({ phase: v || undefined })}
+            options={PHASE_OPTIONS}
+          />
+        </FilterField>
+      </FilterBar>
 
       {/* Stats (page 1 only) */}
       {stats && (

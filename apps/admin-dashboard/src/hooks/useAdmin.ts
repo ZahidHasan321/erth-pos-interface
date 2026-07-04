@@ -21,7 +21,10 @@ import {
   getStockMovements,
   getStaffRoster,
   getWorkshopRoster,
+  getStaffPerformance,
+  getStaffDetail,
   getCustomersPage,
+  getCustomerDetail,
   type OrderCursor,
   type OrdersPage,
   type GarmentCursor,
@@ -46,7 +49,10 @@ export const adminKeys = {
   movements: (params: unknown) => ["admin", "movements", params] as const,
   staff: () => ["admin", "staff"] as const,
   workers: () => ["admin", "workers"] as const,
+  staffPerf: (filters: unknown) => ["admin", "staffPerf", filters] as const,
+  staffDetail: (id: string, filters: unknown) => ["admin", "staffDetail", id, filters] as const,
   customers: (filters: unknown) => ["admin", "customers", filters] as const,
+  customerDetail: (id: number) => ["admin", "customer", id] as const,
 };
 
 export function useDashboardSummary(range: RangeBounds, brands: string[]) {
@@ -187,6 +193,38 @@ export function useWorkshopRoster() {
   });
 }
 
+export interface StaffPerfFilters {
+  from: string;
+  to: string;
+  brands: string[];
+}
+
+/** Staff-performance roster (orders/measurements/collections) over a range. */
+export function useStaffPerformance(filters: StaffPerfFilters) {
+  return useQuery({
+    queryKey: adminKeys.staffPerf(filters),
+    queryFn: () =>
+      getStaffPerformance({
+        from: filters.from,
+        to: filters.to,
+        brands: filters.brands.length ? filters.brands : null,
+      }),
+    staleTime: STALE_TIME,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** One staff member's drilldown (totals, daily breakdown, recent orders). */
+export function useStaffDetail(id: string, filters: { from: string; to: string }) {
+  return useQuery({
+    queryKey: adminKeys.staffDetail(id, filters),
+    queryFn: () => getStaffDetail(id, filters),
+    staleTime: STALE_TIME,
+    placeholderData: keepPreviousData,
+    enabled: !!id,
+  });
+}
+
 export interface CustomersFilters {
   accountType: string | null;
   search: string | null;
@@ -207,5 +245,14 @@ export function useCustomersPage(filters: CustomersFilters) {
     getNextPageParam: (lastPage: CustomersPage) => lastPage.next_cursor ?? undefined,
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useCustomerDetail(id: number) {
+  return useQuery({
+    queryKey: adminKeys.customerDetail(id),
+    queryFn: () => getCustomerDetail(id),
+    staleTime: STALE_TIME,
+    enabled: Number.isFinite(id) && id > 0,
   });
 }

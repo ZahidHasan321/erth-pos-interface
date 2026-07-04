@@ -558,3 +558,180 @@ export async function getCustomersPage(params: CustomersPageParams): Promise<Cus
   if (error) throw new Error(`Failed to load customers: ${error.message}`);
   return data as CustomersPage;
 }
+
+// ── 10. Customer detail (profile + linking + order history) ──────────────────
+// Backed by admin_customer_detail (0047). Returns NULL for a clean 404.
+
+export interface CustomerProfile {
+  id: number;
+  name: string;
+  arabic_name: string | null;
+  phone: string | null;
+  country_code: string | null;
+  nick_name: string | null;
+  account_type: string | null;
+  relation: string | null;
+  primary_customer_id: number | null;
+  customer_segment: string | null;
+  nationality: string | null;
+  city: string | null;
+  area: string | null;
+  email: string | null;
+  notes: string | null;
+  created_at: string | null;
+}
+
+export interface CustomerLinkRef {
+  id: number;
+  name: string;
+  relation?: string | null;
+}
+
+export interface CustomerDetailStats {
+  orders_count: number;
+  total_spend: number | string;
+  outstanding_total: number | string;
+  last_order_at: string | null;
+}
+
+export interface CustomerDetailOrder {
+  id: number;
+  order_date: string;
+  brand: string;
+  order_type: string;
+  checkout_status: string;
+  order_total: number | string | null;
+  paid: number | string | null;
+  invoice_number: number | null;
+  order_phase: string | null;
+  delivery_date: string | null;
+  home_delivery: boolean;
+  garments_count: number | null;
+  brova_count: number | null;
+  final_count: number | null;
+  alteration_count: number | null;
+  status_label: string | null;
+}
+
+export interface CustomerDetail {
+  customer: CustomerProfile;
+  primary: CustomerLinkRef | null;
+  secondaries: CustomerLinkRef[];
+  stats: CustomerDetailStats;
+  orders: CustomerDetailOrder[];
+}
+
+export async function getCustomerDetail(id: number): Promise<CustomerDetail | null> {
+  const { data, error } = await db.rpc("admin_customer_detail", { p_customer_id: id });
+  if (error) throw new Error(`Failed to load customer ${id}: ${error.message}`);
+  return (data as CustomerDetail | null) ?? null;
+}
+
+// ── 11. Staff performance (Team › Staff) ─────────────────────────────────────
+// Backed by admin_staff_performance / admin_staff_detail (0047, Phase 2). Every
+// user with in-range attribution: orders taken, order/brand mix, measurements,
+// cashier collections (net — refunds already negative).
+
+export interface OrderMix {
+  WORK: number;
+  SALES: number;
+  ALTERATION: number;
+}
+
+export interface BrandMixEntry {
+  brand: string;
+  count: number;
+}
+
+export interface StaffPerfRow {
+  id: string;
+  name: string;
+  username: string;
+  role: string | null;
+  department: string | null;
+  brands: string[] | null;
+  is_active: boolean;
+  orders_taken: number;
+  orders_value: number | string;
+  order_mix: OrderMix;
+  brand_mix: BrandMixEntry[];
+  measurements_taken: number;
+  collections_amount: number | string;
+  collections_count: number;
+}
+
+export interface StaffPerfStats {
+  staff_count: number;
+  total_orders: number;
+  total_value: number | string;
+  total_measurements: number;
+  total_collections: number | string;
+}
+
+export interface StaffPerfPage {
+  data: StaffPerfRow[];
+  stats: StaffPerfStats;
+}
+
+export async function getStaffPerformance(
+  { from, to, brands }: { from: string; to: string; brands: string[] | null },
+): Promise<StaffPerfPage> {
+  const { data, error } = await db.rpc("admin_staff_performance", {
+    p_from: from,
+    p_to: to,
+    p_brands: brands && brands.length ? brands : null,
+  });
+  if (error) throw new Error(`Failed to load staff performance: ${error.message}`);
+  return data as StaffPerfPage;
+}
+
+export interface StaffProfile {
+  id: string;
+  name: string;
+  username: string;
+  role: string | null;
+  department: string | null;
+  brands: string[] | null;
+  is_active: boolean;
+  employee_id: string | null;
+  phone: string | null;
+  email: string | null;
+  hire_date: string | null;
+}
+
+export interface StaffTotals {
+  orders_taken: number;
+  orders_value: number | string;
+  order_mix: OrderMix;
+  measurements_taken: number;
+  collections_amount: number | string;
+  collections_count: number;
+}
+
+export interface StaffDailyRow {
+  day: string;
+  orders_taken: number;
+  orders_value: number | string;
+  measurements_taken: number;
+  collections_amount: number | string;
+}
+
+export interface StaffDetail {
+  user: StaffProfile;
+  totals: StaffTotals;
+  daily: StaffDailyRow[];
+  recent_orders: OrderRow[];
+}
+
+export async function getStaffDetail(
+  userId: string,
+  { from, to }: { from: string; to: string },
+): Promise<StaffDetail | null> {
+  const { data, error } = await db.rpc("admin_staff_detail", {
+    p_user_id: userId,
+    p_from: from,
+    p_to: to,
+  });
+  if (error) throw new Error(`Failed to load staff ${userId}: ${error.message}`);
+  return (data as StaffDetail | null) ?? null;
+}

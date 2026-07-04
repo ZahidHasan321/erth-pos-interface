@@ -11,12 +11,17 @@ import {
 } from "@/components/shared/PageShell";
 import { BrandBadge, StageBadge } from "@/components/shared/StageBadge";
 import { SearchInput } from "@/components/shared/SearchInput";
-import { FilterChip, FilterChipGroup } from "@/components/shared/FilterChip";
-import { BrandFilter } from "@/components/Filters";
+import {
+  FilterBar,
+  FilterField,
+  Segmented,
+  FilterSelect,
+} from "@/components/shared/FilterBar";
+import { BrandSelect } from "@/components/Filters";
 import { Button } from "@repo/ui/button";
 import { useGarmentsPage } from "@/hooks/useAdmin";
 import { PIECE_STAGE_LABELS } from "@/lib/constants";
-import { formatNum, titleCase } from "@/lib/format";
+import { formatNum } from "@/lib/format";
 import { formatDate } from "@/lib/utils";
 import type { GarmentRow } from "@/api/admin";
 
@@ -39,19 +44,30 @@ export const Route = createFileRoute("/(main)/garments/")({
   component: GarmentsPage,
 });
 
-const TYPES = ["brova", "final", "alteration"];
-const LOCATIONS = [
+const TYPE_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "brova", label: "Brova" },
+  { value: "final", label: "Final" },
+  { value: "alteration", label: "Alteration" },
+] as const;
+
+const LOCATION_OPTIONS = [
   { value: "shop", label: "Shop" },
   { value: "workshop", label: "Workshop" },
   { value: "transit_to_shop", label: "To shop" },
   { value: "transit_to_workshop", label: "To workshop" },
-];
+] as const;
+
+const STAGE_OPTIONS = Object.entries(PIECE_STAGE_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}));
 
 function GarmentsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
 
-  const brands = useMemo(() => (search.brands ? search.brands.split(",") : []), [search.brands]);
+  const brands = useMemo(() => (search.brands ? [search.brands] : []), [search.brands]);
 
   const filters = useMemo(
     () => ({
@@ -80,41 +96,48 @@ function GarmentsPage() {
       <PageHeader icon={Shirt} title="Garments" subtitle="Every garment across all brands" />
 
       {/* Filters */}
-      <div className="space-y-2 mb-4">
-        <BrandFilter selected={brands} onChange={(b) => patch({ brands: b.length ? b.join(",") : undefined })} />
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <FilterChipGroup>
-              <FilterChip active={!search.type} onClick={() => patch({ type: undefined })}>All types</FilterChip>
-              {TYPES.map((t) => (
-                <FilterChip key={t} active={search.type === t} onClick={() => patch({ type: t })}>{titleCase(t)}</FilterChip>
-              ))}
-            </FilterChipGroup>
-            <FilterChipGroup>
-              <FilterChip active={!search.location} onClick={() => patch({ location: undefined })}>Any where</FilterChip>
-              {LOCATIONS.map((l) => (
-                <FilterChip key={l.value} active={search.location === l.value} onClick={() => patch({ location: l.value })}>{l.label}</FilterChip>
-              ))}
-            </FilterChipGroup>
-            <select
-              value={search.stage ?? ""}
-              onChange={(e) => patch({ stage: e.target.value || undefined })}
-              className="h-8 rounded-md border border-border bg-card px-2 text-sm text-foreground"
-            >
-              <option value="">All stages</option>
-              {Object.entries(PIECE_STAGE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </div>
+      <FilterBar
+        search={
           <SearchInput
             value={search.q ?? ""}
             onChange={(v) => patch({ q: v || undefined })}
             placeholder="Garment ID, order #, invoice, name, phone…"
             className="lg:w-72"
           />
-        </div>
-      </div>
+        }
+      >
+        <FilterField label="Brand">
+          <BrandSelect
+            value={search.brands ?? ""}
+            onChange={(b) => patch({ brands: b || undefined })}
+          />
+        </FilterField>
+        <FilterField label="Type">
+          <Segmented
+            value={search.type ?? ""}
+            onChange={(v) => patch({ type: v || undefined })}
+            options={TYPE_OPTIONS}
+          />
+        </FilterField>
+        <FilterField label="Location">
+          <FilterSelect
+            value={search.location ?? ""}
+            onChange={(v) => patch({ location: v || undefined })}
+            options={LOCATION_OPTIONS}
+            allLabel="Anywhere"
+            className="w-40"
+          />
+        </FilterField>
+        <FilterField label="Stage">
+          <FilterSelect
+            value={search.stage ?? ""}
+            onChange={(v) => patch({ stage: v || undefined })}
+            options={STAGE_OPTIONS}
+            allLabel="All stages"
+            className="w-44"
+          />
+        </FilterField>
+      </FilterBar>
 
       {/* Stats (page 1 only) */}
       {stats && (

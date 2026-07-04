@@ -93,6 +93,24 @@ export function formatDate(value?: string | null): string {
   });
 }
 
+/** Format an ISO timestamp to a readable date + time like "Mar 22, 14:05" (Kuwait tz). */
+export function formatDateTime(value?: string | null): string {
+  if (!value) return "";
+  const d = parseUtcTimestamp(value);
+  if (isNaN(d.getTime())) return value;
+  const now = new Date();
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return d.toLocaleString("en-GB", {
+    timeZone: TZ,
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 // ── Order grouping helpers (shared across pages) ─────────────────────────────
 
 export interface OrderGroup {

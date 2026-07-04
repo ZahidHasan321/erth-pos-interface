@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { LayoutDashboard, Table2, Shirt, Boxes, Users, LogOut, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Table2, Shirt, Boxes, Users, Contact, Wallet, LogOut, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/auth";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
@@ -7,9 +7,11 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/orders", label: "Orders", icon: Table2 },
+  { to: "/finance", label: "Finance", icon: Wallet },
   { to: "/garments", label: "Garments", icon: Shirt },
   { to: "/inventory", label: "Inventory", icon: Boxes },
-  { to: "/people", label: "People", icon: Users },
+  { to: "/customers", label: "Customers", icon: Contact },
+  { to: "/team", label: "Team", icon: Users },
 ] as const;
 
 export function AppLayout({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {
@@ -21,15 +23,15 @@ export function AppLayout({ children, onLogout }: { children: React.ReactNode; o
     to === "/" ? path === "/" : path === to || path.startsWith(to + "/");
 
   return (
-    <div className="min-h-dvh flex bg-background text-foreground">
-      {/* Sidebar */}
-      <aside className="w-56 shrink-0 border-r border-sidebar-border bg-sidebar flex flex-col">
+    <div className="h-dvh flex bg-background text-foreground overflow-hidden">
+      {/* Sidebar — fixed full-height; only the main content scrolls */}
+      <aside className="w-56 shrink-0 border-r border-sidebar-border bg-sidebar flex flex-col h-dvh">
         <div className="h-14 flex items-center gap-2 px-4 border-b border-sidebar-border">
           <ShieldCheck className="w-5 h-5 text-primary" />
           <span className="text-sm font-medium">Admin Dashboard</span>
         </div>
 
-        <nav className="flex-1 p-2 space-y-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
           {NAV.map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
@@ -66,7 +68,7 @@ export function AppLayout({ children, onLogout }: { children: React.ReactNode; o
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0 overflow-x-hidden">
+      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden">
         <div className="max-w-[1400px] mx-auto p-6">{children}</div>
       </main>
     </div>

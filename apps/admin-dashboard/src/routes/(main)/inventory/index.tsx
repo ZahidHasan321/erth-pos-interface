@@ -10,7 +10,11 @@ import {
 } from "@/components/shared/PageShell";
 import { StatusPill } from "@/components/shared/StatusPill";
 import { SearchInput } from "@/components/shared/SearchInput";
-import { FilterChip, FilterChipGroup } from "@/components/shared/FilterChip";
+import {
+  FilterBar,
+  Segmented,
+  FilterToggle,
+} from "@/components/shared/FilterBar";
 import { useInventory, useStockMovements } from "@/hooks/useAdmin";
 import { formatKwd, formatNum, titleCase } from "@/lib/format";
 import { formatDate } from "@/lib/utils";
@@ -79,24 +83,27 @@ function InventoryPage() {
       )}
 
       {/* Controls */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
-        <FilterChipGroup>
-          {TABS.map((t) => (
-            <FilterChip key={t.value} active={tab === t.value} onClick={() => patch({ tab: t.value === "fabric" ? undefined : t.value })}>
-              {t.label}
-            </FilterChip>
-          ))}
-          <FilterChip active={!!search.archived} onClick={() => patch({ archived: search.archived ? undefined : true })}>
-            Include archived
-          </FilterChip>
-        </FilterChipGroup>
-        <SearchInput
-          value={search.q ?? ""}
-          onChange={(v) => patch({ q: v || undefined })}
-          placeholder="Name or SKU…"
-          className="sm:w-64"
+      <FilterBar
+        search={
+          <SearchInput
+            value={search.q ?? ""}
+            onChange={(v) => patch({ q: v || undefined })}
+            placeholder="Name or SKU…"
+            className="sm:w-64"
+          />
+        }
+      >
+        <Segmented
+          value={tab}
+          onChange={(v) => patch({ tab: v === "fabric" ? undefined : v })}
+          options={TABS}
         />
-      </div>
+        <FilterToggle
+          checked={!!search.archived}
+          onChange={(v) => patch({ archived: v || undefined })}
+          label="Include archived"
+        />
+      </FilterBar>
 
       {isError ? (
         <EmptyState icon={AlertTriangle} message={(error as Error)?.message ?? "Failed to load inventory"} />
