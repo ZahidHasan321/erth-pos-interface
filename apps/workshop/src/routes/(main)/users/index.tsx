@@ -59,6 +59,7 @@ const ROLE_STYLE: Record<Role, string> = {
   super_admin: "bg-foreground text-background",
   admin:       "bg-foreground text-background",
   manager:     "bg-muted text-foreground",
+  supervisor:  "bg-muted text-foreground",
   staff:       "bg-muted/40 text-muted-foreground",
   cashier:     "bg-muted/40 text-muted-foreground",
   measurement_taker: "bg-muted/40 text-muted-foreground",
@@ -70,7 +71,7 @@ function getAvatarStyle(role: Role) {
   return "bg-muted/60 text-muted-foreground";
 }
 
-const ROLE_RANK: Record<Role, number> = { super_admin: 0, admin: 1, manager: 2, staff: 3, cashier: 4, measurement_taker: 5 };
+const ROLE_RANK: Record<Role, number> = { super_admin: 0, admin: 1, manager: 2, supervisor: 3, staff: 4, cashier: 5, measurement_taker: 6 };
 
 // ── Deactivate Confirm Dialog ───────────────────────────────────────
 
@@ -421,7 +422,7 @@ function UsersPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All roles</SelectItem>
-              {(["super_admin", "admin", "manager", "staff"] as Role[]).map((r) => (
+              {(["super_admin", "admin", "manager", "supervisor", "staff"] as Role[]).map((r) => (
                 <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
               ))}
             </SelectContent>

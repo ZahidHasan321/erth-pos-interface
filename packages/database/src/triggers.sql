@@ -3516,10 +3516,12 @@ RETURNS BOOLEAN AS $$
   SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role = 'super_admin');
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
--- Check if current user is admin or manager
+-- Check if current user is admin or manager. Supervisor is a workshop
+-- manager-rank role (blocked from production-stage advancement at the UI layer
+-- only), so it counts as manager-or-above for every server-side gate.
 CREATE OR REPLACE FUNCTION is_manager_or_above()
 RETURNS BOOLEAN AS $$
-  SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role IN ('super_admin', 'admin', 'manager'));
+  SELECT EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND role IN ('super_admin', 'admin', 'manager', 'supervisor'));
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
 -- Check if current user can access a given brand

@@ -112,12 +112,21 @@ export function isAdmin(user: AuthUser | null): boolean {
   return user?.role === "super_admin" || user?.role === "admin";
 }
 
+// Supervisor is a workshop manager minus production-stage control: same rank as
+// a manager everywhere except the terminal pages (advancing piece_stage / QC),
+// which the workshop PERMISSIONS matrix denies them. Treated as manager-rank
+// here so every other manager-gated surface behaves identically.
 export function isManager(user: AuthUser | null): boolean {
   return (
     user?.role === "super_admin" ||
     user?.role === "admin" ||
-    user?.role === "manager"
+    user?.role === "manager" ||
+    user?.role === "supervisor"
   );
+}
+
+export function isSupervisor(user: AuthUser | null): boolean {
+  return user?.role === "supervisor";
 }
 
 export function isTerminalUser(user: AuthUser | null): boolean {
@@ -163,6 +172,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   super_admin: "Super Admin",
   admin: "Admin",
   manager: "Manager",
+  supervisor: "Supervisor",
   staff: "Staff",
   cashier: "Cashier",
   measurement_taker: "Measurement Taker",

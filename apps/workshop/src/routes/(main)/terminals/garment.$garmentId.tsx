@@ -16,6 +16,8 @@ import {
   useStartGarment,
   useCancelStartGarment,
 } from "@/hooks/useGarmentMutations";
+import { useCan } from "@/lib/can";
+import { CAPS } from "@/lib/capabilities";
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
 import { HISTORY_KEY_MAP, GarmentHeader } from "@/components/shared/GarmentDetailSections";
 import { DishdashaOverlay } from "@/components/shared/DishdashaOverlay";
@@ -360,6 +362,7 @@ function TerminalActions({
   station?: string;
 }) {
   const router = useRouter();
+  const canAdvance = useCan(CAPS.ADVANCE_STAGE);
   const startMut = useStartGarment();
   const cancelMut = useCancelStartGarment();
   const completeMut = useCompleteAndAdvance();
@@ -403,6 +406,9 @@ function TerminalActions({
   }, [isStarted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!nextStage) return null;
+
+  // No stage-advance capability (e.g. supervisor) → read-only, no action bar.
+  if (!canAdvance) return null;
 
   // Garment already moved past this terminal's stage — lock completion here.
   if (stationMismatch) {

@@ -4,6 +4,8 @@ import { useTerminalGarments } from "@/hooks/useWorkshopGarments";
 import { useAuth } from "@/context/auth";
 import { useCurrentUserUnit } from "@/hooks/useCurrentUserUnit";
 import { isTerminalUser } from "@/lib/rbac";
+import { useCan } from "@/lib/can";
+import { CAPS } from "@/lib/capabilities";
 import {
   PageHeader,
   LoadingSkeleton,
@@ -187,6 +189,7 @@ function InlineActions({
   stage: string;
 }) {
   const { user } = useAuth();
+  const canAdvance = useCan(CAPS.ADVANCE_STAGE);
   const startMut = useStartGarment();
   const cancelMut = useCancelStartGarment();
   const completeMut = useCompleteAndAdvance();
@@ -240,7 +243,7 @@ function InlineActions({
       <Button
         size="sm-touch"
         onClick={onStart}
-        disabled={startMut.isPending}
+        disabled={startMut.isPending || !canAdvance}
       >
         {startMut.isPending ? (
           <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
@@ -257,7 +260,7 @@ function InlineActions({
       <Button
         size="sm-touch"
         onClick={onDone}
-        disabled={completeMut.isPending}
+        disabled={completeMut.isPending || !canAdvance}
       >
         {completeMut.isPending ? (
           <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />

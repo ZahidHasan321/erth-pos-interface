@@ -43,7 +43,7 @@ import {
 import { IconNeedle, IconIroning1, IconRosette, IconSparkles /*, IconStack2 */ } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
-import { isAdmin, isManager } from "@/lib/rbac";
+import { isAdmin, isManager, canAccess } from "@/lib/rbac";
 
 export function WorkshopSidebar() {
   const { data: counts } = useSidebarCounts();
@@ -118,7 +118,10 @@ export function WorkshopSidebar() {
 
   const totalTerminalCount = terminalItems.reduce((s, t) => s + (t.count ?? 0), 0);
   const isCollapsedDesktop = state === "collapsed" && !isMobile;
-  const canSeeTerminals = isAdmin(authUser) || isManager(authUser);
+  // Terminal nav follows real page access, not rank: a supervisor is manager-rank
+  // but denied the terminal pages (can't advance production stages), so drive
+  // this off the matrix rather than isManager.
+  const canSeeTerminals = canAccess(authUser, "/terminals/cutting");
 
   return (
     <Sidebar collapsible="icon">

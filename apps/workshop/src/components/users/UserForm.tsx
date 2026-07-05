@@ -167,6 +167,7 @@ function describeAccess(role: Role, department: Department, jobFunctions: JobFun
   if (role === "super_admin") return { label: "Full access: all apps", detail: "Full access to all pages across all apps. Can manage everything." };
   if (role === "admin") return { label: "Full access", detail: "Full access to all pages. Can manage users, schedules, pricing, and operations." };
   if (role === "manager" && department === "workshop") return { label: "Workshop manager", detail: "Full workshop operations: scheduling, receiving, dispatch, team, performance." };
+  if (role === "supervisor") return { label: "Workshop supervisor", detail: "Reschedules and reassigns work like a manager, but cannot advance production stages (terminals / QC) or Receive & Start." };
   if (role === "manager" && department === "shop") return { label: "Shop manager: workshop view-only", detail: "View-only access to workshop data. Dashboard, tracker, performance." };
   if (role === "staff" && department === "shop") return { label: "Shop staff", detail: "Shop-only access. No workshop pages." };
   if (role === "measurement_taker") return { label: "Measurement taker", detail: "Order-taking only: orders, customers, appointments, deliveries. No stock management, cashier, or end-of-day report." };
@@ -330,7 +331,7 @@ export function UserForm({
             <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v as Role }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(["super_admin", "admin", "manager", "staff"] as Role[]).map((r) => (
+                {(["super_admin", "admin", "manager", "supervisor", "staff"] as Role[]).map((r) => (
                   <SelectItem key={r} value={r}>
                     <span className="flex items-center gap-2">
                       <Shield className={cn(

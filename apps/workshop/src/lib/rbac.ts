@@ -32,6 +32,12 @@ export {
 // Matrix key format (see @repo/database/auth for precedence rules):
 //   admin                — super_admin or admin (any department, any job_function)
 //   manager:workshop     — workshop managers
+//   supervisor:workshop  — workshop supervisors: a manager who reschedules /
+//                          reassigns work but cannot advance production stages.
+//                          Mirrors manager:workshop on every surface EXCEPT the
+//                          terminal pages (cutting…QC), which are omitted so
+//                          getPermission falls through to "none" (no advancing
+//                          piece_stage, no QC verdicts).
 //   manager:shop         — shop managers (rare in workshop app)
 //   staff:workshop       — office workshop staff (job_function = null)
 //   staff:shop           — office shop staff (job_function = null)
@@ -46,46 +52,46 @@ export {
 // Remove later when operations are stable (see task comment at end of file).
 const PERMISSIONS: PermissionMatrix = {
   // Office pages (unchanged from prior advisory matrix)
-  "/users":       { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "none", "staff:shop": "none" },
-  "/team":        { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "own",  "staff:shop": "none" },
-  "/performance": { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "own",  "staff:shop": "none" },
-  "/qc-analytics": { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/receiving":   { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
-  "/parking":     { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
-  "/scheduler":   { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
-  "/board":       { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/assigned":    { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/dispatch":    { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
-  "/pricing":     { admin: "full", "manager:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
-  "/dashboard":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/completed":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/store":           { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/store/transfers": { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
-  "/store/reports":   { admin: "full", "manager:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/users":       { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "none", "staff:shop": "none" },
+  "/team":        { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "own",  "staff:shop": "none" },
+  "/performance": { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "own",  "staff:shop": "none" },
+  "/qc-analytics": { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/receiving":   { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
+  "/parking":     { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
+  "/scheduler":   { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
+  "/board":       { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/assigned":    { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/dispatch":    { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
+  "/pricing":     { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "none", "staff:workshop": "none", "staff:shop": "none" },
+  "/dashboard":   { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/completed":   { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/store":           { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/store/transfers": { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
+  "/store/reports":   { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "view", "staff:workshop": "view", "staff:shop": "none" },
 
   // Inventory type permissions — controls create/edit visibility within the inventory page.
   // Workshop manages accessories only; fabrics and shelf items are shop-owned (fabrics are
   // view-only here as transferred-in stock; shelf items aren't shown in the workshop at all).
-  "inventory:fabrics":     { admin: "full", "manager:workshop": "view", "staff:workshop": "view" },
-  "inventory:accessories": { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
+  "inventory:fabrics":     { admin: "full", "manager:workshop": "view", "supervisor:workshop": "view", "staff:workshop": "view" },
+  "inventory:accessories": { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "staff:workshop": "full" },
   "inventory:shelf":       { admin: "full" },
 
   // Stock action permissions
-  "inventory:restock":     { admin: "full", "manager:workshop": "full" },
-  "inventory:adjust":      { admin: "full", "manager:workshop": "full" },
+  "inventory:restock":     { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full" },
+  "inventory:adjust":      { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full" },
   // Waste is staff-allowed; over the cost threshold the RPC requires a manager.
-  "inventory:waste":       { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
+  "inventory:waste":       { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "staff:workshop": "full" },
   "inventory:delete":      { admin: "full" },
-  "suppliers:manage":      { admin: "full", "manager:workshop": "full" },
+  "suppliers:manage":      { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full" },
 
   // Transfers — request anywhere; send (dispatch)/receive gated by side at render-time.
   // No approve step (CLAUDE.md §4): a requested transfer is sent directly.
-  "transfers:request":     { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
-  "transfers:dispatch":    { admin: "full", "manager:workshop": "full" },
-  "transfers:receive":     { admin: "full", "manager:workshop": "full", "staff:workshop": "full" },
-  "transfers:cancel":      { admin: "full", "manager:workshop": "full" },
-  "/profile":     { admin: "full", "manager:workshop": "full", "manager:shop": "full", "staff:workshop": "full", "staff:shop": "full", terminal: "full" },
-  "/notifications": { admin: "full", "manager:workshop": "full", "manager:shop": "full", "staff:workshop": "full", "staff:shop": "full", terminal: "full" },
+  "transfers:request":     { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "staff:workshop": "full" },
+  "transfers:dispatch":    { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full" },
+  "transfers:receive":     { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "staff:workshop": "full" },
+  "transfers:cancel":      { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full" },
+  "/profile":     { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "full", "staff:workshop": "full", "staff:shop": "full", terminal: "full" },
+  "/notifications": { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "manager:shop": "full", "staff:workshop": "full", "staff:shop": "full", terminal: "full" },
 
   // Terminal pages. Matched by matrix key in this order:
   //   1. admin / manager:workshop           — full for testing, revoke later

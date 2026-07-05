@@ -25,6 +25,8 @@ import { parseMeasurementParts } from "@repo/database";
 
 import { cn } from "@/lib/utils";
 import { useSubmitQc } from "@/hooks/useGarmentMutations";
+import { useCan } from "@/lib/can";
+import { CAPS } from "@/lib/capabilities";
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
 import { StageChip } from "@/components/shared/plan-dialog-shared";
 import { PIECE_STAGE_LABELS, STAGE_TO_PLAN_KEY } from "@/lib/constants";
@@ -156,6 +158,7 @@ export function QualityCheckForm({
   alterationFilter = null,
 }: Props) {
   const router = useRouter();
+  const canQc = useCan(CAPS.QC_SUBMIT);
   const submitMut = useSubmitQc();
 
   const plan = garment.production_plan as ProductionPlan | null;
@@ -448,7 +451,7 @@ export function QualityCheckForm({
       missing.push({ key: q.key, label: q.label });
     }
   }
-  const canSubmit = !!inspector && missing.length === 0;
+  const canSubmit = canQc && !!inspector && missing.length === 0;
 
   // ── Submit flow ───────────────────────────────────────────────────────────
   const [failDialogOpen, setFailDialogOpen] = useState(false);
