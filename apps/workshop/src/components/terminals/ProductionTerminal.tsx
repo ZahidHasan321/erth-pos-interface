@@ -273,7 +273,7 @@ function InlineActions({
         size="sm-touch"
         variant="outline"
         onClick={onCancel}
-        disabled={cancelMut.isPending}
+        disabled={cancelMut.isPending || !canAdvance}
       >
         {cancelMut.isPending ? (
           <Loader2 className="w-3.5 h-3.5" />

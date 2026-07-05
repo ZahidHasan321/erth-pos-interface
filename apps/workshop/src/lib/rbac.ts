@@ -33,11 +33,12 @@ export {
 //   admin                — super_admin or admin (any department, any job_function)
 //   manager:workshop     — workshop managers
 //   supervisor:workshop  — workshop supervisors: a manager who reschedules /
-//                          reassigns work but cannot advance production stages.
-//                          Mirrors manager:workshop on every surface EXCEPT the
-//                          terminal pages (cutting…QC), which are omitted so
-//                          getPermission falls through to "none" (no advancing
-//                          piece_stage, no QC verdicts).
+//                          reassigns work. Mirrors manager:workshop on every
+//                          surface (they can OPEN the terminals to monitor).
+//                          The one thing they can't do — advance a garment's
+//                          stage (terminal Start/Done/Cancel) or submit a QC
+//                          verdict — is gated at the buttons via the capability
+//                          layer (CAPS.ADVANCE_STAGE / QC_SUBMIT), not the page.
 //   manager:shop         — shop managers (rare in workshop app)
 //   staff:workshop       — office workshop staff (job_function = null)
 //   staff:shop           — office shop staff (job_function = null)
@@ -99,18 +100,18 @@ const PERMISSIONS: PermissionMatrix = {
   //   3. terminal                           — "none" fallback so a sewer can't open
   //                                           the cutting terminal
   //   4. office staff keys — explicitly "none"
-  "/terminals/soaking":       { admin: "full", "manager:workshop": "full", "terminal:soaker":      "full", terminal: "none", "staff:workshop": "none" },
-  "/terminals/cutting":       { admin: "full", "manager:workshop": "full", "terminal:cutter":      "full", terminal: "none", "staff:workshop": "none" },
-  "/terminals/post-cutting":  { admin: "full", "manager:workshop": "full", "terminal:post_cutter": "full", terminal: "none", "staff:workshop": "none" },
-  "/terminals/sewing":        { admin: "full", "manager:workshop": "full", "terminal:sewer":       "full", terminal: "none", "staff:workshop": "none" },
-  "/terminals/finishing":     { admin: "full", "manager:workshop": "full", "terminal:finisher":    "full", terminal: "none", "staff:workshop": "none" },
-  "/terminals/ironing":       { admin: "full", "manager:workshop": "full", "terminal:ironer":      "full", terminal: "none", "staff:workshop": "none" },
-  "/terminals/quality-check": { admin: "full", "manager:workshop": "full", "terminal:qc":          "full", terminal: "none", "staff:workshop": "none" },
+  "/terminals/soaking":       { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "terminal:soaker":      "full", terminal: "none", "staff:workshop": "none" },
+  "/terminals/cutting":       { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "terminal:cutter":      "full", terminal: "none", "staff:workshop": "none" },
+  "/terminals/post-cutting":  { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "terminal:post_cutter": "full", terminal: "none", "staff:workshop": "none" },
+  "/terminals/sewing":        { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "terminal:sewer":       "full", terminal: "none", "staff:workshop": "none" },
+  "/terminals/finishing":     { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "terminal:finisher":    "full", terminal: "none", "staff:workshop": "none" },
+  "/terminals/ironing":       { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "terminal:ironer":      "full", terminal: "none", "staff:workshop": "none" },
+  "/terminals/quality-check": { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", "terminal:qc":          "full", terminal: "none", "staff:workshop": "none" },
 
   // Garment detail page inside any terminal — reachable from every terminal
   // view, so any terminal role is allowed (their own terminal already gates
   // which garments they can see via data queries).
-  "/terminals/garment":       { admin: "full", "manager:workshop": "full", terminal: "full", "staff:workshop": "none", "staff:shop": "none" },
+  "/terminals/garment":       { admin: "full", "manager:workshop": "full", "supervisor:workshop": "full", terminal: "full", "staff:workshop": "none", "staff:shop": "none" },
 };
 
 export function getPermission(user: AuthUser | null, page: string): Permission {

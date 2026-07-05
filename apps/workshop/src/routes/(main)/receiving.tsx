@@ -2,8 +2,6 @@ import React, { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useWorkshopGarments } from "@/hooks/useWorkshopGarments";
 import { useReceiveGarments, useReceiveAndStart, useMarkLostInTransit } from "@/hooks/useGarmentMutations";
-import { useCan } from "@/lib/can";
-import { CAPS } from "@/lib/capabilities";
 import { BatchActionBar } from "@/components/shared/BatchActionBar";
 import {
   PageHeader, LoadingSkeleton,
@@ -86,7 +84,6 @@ function GarmentRow({
   showAlterationOut?: boolean;
   hideExpress?: boolean;
 }) {
-  const canReceiveStart = useCan(CAPS.RECEIVE_AND_START);
   const urgency = getDeliveryUrgency(garment.delivery_date_order);
   const rowBusy = receivePending || receiveStartPending || lostPending;
 
@@ -200,12 +197,10 @@ function GarmentRow({
                 {receivePending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                 Receive
               </Button>
-              {canReceiveStart && (
-                <Button size="sm-touch" onClick={onReceiveAndStart} disabled={rowBusy} className="text-xs">
-                  {receiveStartPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                  Receive & Start
-                </Button>
-              )}
+              <Button size="sm-touch" onClick={onReceiveAndStart} disabled={rowBusy} className="text-xs">
+                {receiveStartPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                Receive & Start
+              </Button>
               {actionVariant === "receive-start-lost" && (
                 <>
                   <div className="w-px self-stretch bg-border mx-1" aria-hidden="true" />
@@ -401,7 +396,6 @@ function Section({
 
 function ReceivingPage() {
   const { data: allGarments = [], isLoading } = useWorkshopGarments();
-  const canReceiveStart = useCan(CAPS.RECEIVE_AND_START);
   const receiveMut = useReceiveGarments();
   const receiveStartMut = useReceiveAndStart();
   const lostMut = useMarkLostInTransit();
@@ -667,16 +661,14 @@ function ReceivingPage() {
                   {receiveMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                   Receive
                 </Button>
-                {canReceiveStart && (
-                  <Button
-                    size="sm"
-                    onClick={() => { receiveAndStart(allSelectedIds); clearAllSelections(); }}
-                    disabled={receiveStartMut.isPending}
-                  >
-                    {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-                    Receive & Start
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  onClick={() => { receiveAndStart(allSelectedIds); clearAllSelections(); }}
+                  disabled={receiveStartMut.isPending}
+                >
+                  {receiveStartMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                  Receive & Start
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"
