@@ -14,6 +14,9 @@ export const customerDemographicsSchema = z.object({
   whatsapp_alt: z.boolean().default(false),
   email: z.string().email().optional().nullable().or(z.literal('')),
   insta_id: z.string().optional().nullable(),
+  // Customer photo (public URL into the media bucket). Captured/compressed in
+  // the form; the fresh blob is uploaded on save, this holds the saved URL.
+  photo_url: z.string().optional().nullable(),
 
   // Address
   city: z.string().optional().nullable(),
@@ -69,6 +72,7 @@ export const customerDemographicsDefaults: CustomerDemographicsSchema = {
   whatsapp_alt: false,
   email: '',
   insta_id: '',
+  photo_url: null,
   city: '',
   block: '',
   street: '',

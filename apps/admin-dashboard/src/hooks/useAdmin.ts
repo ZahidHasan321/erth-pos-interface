@@ -18,6 +18,7 @@ import {
   getCustomerBrandMatrix,
   getGarmentsPage,
   getInventory,
+  getInventoryItem,
   getStockMovements,
   getStaffRoster,
   getWorkshopRoster,
@@ -46,6 +47,7 @@ export const adminKeys = {
   garmentDetail: (id: string) => ["admin", "garment", id] as const,
   garments: (filters: unknown) => ["admin", "garments", filters] as const,
   inventory: (search: string, archived: boolean) => ["admin", "inventory", search, archived] as const,
+  inventoryItem: (itemType: string, id: number) => ["admin", "inventoryItem", itemType, id] as const,
   movements: (params: unknown) => ["admin", "movements", params] as const,
   staff: () => ["admin", "staff"] as const,
   workers: () => ["admin", "workers"] as const,
@@ -165,6 +167,15 @@ export function useInventory(search: string, includeArchived: boolean) {
     queryFn: () => getInventory(search || null, includeArchived),
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useInventoryItem(itemType: string, id: number) {
+  return useQuery({
+    queryKey: adminKeys.inventoryItem(itemType, id),
+    queryFn: () => getInventoryItem(itemType, id),
+    staleTime: STALE_TIME,
+    enabled: !!itemType && Number.isFinite(id) && id > 0,
   });
 }
 

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Contact, Users2, Receipt, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Contact, Users2, Receipt, AlertTriangle, Link2, CornerDownRight } from "lucide-react";
 import {
   PageHeader,
   SectionCard,
@@ -12,7 +12,8 @@ import { StatusPill } from "@/components/shared/StatusPill";
 import { useCustomerDetail } from "@/hooks/useAdmin";
 import { formatKwd, titleCase } from "@/lib/format";
 import { formatDate } from "@/lib/utils";
-import type { CustomerDetail, CustomerDetailOrder } from "@/api/admin";
+import { orderStatusView } from "@/lib/orderStatus";
+import type { CustomerDetail, CustomerDetailOrder, FamilyMember } from "@/api/admin";
 
 export const Route = createFileRoute("/(main)/customers/$customerId")({
   component: CustomerDetailPage,
@@ -81,31 +82,17 @@ function CustomerDetailView({ data }: { data: CustomerDetail }) {
           )}
         </SectionCard>
 
-        {/* Linking */}
-        <SectionCard title="Family links" className="lg:col-span-1">
-          {isSecondary ? (
-            data.primary ? (
-              <div className="text-sm">
-                <div className="text-xs text-muted-foreground mb-1">
-                  {c.relation ? `${titleCase(c.relation)} of` : "Linked to"}
-                </div>
-                <Link to="/customers/$customerId" params={{ customerId: String(data.primary.id) }} className="font-medium hover:underline inline-flex items-center gap-1.5">
-                  <Users2 className="w-3.5 h-3.5 text-muted-foreground" />
-                  {data.primary.name}
-                </Link>
-              </div>
-            ) : <EmptyState message="Primary account not found" />
-          ) : data.secondaries.length > 0 ? (
-            <div className="divide-y divide-border -my-1">
-              {data.secondaries.map((s) => (
-                <Link key={s.id} to="/customers/$customerId" params={{ customerId: String(s.id) }}
-                  className="flex items-center justify-between py-2 text-sm hover:underline">
-                  <span className="font-medium">{s.name}</span>
-                  {s.relation && <span className="text-xs text-muted-foreground">{titleCase(s.relation)}</span>}
-                </Link>
-              ))}
-            </div>
-          ) : <EmptyState message="No linked family members" />}
+        {/* Family — the whole group (Primary + Secondaries), from any member */}
+        <SectionCard
+          title="Family"
+          className="lg:col-span-1"
+          action={data.family.length > 1
+            ? <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Users2 className="w-3 h-3" />{data.family.length}</span>
+            : undefined}
+        >
+          {data.family.length > 1
+            ? <FamilyRoster members={data.family} />
+            : <EmptyState message="No linked family members" />}
         </SectionCard>
       </div>
 
@@ -150,7 +137,39 @@ function CustomerDetailView({ data }: { data: CustomerDetail }) {
   );
 }
 
+function FamilyRoster({ members }: { members: FamilyMember[] }) {
+  return (
+    <div className="divide-y divide-border -my-1">
+      {members.map((m) => {
+        const isPrimary = m.account_type === "Primary";
+        const row = (
+          <span className="flex items-center justify-between gap-2 min-w-0">
+            <span className="flex items-center gap-1.5 min-w-0">
+              {isPrimary
+                ? <Users2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                : <CornerDownRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+              <span className="font-medium truncate">{m.name}</span>
+              {m.is_self && <span className="text-xs text-muted-foreground">(viewing)</span>}
+            </span>
+            <span className="text-xs text-muted-foreground shrink-0">
+              {isPrimary ? "Primary" : titleCase(m.relation ?? "Secondary")}
+            </span>
+          </span>
+        );
+        return m.is_self ? (
+          <div key={m.id} className="py-2 text-sm bg-muted/40 -mx-4 px-4">{row}</div>
+        ) : (
+          <Link key={m.id} to="/customers/$customerId" params={{ customerId: String(m.id) }}
+            className="block py-2 text-sm hover:underline">{row}</Link>
+        );
+      })}
+    </div>
+  );
+}
+
 function OrderRowView({ o }: { o: CustomerDetailOrder }) {
+  const status = orderStatusView(o);
+  const linked = o.link_size > 1;
   const garmentBits = [
     o.brova_count ? `${o.brova_count}B` : null,
     o.final_count ? `${o.final_count}F` : null,
@@ -158,18 +177,24 @@ function OrderRowView({ o }: { o: CustomerDetailOrder }) {
   ].filter(Boolean).join(" ");
 
   return (
-    <tr className="border-b border-border/60 hover:bg-muted/40 transition-colors">
-      <td className="py-2.5 px-4">
-        <Link to="/orders/$orderId" params={{ orderId: String(o.id) }} className="font-medium hover:underline">#{o.id}</Link>
+    <tr className={"border-b border-border/60 hover:bg-muted/40 transition-colors" + (linked ? " border-l-2 border-l-[var(--status-info)]" : "")}>
+      <td className={"py-2.5 px-4" + (o.is_link_child ? " pl-6" : "")}>
+        <span className="inline-flex items-center gap-1.5">
+          {o.is_link_child && <CornerDownRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+          <Link to="/orders/$orderId" params={{ orderId: String(o.id) }} className="font-medium hover:underline">#{o.id}</Link>
+          {linked && !o.is_link_child && (
+            <StatusPill color="sky" icon={Link2} className="ml-0.5">Linked · {o.link_size}</StatusPill>
+          )}
+        </span>
         {o.invoice_number != null && <div className="text-xs text-muted-foreground tabular-nums">INV-{o.invoice_number}</div>}
       </td>
       <td className="py-2.5 px-3 text-muted-foreground">{formatDate(o.order_date)}</td>
       <td className="py-2.5 px-3 text-muted-foreground">{titleCase(o.order_type)}</td>
       <td className="py-2.5 px-3"><BrandBadge brand={o.brand} /></td>
       <td className="py-2.5 px-3">
-        {o.checkout_status === "cancelled"
-          ? <StatusPill color="red">Cancelled</StatusPill>
-          : <span className="text-muted-foreground">{o.status_label ?? titleCase(o.order_phase ?? "—")}</span>}
+        {status.pill
+          ? <StatusPill color={status.color}>{status.label}</StatusPill>
+          : <span className="text-muted-foreground">{status.label}</span>}
       </td>
       <td className="py-2.5 px-3 tabular-nums text-muted-foreground">{garmentBits || (o.garments_count ?? 0)}</td>
       <td className="py-2.5 px-3 text-right tabular-nums">{formatKwd(o.order_total)}</td>

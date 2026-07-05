@@ -4,6 +4,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { AuthProvider, useAuth } from "./context/auth";
 import { router } from "./router";
 import { db } from "./lib/db";
+import { useSessionKeepalive } from "./hooks/useSessionKeepalive";
 
 // Detect supabase/PostgREST JWT-related errors. supabase-js sometimes surfaces
 // these as PGRST301 (JWSInvalid) or generic "JWT expired" messages.
@@ -48,6 +49,11 @@ const queryClient = new QueryClient({
 
 function InnerApp() {
   const auth = useAuth();
+
+  // Keep the session warm so it doesn't hit the 1-hour token TTL while idle —
+  // the admin dashboard has no realtime channel / focus-refetch to do this the
+  // way pos-interface and workshop do.
+  useSessionKeepalive(auth.isAuthenticated);
 
   // Drop cached data on logout so a different user can't see stale rows through
   // the cache while the new session is being established.

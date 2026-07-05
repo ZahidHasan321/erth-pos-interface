@@ -11,6 +11,8 @@
     "db:apply-admin-dashboard": "tsx scripts/apply-admin-dashboard.ts",
     "db:apply-admin-finance": "tsx scripts/apply-admin-finance.ts",
     "db:apply-admin-people": "tsx scripts/apply-admin-people.ts",
+    "db:apply-0048-customer-photo": "tsx scripts/apply-0048-customer-photo.ts",
+    "db:apply-0050-inventory-item": "tsx scripts/apply-0050-inventory-item.ts",
     "db:apply-login-rpc": "tsx scripts/apply-login-rpc.ts",
     "db:apply-approve-reject-rpc": "tsx scripts/apply-approve-reject-rpc.ts",
     "db:apply-restock-ref-fix": "tsx scripts/apply-restock-ref-fix.ts",

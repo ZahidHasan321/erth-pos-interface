@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { Contact, AlertTriangle } from "lucide-react";
+import { Contact, AlertTriangle, Users2, CornerDownRight } from "lucide-react";
 import {
   PageHeader,
   SectionCard,
@@ -122,21 +122,34 @@ function CustomersPage() {
 }
 
 function CustomerRowView({ c }: { c: CustomerRow }) {
+  const inFamily = c.family_size > 1;
+  const isChild = c.account_type === "Secondary";
   return (
-    <tr className="border-b border-border/60 hover:bg-muted/40 transition-colors">
-      <td className="py-2.5 px-4">
-        <Link to="/customers/$customerId" params={{ customerId: String(c.id) }} className="font-medium hover:underline">
-          {c.name}
-        </Link>
+    <tr className={"border-b border-border/60 hover:bg-muted/40 transition-colors" + (inFamily ? " border-l-2 border-l-[var(--status-info)]" : "")}>
+      <td className={"py-2.5 px-4" + (isChild ? " pl-6" : "")}>
+        <span className="inline-flex items-center gap-1.5">
+          {isChild && <CornerDownRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+          <Link to="/customers/$customerId" params={{ customerId: String(c.id) }} className="font-medium hover:underline">
+            {c.name}
+          </Link>
+          {inFamily && !isChild && (
+            <StatusPill color="sky" icon={Users2} className="ml-0.5">Family · {c.family_size}</StatusPill>
+          )}
+        </span>
         <div className="text-xs text-muted-foreground">
           {c.arabic_name ? <span dir="rtl">{c.arabic_name}</span> : null}
-          {c.account_type === "Secondary" && c.primary_name ? (
-            <span>{c.arabic_name ? " · " : ""}{c.relation ? `${titleCase(c.relation)} of ` : "of "}{c.primary_name}</span>
+          {isChild && c.primary_name ? (
+            <span>
+              {c.arabic_name ? " · " : ""}{c.relation ? `${titleCase(c.relation)} of ` : "of "}
+              {c.primary_customer_id != null
+                ? <Link to="/customers/$customerId" params={{ customerId: String(c.primary_customer_id) }} className="hover:underline">{c.primary_name}</Link>
+                : c.primary_name}
+            </span>
           ) : null}
         </div>
       </td>
       <td className="py-2.5 px-3">
-        {c.account_type === "Secondary"
+        {isChild
           ? <StatusPill color="purple">Secondary</StatusPill>
           : <span className="text-muted-foreground">Primary</span>}
       </td>

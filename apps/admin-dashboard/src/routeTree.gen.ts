@@ -27,6 +27,7 @@ import { Route as mainCustomersCustomerIdRouteImport } from './routes/(main)/cus
 import { Route as mainFinanceRegistersIndexRouteImport } from './routes/(main)/finance/registers/index'
 import { Route as mainFinancePurchasesIndexRouteImport } from './routes/(main)/finance/purchases/index'
 import { Route as mainTeamStaffUserIdRouteImport } from './routes/(main)/team/staff/$userId'
+import { Route as mainInventoryItemTypeItemIdRouteImport } from './routes/(main)/inventory/$itemType/$itemId'
 import { Route as mainFinanceRegistersSessionIdRouteImport } from './routes/(main)/finance/registers/$sessionId'
 import { Route as mainFinancePurchasesPurchaseIdRouteImport } from './routes/(main)/finance/purchases/$purchaseId'
 
@@ -121,6 +122,12 @@ const mainTeamStaffUserIdRoute = mainTeamStaffUserIdRouteImport.update({
   path: '/team/staff/$userId',
   getParentRoute: () => mainRouteRoute,
 } as any)
+const mainInventoryItemTypeItemIdRoute =
+  mainInventoryItemTypeItemIdRouteImport.update({
+    id: '/inventory/$itemType/$itemId',
+    path: '/inventory/$itemType/$itemId',
+    getParentRoute: () => mainRouteRoute,
+  } as any)
 const mainFinanceRegistersSessionIdRoute =
   mainFinanceRegistersSessionIdRouteImport.update({
     id: '/registers/$sessionId',
@@ -151,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/team/': typeof mainTeamIndexRoute
   '/finance/purchases/$purchaseId': typeof mainFinancePurchasesPurchaseIdRoute
   '/finance/registers/$sessionId': typeof mainFinanceRegistersSessionIdRoute
+  '/inventory/$itemType/$itemId': typeof mainInventoryItemTypeItemIdRoute
   '/team/staff/$userId': typeof mainTeamStaffUserIdRoute
   '/finance/purchases/': typeof mainFinancePurchasesIndexRoute
   '/finance/registers/': typeof mainFinanceRegistersIndexRoute
@@ -171,6 +179,7 @@ export interface FileRoutesByTo {
   '/team': typeof mainTeamIndexRoute
   '/finance/purchases/$purchaseId': typeof mainFinancePurchasesPurchaseIdRoute
   '/finance/registers/$sessionId': typeof mainFinanceRegistersSessionIdRoute
+  '/inventory/$itemType/$itemId': typeof mainInventoryItemTypeItemIdRoute
   '/team/staff/$userId': typeof mainTeamStaffUserIdRoute
   '/finance/purchases': typeof mainFinancePurchasesIndexRoute
   '/finance/registers': typeof mainFinanceRegistersIndexRoute
@@ -194,6 +203,7 @@ export interface FileRoutesById {
   '/(main)/team/': typeof mainTeamIndexRoute
   '/(main)/finance/purchases/$purchaseId': typeof mainFinancePurchasesPurchaseIdRoute
   '/(main)/finance/registers/$sessionId': typeof mainFinanceRegistersSessionIdRoute
+  '/(main)/inventory/$itemType/$itemId': typeof mainInventoryItemTypeItemIdRoute
   '/(main)/team/staff/$userId': typeof mainTeamStaffUserIdRoute
   '/(main)/finance/purchases/': typeof mainFinancePurchasesIndexRoute
   '/(main)/finance/registers/': typeof mainFinanceRegistersIndexRoute
@@ -217,6 +227,7 @@ export interface FileRouteTypes {
     | '/team/'
     | '/finance/purchases/$purchaseId'
     | '/finance/registers/$sessionId'
+    | '/inventory/$itemType/$itemId'
     | '/team/staff/$userId'
     | '/finance/purchases/'
     | '/finance/registers/'
@@ -237,6 +248,7 @@ export interface FileRouteTypes {
     | '/team'
     | '/finance/purchases/$purchaseId'
     | '/finance/registers/$sessionId'
+    | '/inventory/$itemType/$itemId'
     | '/team/staff/$userId'
     | '/finance/purchases'
     | '/finance/registers'
@@ -259,6 +271,7 @@ export interface FileRouteTypes {
     | '/(main)/team/'
     | '/(main)/finance/purchases/$purchaseId'
     | '/(main)/finance/registers/$sessionId'
+    | '/(main)/inventory/$itemType/$itemId'
     | '/(main)/team/staff/$userId'
     | '/(main)/finance/purchases/'
     | '/(main)/finance/registers/'
@@ -398,6 +411,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainTeamStaffUserIdRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/inventory/$itemType/$itemId': {
+      id: '/(main)/inventory/$itemType/$itemId'
+      path: '/inventory/$itemType/$itemId'
+      fullPath: '/inventory/$itemType/$itemId'
+      preLoaderRoute: typeof mainInventoryItemTypeItemIdRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/finance/registers/$sessionId': {
       id: '/(main)/finance/registers/$sessionId'
       path: '/registers/$sessionId'
@@ -447,6 +467,7 @@ interface mainRouteRouteChildren {
   mainInventoryIndexRoute: typeof mainInventoryIndexRoute
   mainOrdersIndexRoute: typeof mainOrdersIndexRoute
   mainTeamIndexRoute: typeof mainTeamIndexRoute
+  mainInventoryItemTypeItemIdRoute: typeof mainInventoryItemTypeItemIdRoute
   mainTeamStaffUserIdRoute: typeof mainTeamStaffUserIdRoute
 }
 
@@ -461,6 +482,7 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainInventoryIndexRoute: mainInventoryIndexRoute,
   mainOrdersIndexRoute: mainOrdersIndexRoute,
   mainTeamIndexRoute: mainTeamIndexRoute,
+  mainInventoryItemTypeItemIdRoute: mainInventoryItemTypeItemIdRoute,
   mainTeamStaffUserIdRoute: mainTeamStaffUserIdRoute,
 }
 

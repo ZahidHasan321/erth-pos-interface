@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { Boxes, AlertTriangle, Package, PackageX } from "lucide-react";
 import {
@@ -161,7 +161,7 @@ function FabricTable({ rows }: { rows: FabricStockRow[] }) {
                 <td className="py-2.5 px-4">
                   <span className="inline-flex items-center gap-2">
                     {f.color_hex && <span className="w-3 h-3 rounded-full border border-border shrink-0" style={{ background: f.color_hex }} />}
-                    <span className="font-medium">{f.name}</span>
+                    <Link to="/inventory/$itemType/$itemId" params={{ itemType: "fabric", itemId: String(f.id) }} className="font-medium hover:underline">{f.name}</Link>
                     <LowBadge low={f.low} />
                   </span>
                 </td>
@@ -199,7 +199,10 @@ function ShelfTable({ rows }: { rows: ShelfStockRow[] }) {
           <tbody>
             {rows.map((s) => (
               <tr key={s.id} className={"border-b border-border/60 hover:bg-muted/40 transition-colors " + (s.is_archived ? "opacity-50" : "")}>
-                <td className="py-2.5 px-4 font-medium">{s.name ?? "—"}<LowBadge low={s.low} /></td>
+                <td className="py-2.5 px-4 font-medium">
+                  <Link to="/inventory/$itemType/$itemId" params={{ itemType: "shelf", itemId: String(s.id) }} className="hover:underline">{s.name ?? "—"}</Link>
+                  <LowBadge low={s.low} />
+                </td>
                 <td className="py-2.5 px-3 text-muted-foreground tabular-nums">{s.sku ?? "—"}</td>
                 <td className="py-2.5 px-3 text-muted-foreground">{s.brand ?? "—"}</td>
                 <td className="py-2.5 px-3 text-right"><StockCell shop={s.shop_stock} workshop={s.workshop_stock} /></td>
@@ -233,7 +236,10 @@ function AccessoryTable({ rows }: { rows: AccessoryStockRow[] }) {
           <tbody>
             {rows.map((a) => (
               <tr key={a.id} className={"border-b border-border/60 hover:bg-muted/40 transition-colors " + (a.is_archived ? "opacity-50" : "")}>
-                <td className="py-2.5 px-4 font-medium">{a.name}<LowBadge low={a.low} /></td>
+                <td className="py-2.5 px-4 font-medium">
+                  <Link to="/inventory/$itemType/$itemId" params={{ itemType: "accessory", itemId: String(a.id) }} className="hover:underline">{a.name}</Link>
+                  <LowBadge low={a.low} />
+                </td>
                 <td className="py-2.5 px-3 text-muted-foreground">{titleCase(a.category)}</td>
                 <td className="py-2.5 px-3 text-muted-foreground">{a.unit_of_measure}</td>
                 <td className="py-2.5 px-3 text-right tabular-nums">{qty(a.shop_stock)} · {qty(a.workshop_stock)}</td>

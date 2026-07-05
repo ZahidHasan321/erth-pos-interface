@@ -74,7 +74,7 @@ export async function getDashboardSummary(
 
 // ── 2. Orders explorer (keyset) ──────────────────────────────────────────────
 
-export interface OrderCursor { order_date: string; id: number }
+export interface OrderCursor { group_date: string; group_key: number; id: number }
 
 export interface OrderRow {
   id: number;
@@ -97,6 +97,10 @@ export interface OrderRow {
   final_count: number | null;
   alteration_count: number | null;
   status_label: string | null;
+  // §2.13 order-link grouping (rows arrive clustered, primary first).
+  group_key: number;
+  is_link_child: boolean;
+  link_size: number;
 }
 
 export interface OrdersPageStats {
@@ -408,6 +412,73 @@ export async function getInventory(search: string | null, includeArchived: boole
   return data as Inventory;
 }
 
+// ── 7b. Inventory item detail — one item + usage rollups + its own ledger ────
+
+export interface InventoryItemDetail {
+  id: number;
+  item_type: "fabric" | "shelf" | "accessory";
+  name: string | null;
+  sku: string | null;
+  unit: string;
+  shop_stock: number | string | null;
+  workshop_stock: number | string | null;
+  price: number | string | null;
+  avg_cost: number | string | null;
+  low_stock_threshold: number | string | null;
+  is_archived: boolean;
+  low: boolean;
+  // fabric-only extras
+  color?: string | null;
+  color_hex?: string | null;
+  season?: string | null;
+  supplier?: string | null;
+  // shelf-only extras
+  brand?: string | null;
+  // accessory-only extras
+  category?: string | null;
+  unit_of_measure?: string | null;
+}
+
+export interface InventoryItemRollup {
+  consumed: number | string;
+  restocked: number | string;
+  wasted: number | string;
+  returned: number | string;
+  adjusted: number | string;
+  transferred_in: number | string;
+  transferred_out: number | string;
+  movement_count: number;
+  first_movement: string | null;
+  last_movement: string | null;
+}
+
+export interface ConsumptionByBrand {
+  brand: string;
+  qty: number | string;
+  count: number;
+}
+
+export interface InventoryItem {
+  item: InventoryItemDetail;
+  rollup: InventoryItemRollup;
+  by_brand: ConsumptionByBrand[];
+  movements: MovementRow[];
+}
+
+export async function getInventoryItem(
+  itemType: string,
+  itemId: number,
+  limit = 200,
+): Promise<InventoryItem | null> {
+  const { data, error } = await db.rpc("admin_inventory_item", {
+    p_item_type: itemType,
+    p_item_id: itemId,
+    p_limit: limit,
+  });
+  if (error) throw new Error(`Failed to load inventory item: ${error.message}`);
+  return data as InventoryItem | null;
+}
+
 // ── 8. Stock movements — recent ledger + aggregates + waste-by-cause ─────────
 
 export interface MovementRow {
@@ -508,7 +579,7 @@ export async function getWorkshopRoster(): Promise<WorkerRow[]> {
   return (data as WorkerRow[]) ?? [];
 }
 
-export interface CustomerCursor { id: number }
+export interface CustomerCursor { family_key: number; id: number }
 
 export interface CustomerRow {
   id: number;
@@ -527,6 +598,9 @@ export interface CustomerRow {
   created_at: string | null;
   orders_count: number;
   total_spend: number | string;
+  // Family grouping (rows arrive clustered: root Primary first, then Secondaries).
+  family_key: number;
+  family_size: number;
 }
 
 export interface CustomersPageStats {
@@ -581,10 +655,12 @@ export interface CustomerProfile {
   created_at: string | null;
 }
 
-export interface CustomerLinkRef {
+export interface FamilyMember {
   id: number;
   name: string;
-  relation?: string | null;
+  relation: string | null;
+  account_type: string | null;
+  is_self: boolean;
 }
 
 export interface CustomerDetailStats {
@@ -611,12 +687,14 @@ export interface CustomerDetailOrder {
   final_count: number | null;
   alteration_count: number | null;
   status_label: string | null;
+  group_key: number;
+  is_link_child: boolean;
+  link_size: number;
 }
 
 export interface CustomerDetail {
   customer: CustomerProfile;
-  primary: CustomerLinkRef | null;
-  secondaries: CustomerLinkRef[];
+  family: FamilyMember[];
   stats: CustomerDetailStats;
   orders: CustomerDetailOrder[];
 }

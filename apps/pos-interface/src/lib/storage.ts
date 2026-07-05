@@ -197,6 +197,31 @@ export async function uploadRestockInvoice(
   return uploadFile(file, path);
 }
 
+// ── Customer photo ──────────────────────────────────────────────────────────
+
+/** Bucket-relative path for a customer's photo. Fixed per customer (upsert). */
+function customerPhotoPath(customerId: number): string {
+  return `customers/${customerId}/photo.webp`;
+}
+
+/**
+ * Upload a customer photo. Fixed path per customer with upsert, so a retake
+ * replaces the prior image instead of accumulating files. The blob is already
+ * compressed client-side (WebP) before it reaches here. Callers should
+ * cache-bust the returned URL (append `?v={ts}`) since the path is stable.
+ */
+export async function uploadCustomerPhoto(
+  blob: Blob,
+  customerId: number,
+): Promise<UploadResult> {
+  return uploadFile(blob, customerPhotoPath(customerId));
+}
+
+/** Delete a customer's photo (best-effort; fixed path). */
+export async function deleteCustomerPhoto(customerId: number): Promise<void> {
+  await deleteFile(customerPhotoPath(customerId));
+}
+
 /** Delete an inventory image by full URL (extracts path from public URL). */
 export async function deleteInventoryImageByUrl(url: string): Promise<void> {
   const marker = `/${MEDIA_BUCKET}/`;

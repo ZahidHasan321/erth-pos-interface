@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { Table2, AlertTriangle } from "lucide-react";
+import { Table2, AlertTriangle, Link2, CornerDownRight } from "lucide-react";
 import {
   PageHeader,
   SectionCard,
@@ -21,6 +21,7 @@ import { Button } from "@repo/ui/button";
 import { useOrdersPage } from "@/hooks/useAdmin";
 import { formatKwd, formatNum, titleCase } from "@/lib/format";
 import { formatDate, getDeliveryUrgency } from "@/lib/utils";
+import { orderStatusView } from "@/lib/orderStatus";
 import type { OrderRow } from "@/api/admin";
 
 interface OrdersSearch {
@@ -172,6 +173,8 @@ function OrdersPage() {
 function OrderRowView({ o }: { o: OrderRow }) {
   const outstanding = Math.max(Number(o.order_total ?? 0) - Number(o.paid ?? 0), 0);
   const urgency = getDeliveryUrgency(o.delivery_date);
+  const status = orderStatusView(o);
+  const linked = o.link_size > 1;
   const garmentBits = [
     o.brova_count ? `${o.brova_count}B` : null,
     o.final_count ? `${o.final_count}F` : null,
@@ -179,10 +182,21 @@ function OrderRowView({ o }: { o: OrderRow }) {
   ].filter(Boolean).join(" ");
 
   return (
-    <tr className="border-b border-border/60 hover:bg-muted/40 transition-colors">
-      <td className="py-2.5 px-4">
-        <Link to="/orders/$orderId" params={{ orderId: String(o.id) }} className="font-medium hover:underline">#{o.id}</Link>
+    <tr className={"border-b border-border/60 hover:bg-muted/40 transition-colors" + (linked ? " border-l-2 border-l-[var(--status-info)]" : "")}>
+      <td className={"py-2.5 px-4" + (o.is_link_child ? " pl-6" : "")}>
+        <span className="inline-flex items-center gap-1.5">
+          {o.is_link_child && <CornerDownRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+          <Link to="/orders/$orderId" params={{ orderId: String(o.id) }} className="font-medium hover:underline">#{o.id}</Link>
+          {linked && !o.is_link_child && (
+            <StatusPill color="sky" icon={Link2} className="ml-0.5">Linked · {o.link_size}</StatusPill>
+          )}
+        </span>
         {o.invoice_number != null && <div className="text-xs text-muted-foreground tabular-nums">INV-{o.invoice_number}</div>}
+        {o.is_link_child && (
+          <Link to="/orders/$orderId" params={{ orderId: String(o.group_key) }} className="block text-xs text-muted-foreground hover:underline">
+            linked to #{o.group_key}
+          </Link>
+        )}
       </td>
       <td className="py-2.5 px-3">
         <div className="truncate max-w-[160px]">{o.c_name ?? "—"}</div>
@@ -191,9 +205,9 @@ function OrderRowView({ o }: { o: OrderRow }) {
       <td className="py-2.5 px-3"><BrandBadge brand={o.brand} /></td>
       <td className="py-2.5 px-3 text-muted-foreground">{titleCase(o.order_type)}</td>
       <td className="py-2.5 px-3">
-        {o.checkout_status === "cancelled"
-          ? <StatusPill color="red">Cancelled</StatusPill>
-          : <span className="text-muted-foreground">{o.status_label ?? titleCase(o.order_phase ?? "—")}</span>}
+        {status.pill
+          ? <StatusPill color={status.color}>{status.label}</StatusPill>
+          : <span className="text-muted-foreground">{status.label}</span>}
       </td>
       <td className="py-2.5 px-3 tabular-nums text-muted-foreground">{garmentBits || (o.garments_count ?? 0)}</td>
       <td className="py-2.5 px-3 text-right tabular-nums">{formatKwd(o.order_total)}</td>

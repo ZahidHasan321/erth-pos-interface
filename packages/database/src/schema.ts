@@ -467,6 +467,9 @@ export const customers = pgTable("customers", {
     primary_customer_id: integer("primary_customer_id").references((): AnyPgColumn => customers.id, { onDelete: "set null" }),
 
     notes: text("notes"),
+    // Optional customer photo (camera-captured in the demographics form,
+    // compressed client-side). Public URL into the `media` bucket. See mig 0048.
+    photo_url: text("photo_url"),
     created_at: timestamp("created_at").defaultNow(),
 
     // Idempotent create: unique when present so a network retry / double-submit

@@ -44,7 +44,16 @@ import { ErrorBoundary } from "@/components/global/error-boundary";
 import { FlagIcon } from "@repo/ui/flag-icon";
 import { Pencil, X, Save, Check, Users, Info, Eye, Copy, MapPin, AlertTriangle } from "lucide-react";
 import { SearchCustomer } from "./search-customer";
+import { CustomerPhotoField } from "./customer-photo-capture";
+import { uploadCustomerPhoto, deleteCustomerPhoto } from "@/lib/storage";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@repo/ui/dialog";
+
+// A photo change staged in the form but not yet persisted: either a fresh
+// capture (blob to upload on save) or an explicit removal of the saved photo.
+type PendingPhoto =
+  | { kind: "capture"; blob: Blob; previewUrl: string }
+  | { kind: "remove" }
+  | null;
 
 // Family relations a Secondary account can carry (SPEC §5). Shared by the
 // relation field and the duplicate-phone "link as family member" flow.
@@ -117,11 +126,54 @@ export function CustomerDemographicsForm({
     [K in keyof CustomerDemographicsSchema]?: string;
   }>({});
 
-  const [AccountType, phone, id, primaryCustomerId] = useWatch({
+  const [AccountType, phone, id, primaryCustomerId, photoUrl] = useWatch({
     control: form.control,
-    name: ["account_type", "phone", "id", "primary_customer_id"],
+    name: ["account_type", "phone", "id", "primary_customer_id", "photo_url"],
   });
   const countries = getSortedCountries();
+
+  // Staged photo change. The ref is the source of truth read inside the save
+  // mutations (whose closures would otherwise capture stale state); the state
+  // mirror only drives rendering. Always update both through setPendingPhoto.
+  const pendingPhotoRef = React.useRef<PendingPhoto>(null);
+  const [pendingPhoto, setPendingPhotoState] = React.useState<PendingPhoto>(null);
+  const setPendingPhoto = React.useCallback((p: PendingPhoto) => {
+    pendingPhotoRef.current = p;
+    setPendingPhotoState(p);
+  }, []);
+
+  // What the avatar shows: a fresh capture wins, an explicit removal blanks it,
+  // otherwise the saved URL.
+  const displayPhotoUrl =
+    pendingPhoto?.kind === "capture"
+      ? pendingPhoto.previewUrl
+      : pendingPhoto?.kind === "remove"
+        ? null
+        : photoUrl ?? null;
+
+  const handlePhotoCapture = (blob: Blob, previewUrl: string) => {
+    // Drop any previous unsaved capture's object URL before replacing it.
+    if (pendingPhotoRef.current?.kind === "capture") {
+      URL.revokeObjectURL(pendingPhotoRef.current.previewUrl);
+    }
+    setPendingPhoto({ kind: "capture", blob, previewUrl });
+  };
+
+  const handlePhotoRemove = () => {
+    if (pendingPhotoRef.current?.kind === "capture") {
+      URL.revokeObjectURL(pendingPhotoRef.current.previewUrl);
+    }
+    // If there is no saved photo either, this is just clearing a pending capture.
+    setPendingPhoto(photoUrl ? { kind: "remove" } : null);
+  };
+
+  // Clear the staged photo once a save has consumed it (called from mutations).
+  const clearPendingPhoto = React.useCallback(() => {
+    if (pendingPhotoRef.current?.kind === "capture") {
+      URL.revokeObjectURL(pendingPhotoRef.current.previewUrl);
+    }
+    setPendingPhoto(null);
+  }, [setPendingPhoto]);
 
   // When id changes (loaded or saved), set to readonly mode. 
   // If id is cleared, set back to editing mode.
@@ -313,10 +365,30 @@ export function CustomerDemographicsForm({
 
   const { mutate: createCustomerMutation, isPending: isCreating } = useMutation(
     {
-      mutationFn: (customerToCreate: Partial<Customer>) =>
-        createCustomer(customerToCreate),
+      // The customer must exist before its photo can be uploaded (path is keyed
+      // by id), so create first, then upload the staged photo and patch the URL.
+      // A photo failure never fails the create - the customer is saved either way.
+      mutationFn: async (customerToCreate: Partial<Customer>) => {
+        const res = await createCustomer(customerToCreate);
+        if (res.status !== "success" || !res.data) return res;
+        const pending = pendingPhotoRef.current;
+        if (pending?.kind === "capture") {
+          try {
+            const { url } = await uploadCustomerPhoto(pending.blob, res.data.id);
+            const busted = `${url}?v=${Date.now()}`;
+            const upd = await updateCustomer(res.data.id, { photo_url: busted });
+            if (upd.status === "success" && upd.data) return upd;
+          } catch (err) {
+            toast.error(
+              `Customer saved, but the photo upload failed: ${err instanceof Error ? err.message : String(err)}. Retake it from the customer's profile.`,
+            );
+          }
+        }
+        return res;
+      },
       onSuccess: (response) => {
         if (response.status === "success" && response.data) {
+          clearPendingPhoto();
           // Invalidate relevant queries
           queryClient.invalidateQueries({ queryKey: ["customers"] });
           queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
@@ -341,12 +413,32 @@ export function CustomerDemographicsForm({
 
   const { mutate: updateCustomerMutation, isPending: isUpdating } = useMutation(
     {
-      mutationFn: (customerToUpdate: {
+      mutationFn: async (customerToUpdate: {
         id: number;
         data: Partial<Customer>;
-      }) => updateCustomer(customerToUpdate.id, customerToUpdate.data),
+      }) => {
+        const { id, data } = customerToUpdate;
+        const pending = pendingPhotoRef.current;
+        let photo_url = data.photo_url ?? null;
+        if (pending?.kind === "capture") {
+          try {
+            const { url } = await uploadCustomerPhoto(pending.blob, id);
+            photo_url = `${url}?v=${Date.now()}`;
+          } catch (err) {
+            toast.error(
+              `The photo upload failed, other changes were saved: ${err instanceof Error ? err.message : String(err)}`,
+            );
+            photo_url = data.photo_url ?? null;
+          }
+        } else if (pending?.kind === "remove") {
+          photo_url = null;
+          await deleteCustomerPhoto(id).catch(() => {}); // best-effort cleanup
+        }
+        return updateCustomer(id, { ...data, photo_url });
+      },
       onSuccess: (response) => {
         if (response.status === "success" && response.data) {
+          clearPendingPhoto();
           // Invalidate relevant queries
           queryClient.invalidateQueries({ queryKey: ["customers"] });
           queryClient.invalidateQueries({ queryKey: ["dashboard-customers"] });
@@ -471,6 +563,12 @@ export function CustomerDemographicsForm({
                   </span>
                 )}
               </div>
+              <CustomerPhotoField
+                displayUrl={displayPhotoUrl}
+                isReadOnly={isReadOnly}
+                onCapture={handlePhotoCapture}
+                onRemove={handlePhotoRemove}
+              />
               <ErrorBoundary fallback={<div>Name field crashed</div>}>
                 <FormField
                   control={form.control}
