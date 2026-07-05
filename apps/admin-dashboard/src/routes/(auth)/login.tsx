@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
-import { toast } from "sonner";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { isAdmin, type AuthUser } from "@/lib/rbac";
 
 // Post-login destination. Admins land on the dashboard; anyone else is bounced
@@ -26,6 +26,8 @@ function LoginPage() {
   const [username, setUsername] = useState("");
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPin, setShowPin] = useState(false);
 
   useEffect(() => {
     if (auth.isAuthenticated) {
@@ -39,10 +41,11 @@ function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       await auth.login({ username, pin });
     } catch (err) {
-      toast.error(`Login failed: ${err instanceof Error ? err.message : String(err)}`);
+      setError(err instanceof Error ? err.message : String(err));
       setLoading(false);
     }
   };
@@ -59,6 +62,16 @@ function LoginPage() {
             Cross-brand oversight — owners only.
           </p>
         </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
@@ -81,20 +94,31 @@ function LoginPage() {
             <label className="block text-sm font-medium mb-1.5" htmlFor="ad-pin">
               PIN
             </label>
-            <input
-              id="ad-pin"
-              name="pin"
-              type="password"
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={10}
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-              placeholder="••••••"
-              required
-              className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground outline-none focus:border-ring"
-              style={{ letterSpacing: "0.2em" }}
-            />
+            <div className="relative">
+              <input
+                id="ad-pin"
+                name="pin"
+                type={showPin ? "text" : "password"}
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={10}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                placeholder="••••••"
+                required
+                className="w-full h-10 pl-3 pr-10 rounded-md border border-input bg-background text-foreground outline-none focus:border-ring"
+                style={{ letterSpacing: "0.2em" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin((s) => !s)}
+                aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                tabIndex={-1}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+              >
+                {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           <button

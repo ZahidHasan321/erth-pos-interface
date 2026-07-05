@@ -1,5 +1,6 @@
 import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router";
 import * as React from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 import { useAuth } from "@/context/auth";
 import SakkbaLogo from "@/assets/Sakkba.png";
@@ -30,6 +31,7 @@ function SakkbaLoginPage() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [ready, setReady] = React.useState(false);
+  const [showPin, setShowPin] = React.useState(false);
 
   // Apply sakkba theme so CSS vars resolve correctly
   React.useEffect(() => {
@@ -157,6 +159,28 @@ function SakkbaLoginPage() {
           box-shadow: 0 0 0 3px oklch(0.35 0.06 250 / 0.12);
         }
         .sl-input[type="password"] { letter-spacing: 0.2em; }
+
+        /* PIN field with show/hide toggle */
+        .sl-pin-wrap { position: relative; }
+        .sl-pin-wrap .sl-input { padding-right: 40px; }
+        .sl-pin-toggle {
+          position: absolute;
+          top: 0;
+          right: 0;
+          height: 40px;
+          width: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: transparent;
+          border: none;
+          padding: 0;
+          cursor: pointer;
+          color: var(--muted-foreground);
+          opacity: 0.6;
+          transition: opacity 0.15s, color 0.15s;
+        }
+        .sl-pin-toggle:hover { opacity: 1; color: var(--primary); }
 
         .sl-btn {
           width: 100%;
@@ -354,17 +378,28 @@ function SakkbaLoginPage() {
                   fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)",
                   marginBottom: 6,
                 }}>PIN</label>
-                <input
-                  className="sl-input"
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={10}
-                  autoComplete="off"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                  placeholder="••••••"
-                  required
-                />
+                <div className="sl-pin-wrap">
+                  <input
+                    className="sl-input"
+                    type={showPin ? "text" : "password"}
+                    inputMode="numeric"
+                    maxLength={10}
+                    autoComplete="off"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                    placeholder="••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                    onClick={() => setShowPin((s) => !s)}
+                    className="sl-pin-toggle"
+                  >
+                    {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
 
               <div className="sl-item">

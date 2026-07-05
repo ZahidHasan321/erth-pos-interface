@@ -4,7 +4,7 @@ import { z } from "zod";
 import { useAuth } from "@/context/auth";
 import { BRAND_NAMES } from "@/lib/constants";
 import { Input } from "@repo/ui/input";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import ErthLogoDark from "@/assets/erth-dark.svg";
 import SakkbaLogo from "@/assets/Sakkba.png";
 
@@ -52,6 +52,7 @@ function LoginComponent() {
   const navigate = Route.useNavigate();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [showPin, setShowPin] = React.useState(false);
 
   const search = Route.useSearch();
 
@@ -300,6 +301,26 @@ function LoginComponent() {
           outline: none;
         }
 
+        .lg-pin-wrap { position: relative; }
+        .lg-pin-wrap .lg-input { padding-right: 40px !important; }
+        .lg-pin-toggle {
+          position: absolute;
+          right: 4px;
+          top: 0;
+          height: 44px;
+          width: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: none;
+          border: none;
+          padding: 0;
+          cursor: pointer;
+          color: rgba(212,205,170,0.5);
+          transition: color 0.15s;
+        }
+        .lg-pin-toggle:hover { color: #d4cdaa; }
+
         .lg-submit {
           width: 100%;
           height: 46px;
@@ -517,17 +538,28 @@ function LoginComponent() {
 
                 <div className="lg-field">
                   <label htmlFor="pin-input">PIN</label>
-                  <Input
-                    id="pin-input"
-                    name="pin"
-                    placeholder="••••••"
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={10}
-                    pattern="[0-9]{6,10}"
-                    required
-                    className="lg-input"
-                  />
+                  <div className="lg-pin-wrap">
+                    <Input
+                      id="pin-input"
+                      name="pin"
+                      placeholder="••••••"
+                      type={showPin ? "text" : "password"}
+                      inputMode="numeric"
+                      maxLength={10}
+                      pattern="[0-9]{6,10}"
+                      required
+                      className="lg-input"
+                    />
+                    <button
+                      type="button"
+                      className="lg-pin-toggle"
+                      onClick={() => setShowPin((s) => !s)}
+                      aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                      tabIndex={-1}
+                    >
+                      {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <button type="submit" disabled={isSubmitting} className="lg-submit">

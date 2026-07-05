@@ -48,7 +48,7 @@ function StaffDetailPage() {
 
   return (
     <div>
-      <Link to="/team" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-3">
+      <Link to="/team" search={{ location: "", role: "" }} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-3">
         <ArrowLeft className="w-4 h-4" /> Back to team
       </Link>
 

@@ -1,43 +1,11 @@
 import { db } from "@/lib/db";
-import type { StageTimings, QcAttempt } from "@repo/database";
+import type { GarmentPerformanceRow } from "@repo/database";
 
-export interface GarmentPerformanceRow {
-  id: number;
-  /** Assigned plan for the current trip (role → worker/unit name). Used as the
-   *  fallback unit for a sewing session whose presser isn't a known sewing
-   *  resource (e.g. a manager pressed Done), so the piece still lands on its unit. */
-  production_plan: Record<string, string> | null;
-  completion_time: string | null;
-  piece_stage: string;
-  trip_number: number | null;
-  trip_history: Array<{
-    trip: number;
-    worker_history: Record<string, string> | null;
-    completed_date: string | null;
-    qc_attempts: QcAttempt[] | null;
-  }> | null;
-  stage_timings: StageTimings | null;
-  delivery_date: string | null;
-  feedback_status: string | null;
-  express: boolean | null;
-}
-
-// "Production finished" = the garment has passed QC and left the workshop floor:
-// `ready_for_dispatch` (the post-QC dispatch queue) or any downstream shop/terminal
-// stage. The pre-dispatch production stages (cutting…quality_check, soaking,
-// waiting_*) are still IN PROGRESS; `discarded` is a redo outcome (the piece never
-// finished — its labor is surfaced as capacity in the redo-impact card, §6 Q14).
-// computeKpis uses this set for the garment-level KPIs (Completed / FPY / accept /
-// on-time / lead time). It is NOT used for per-worker output — that reads
-// stage_timings sessions, so a cutter is credited when they cut, not when the
-// garment finishes downstream.
-export const COMPLETED_PIECE_STAGES: ReadonlySet<string> = new Set([
-  "ready_for_dispatch",
-  "awaiting_trial",
-  "ready_for_pickup",
-  "brova_trialed",
-  "completed",
-]);
+// GarmentPerformanceRow + COMPLETED_PIECE_STAGES + the KPI compute now live in
+// @repo/database (shared with apps/admin-dashboard). Re-exported here so existing
+// `@/api/performance` imports keep working unchanged.
+export { COMPLETED_PIECE_STAGES } from "@repo/database";
+export type { GarmentPerformanceRow } from "@repo/database";
 
 // Every garment with production activity since `from`. `completion_time` is the
 // timestamp of the most recent stage advance (garments.ts overwrites it on every
@@ -45,10 +13,7 @@ export const COMPLETED_PIECE_STAGES: ReadonlySet<string> = new Set([
 // completion_time >= from — that lower bound is the cheapest server-side filter that
 // can't drop a relevant garment. There is deliberately NO upper bound or piece_stage
 // gate: a garment cut inside the window but finished after it must still be fetched so
-// its in-range session counts. computeKpis then splits the set in JS — finished
-// garments (COMPLETED_PIECE_STAGES, completion within [from,to]) for garment-level
-// KPIs, and stage_timings sessions windowed by each session's own completed_at for
-// per-worker / per-unit performance.
+// its in-range session counts. computeKpis then splits the set in JS.
 export const getPerformanceGarmentsInRange = async (
   from: string
 ): Promise<GarmentPerformanceRow[]> => {

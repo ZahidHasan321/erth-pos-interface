@@ -5,11 +5,13 @@
  * keep the previous page visible while fetching (no skeleton flash). All data is
  * read-only, so a 60s stale time is comfortable.
  */
+import { useMemo } from "react";
 import {
   useQuery,
   useInfiniteQuery,
   keepPreviousData,
 } from "@tanstack/react-query";
+import { computeKpis, type GarmentPerformanceRow } from "@repo/database";
 import {
   getDashboardSummary,
   getOrdersPage,
@@ -24,6 +26,9 @@ import {
   getWorkshopRoster,
   getStaffPerformance,
   getStaffDetail,
+  getTeamRoster,
+  getPerformanceGarments,
+  workshopRosterToResources,
   getCustomersPage,
   getCustomerDetail,
   type OrderCursor,
@@ -37,6 +42,10 @@ import {
 import type { RangeBounds } from "@/lib/date-range";
 
 export const STALE_TIME = 60_000;
+
+// Stable empty references so useMemo deps don't churn while queries load.
+const EMPTY_GARMENTS: GarmentPerformanceRow[] = [];
+const EMPTY_WORKERS: import("@/api/admin").WorkerRow[] = [];
 
 export const adminKeys = {
   summary: (from: string, to: string, brands: string[]) =>
@@ -53,6 +62,9 @@ export const adminKeys = {
   workers: () => ["admin", "workers"] as const,
   staffPerf: (filters: unknown) => ["admin", "staffPerf", filters] as const,
   staffDetail: (id: string, filters: unknown) => ["admin", "staffDetail", id, filters] as const,
+  teamRoster: (location: string | null, role: string | null) =>
+    ["admin", "teamRoster", location, role] as const,
+  perfGarments: (from: string) => ["admin", "perfGarments", from] as const,
   customers: (filters: unknown) => ["admin", "customers", filters] as const,
   customerDetail: (id: number) => ["admin", "customer", id] as const,
 };
@@ -234,6 +246,56 @@ export function useStaffDetail(id: string, filters: { from: string; to: string }
     placeholderData: keepPreviousData,
     enabled: !!id,
   });
+}
+
+/** Unified team roster (shop + workshop people), filtered server-side. */
+export function useTeamRoster(location: string | null, role: string | null) {
+  return useQuery({
+    queryKey: adminKeys.teamRoster(location, role),
+    queryFn: () => getTeamRoster(location, role),
+    staleTime: STALE_TIME,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Workshop performance drilldown for one terminal worker. Mirrors the
+ *  workshop's usePerformanceData: fetch garments + roster, run the shared
+ *  computeKpis, and return every stage KPI for `name` (the page picks a stage).
+ *  Both queries key only on `from`, so switching workers/stages never refetches. */
+export function useWorkerPerformance(name: string, range: RangeBounds) {
+  const garmentsQ = useQuery({
+    queryKey: adminKeys.perfGarments(range.from),
+    queryFn: () => getPerformanceGarments(range.from),
+    staleTime: STALE_TIME,
+    placeholderData: keepPreviousData,
+  });
+  const rosterQ = useQuery({
+    queryKey: adminKeys.workers(),
+    queryFn: getWorkshopRoster,
+    staleTime: STALE_TIME,
+  });
+
+  const garments = garmentsQ.data ?? EMPTY_GARMENTS;
+  const resources = useMemo(
+    () => workshopRosterToResources(rosterQ.data ?? EMPTY_WORKERS),
+    [rosterQ.data],
+  );
+  const kpis = useMemo(
+    () => computeKpis(garments, resources, range),
+    [garments, resources, range],
+  );
+  const workers = useMemo(
+    () => kpis.workers.filter((w) => w.name === name),
+    [kpis.workers, name],
+  );
+
+  return {
+    workers,
+    garments,
+    isLoading: garmentsQ.isLoading || rosterQ.isLoading,
+    isError: garmentsQ.isError || rosterQ.isError,
+    error: (garmentsQ.error ?? rosterQ.error) as Error | null,
+  };
 }
 
 export interface CustomersFilters {

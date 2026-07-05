@@ -26,7 +26,9 @@ import { Route as mainFinanceTransactionsRouteImport } from './routes/(main)/fin
 import { Route as mainCustomersCustomerIdRouteImport } from './routes/(main)/customers/$customerId'
 import { Route as mainFinanceRegistersIndexRouteImport } from './routes/(main)/finance/registers/index'
 import { Route as mainFinancePurchasesIndexRouteImport } from './routes/(main)/finance/purchases/index'
+import { Route as mainTeamWorkerWorkerNameRouteImport } from './routes/(main)/team/worker/$workerName'
 import { Route as mainTeamStaffUserIdRouteImport } from './routes/(main)/team/staff/$userId'
+import { Route as mainTeamPersonUserIdRouteImport } from './routes/(main)/team/person/$userId'
 import { Route as mainInventoryItemTypeItemIdRouteImport } from './routes/(main)/inventory/$itemType/$itemId'
 import { Route as mainFinanceRegistersSessionIdRouteImport } from './routes/(main)/finance/registers/$sessionId'
 import { Route as mainFinancePurchasesPurchaseIdRouteImport } from './routes/(main)/finance/purchases/$purchaseId'
@@ -117,9 +119,20 @@ const mainFinancePurchasesIndexRoute =
     path: '/purchases/',
     getParentRoute: () => mainFinanceRouteRoute,
   } as any)
+const mainTeamWorkerWorkerNameRoute =
+  mainTeamWorkerWorkerNameRouteImport.update({
+    id: '/team/worker/$workerName',
+    path: '/team/worker/$workerName',
+    getParentRoute: () => mainRouteRoute,
+  } as any)
 const mainTeamStaffUserIdRoute = mainTeamStaffUserIdRouteImport.update({
   id: '/team/staff/$userId',
   path: '/team/staff/$userId',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainTeamPersonUserIdRoute = mainTeamPersonUserIdRouteImport.update({
+  id: '/team/person/$userId',
+  path: '/team/person/$userId',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const mainInventoryItemTypeItemIdRoute =
@@ -159,7 +172,9 @@ export interface FileRoutesByFullPath {
   '/finance/purchases/$purchaseId': typeof mainFinancePurchasesPurchaseIdRoute
   '/finance/registers/$sessionId': typeof mainFinanceRegistersSessionIdRoute
   '/inventory/$itemType/$itemId': typeof mainInventoryItemTypeItemIdRoute
+  '/team/person/$userId': typeof mainTeamPersonUserIdRoute
   '/team/staff/$userId': typeof mainTeamStaffUserIdRoute
+  '/team/worker/$workerName': typeof mainTeamWorkerWorkerNameRoute
   '/finance/purchases/': typeof mainFinancePurchasesIndexRoute
   '/finance/registers/': typeof mainFinanceRegistersIndexRoute
 }
@@ -180,7 +195,9 @@ export interface FileRoutesByTo {
   '/finance/purchases/$purchaseId': typeof mainFinancePurchasesPurchaseIdRoute
   '/finance/registers/$sessionId': typeof mainFinanceRegistersSessionIdRoute
   '/inventory/$itemType/$itemId': typeof mainInventoryItemTypeItemIdRoute
+  '/team/person/$userId': typeof mainTeamPersonUserIdRoute
   '/team/staff/$userId': typeof mainTeamStaffUserIdRoute
+  '/team/worker/$workerName': typeof mainTeamWorkerWorkerNameRoute
   '/finance/purchases': typeof mainFinancePurchasesIndexRoute
   '/finance/registers': typeof mainFinanceRegistersIndexRoute
 }
@@ -204,7 +221,9 @@ export interface FileRoutesById {
   '/(main)/finance/purchases/$purchaseId': typeof mainFinancePurchasesPurchaseIdRoute
   '/(main)/finance/registers/$sessionId': typeof mainFinanceRegistersSessionIdRoute
   '/(main)/inventory/$itemType/$itemId': typeof mainInventoryItemTypeItemIdRoute
+  '/(main)/team/person/$userId': typeof mainTeamPersonUserIdRoute
   '/(main)/team/staff/$userId': typeof mainTeamStaffUserIdRoute
+  '/(main)/team/worker/$workerName': typeof mainTeamWorkerWorkerNameRoute
   '/(main)/finance/purchases/': typeof mainFinancePurchasesIndexRoute
   '/(main)/finance/registers/': typeof mainFinanceRegistersIndexRoute
 }
@@ -228,7 +247,9 @@ export interface FileRouteTypes {
     | '/finance/purchases/$purchaseId'
     | '/finance/registers/$sessionId'
     | '/inventory/$itemType/$itemId'
+    | '/team/person/$userId'
     | '/team/staff/$userId'
+    | '/team/worker/$workerName'
     | '/finance/purchases/'
     | '/finance/registers/'
   fileRoutesByTo: FileRoutesByTo
@@ -249,7 +270,9 @@ export interface FileRouteTypes {
     | '/finance/purchases/$purchaseId'
     | '/finance/registers/$sessionId'
     | '/inventory/$itemType/$itemId'
+    | '/team/person/$userId'
     | '/team/staff/$userId'
+    | '/team/worker/$workerName'
     | '/finance/purchases'
     | '/finance/registers'
   id:
@@ -272,7 +295,9 @@ export interface FileRouteTypes {
     | '/(main)/finance/purchases/$purchaseId'
     | '/(main)/finance/registers/$sessionId'
     | '/(main)/inventory/$itemType/$itemId'
+    | '/(main)/team/person/$userId'
     | '/(main)/team/staff/$userId'
+    | '/(main)/team/worker/$workerName'
     | '/(main)/finance/purchases/'
     | '/(main)/finance/registers/'
   fileRoutesById: FileRoutesById
@@ -404,11 +429,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainFinancePurchasesIndexRouteImport
       parentRoute: typeof mainFinanceRouteRoute
     }
+    '/(main)/team/worker/$workerName': {
+      id: '/(main)/team/worker/$workerName'
+      path: '/team/worker/$workerName'
+      fullPath: '/team/worker/$workerName'
+      preLoaderRoute: typeof mainTeamWorkerWorkerNameRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/team/staff/$userId': {
       id: '/(main)/team/staff/$userId'
       path: '/team/staff/$userId'
       fullPath: '/team/staff/$userId'
       preLoaderRoute: typeof mainTeamStaffUserIdRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/team/person/$userId': {
+      id: '/(main)/team/person/$userId'
+      path: '/team/person/$userId'
+      fullPath: '/team/person/$userId'
+      preLoaderRoute: typeof mainTeamPersonUserIdRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/inventory/$itemType/$itemId': {
@@ -468,7 +507,9 @@ interface mainRouteRouteChildren {
   mainOrdersIndexRoute: typeof mainOrdersIndexRoute
   mainTeamIndexRoute: typeof mainTeamIndexRoute
   mainInventoryItemTypeItemIdRoute: typeof mainInventoryItemTypeItemIdRoute
+  mainTeamPersonUserIdRoute: typeof mainTeamPersonUserIdRoute
   mainTeamStaffUserIdRoute: typeof mainTeamStaffUserIdRoute
+  mainTeamWorkerWorkerNameRoute: typeof mainTeamWorkerWorkerNameRoute
 }
 
 const mainRouteRouteChildren: mainRouteRouteChildren = {
@@ -483,7 +524,9 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainOrdersIndexRoute: mainOrdersIndexRoute,
   mainTeamIndexRoute: mainTeamIndexRoute,
   mainInventoryItemTypeItemIdRoute: mainInventoryItemTypeItemIdRoute,
+  mainTeamPersonUserIdRoute: mainTeamPersonUserIdRoute,
   mainTeamStaffUserIdRoute: mainTeamStaffUserIdRoute,
+  mainTeamWorkerWorkerNameRoute: mainTeamWorkerWorkerNameRoute,
 }
 
 const mainRouteRouteWithChildren = mainRouteRoute._addFileChildren(

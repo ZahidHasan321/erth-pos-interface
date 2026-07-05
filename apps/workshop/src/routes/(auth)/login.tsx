@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
-import { toast } from "sonner";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { getTerminalPath, isTerminalUser, type AuthUser } from "@/lib/rbac";
 
 // Post-login destination. Terminal-locked users go straight to their terminal;
@@ -41,6 +41,8 @@ function LoginPage() {
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPin, setShowPin] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setReady(true), 40);
@@ -59,10 +61,11 @@ function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       await auth.login({ username, pin });
     } catch (err) {
-      toast.error(`Login failed: ${err instanceof Error ? err.message : String(err)}`);
+      setError(err instanceof Error ? err.message : String(err));
       setLoading(false);
     }
   };
@@ -188,9 +191,42 @@ function LoginPage() {
         }
         .wl-input::placeholder { color: rgba(240,235,225,0.3); font-weight: 400; }
         .wl-input:focus         { border-bottom-color: #c8922a; }
-        .wl-input[type="password"] {
+        .wl-input.wl-pin {
           letter-spacing: 0.35em;
           font-size: 19px;
+          padding-right: 34px;
+        }
+
+        /* ── PIN field wrapper + visibility toggle ── */
+        .wl-pin-wrap { position: relative; }
+        .wl-pin-toggle {
+          position: absolute;
+          right: 0;
+          bottom: 9px;
+          background: none;
+          border: none;
+          padding: 2px;
+          cursor: pointer;
+          color: rgba(240,235,225,0.4);
+          display: flex;
+          align-items: center;
+          transition: color 0.15s ease;
+        }
+        .wl-pin-toggle:hover { color: #c8922a; }
+
+        /* ── Inline error alert ── */
+        .wl-alert {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 12px;
+          margin-bottom: 22px;
+          background: rgba(239,68,68,0.1);
+          border: 1px solid rgba(239,68,68,0.24);
+          font-family: 'Montserrat', sans-serif;
+          font-size: 11px;
+          font-weight: 500;
+          color: #fca5a5;
         }
 
         /* ── Submit button ── */
@@ -394,20 +430,38 @@ function LoginPage() {
 
                 <div className="wl-a3" style={{ marginBottom: 38 }}>
                   <label className="wl-label" htmlFor="ws-pin">PIN</label>
-                  <input
-                    id="ws-pin"
-                    name="pin"
-                    className="wl-input"
-                    autoComplete="off"
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={10}
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                    placeholder="••••••"
-                    required
-                  />
+                  <div className="wl-pin-wrap">
+                    <input
+                      id="ws-pin"
+                      name="pin"
+                      className="wl-input wl-pin"
+                      autoComplete="off"
+                      type={showPin ? "text" : "password"}
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={pin}
+                      onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                      placeholder="••••••"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="wl-pin-toggle"
+                      onClick={() => setShowPin((s) => !s)}
+                      aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                      tabIndex={-1}
+                    >
+                      {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
+
+                {error && (
+                  <div className="wl-alert wl-a3" role="alert">
+                    <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                    <span>{error}</span>
+                  </div>
+                )}
 
                 <div className="wl-a4">
                   <button type="submit" className="wl-btn" disabled={loading}>

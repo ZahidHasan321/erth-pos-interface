@@ -1,14 +1,11 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   Users,
   AlertTriangle,
-  UserCog,
   Factory,
-  Receipt,
-  Wallet,
-  Ruler,
-  Coins,
+  Store,
+  ChevronRight,
 } from "lucide-react";
 import {
   PageHeader,
@@ -19,226 +16,232 @@ import {
 } from "@/components/shared/PageShell";
 import { BrandBadge } from "@/components/shared/StageBadge";
 import { StatusPill } from "@/components/shared/StatusPill";
-import { FilterBar, FilterField, Segmented } from "@/components/shared/FilterBar";
-import { BrandSelect, RangeFilter } from "@/components/Filters";
-import { useWorkshopRoster, useStaffPerformance } from "@/hooks/useAdmin";
-import { getRangeBounds, type RangePreset, type RangeBounds } from "@/lib/date-range";
-import { formatKwd, formatNum, titleCase } from "@/lib/format";
-import type { StaffPerfRow, WorkerRow } from "@/api/admin";
+import { FilterBar, FilterField, Segmented, FilterSelect } from "@/components/shared/FilterBar";
+import { useTeamRoster } from "@/hooks/useAdmin";
+import { titleCase } from "@/lib/format";
+import type { TeamPerson } from "@/api/admin";
 
-type Tab = "staff" | "workers";
+type LocationFilter = "" | "shop" | "workshop";
 
 interface TeamSearch {
-  tab?: Tab;
+  location: LocationFilter;
+  role: string;
 }
 
 export const Route = createFileRoute("/(main)/team/")({
   validateSearch: (s: Record<string, unknown>): TeamSearch => ({
-    tab: s.tab === "workers" ? s.tab : undefined,
+    location: s.location === "shop" || s.location === "workshop" ? s.location : "",
+    role: typeof s.role === "string" ? s.role : "",
   }),
   component: TeamPage,
 });
 
-const TABS: { value: Tab; label: string }[] = [
-  { value: "staff", label: "Staff" },
-  { value: "workers", label: "Workshop" },
+const LOCATION_OPTIONS = [
+  { value: "" as const, label: "All" },
+  { value: "shop" as const, label: "Shop" },
+  { value: "workshop" as const, label: "Workshop" },
 ];
 
-function num(v: number | string | null | undefined): number {
-  return v == null ? 0 : typeof v === "string" ? Number(v) : v;
+const STAGE_LABEL: Record<string, string> = {
+  soaking: "Soaking",
+  cutting: "Cutting",
+  post_cutting: "Post-cutting",
+  sewing: "Sewing",
+  finishing: "Finishing",
+  ironing: "Ironing",
+  quality_check: "QC",
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  terminal: "Terminal worker",
+  measurement_taker: "Measurement taker",
+  super_admin: "Owner",
+};
+
+function roleLabel(role: string): string {
+  return ROLE_LABEL[role] ?? titleCase(role);
 }
 
+function stageLabel(stage: string): string {
+  return STAGE_LABEL[stage] ?? titleCase(stage);
+}
+
+/** Terminal people are ordered by stage; a few roles sort first among office. */
 function TeamPage() {
-  const search = Route.useSearch();
+  const { location, role } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const tab: Tab = search.tab ?? "staff";
 
   const patch = (next: Partial<TeamSearch>) =>
     navigate({ search: (prev) => ({ ...prev, ...next }), replace: true });
 
-  return (
-    <div>
-      <PageHeader icon={Users} title="Team" subtitle="Shop staff & workshop workers" />
-
-      <Segmented
-        className="mb-4"
-        value={tab}
-        onChange={(v) => patch({ tab: v === "staff" ? undefined : v })}
-        options={TABS}
-      />
-
-      {tab === "staff" && <StaffTab />}
-      {tab === "workers" && <WorkersTab />}
-    </div>
+  const { data, isLoading, isError, error, isFetching } = useTeamRoster(
+    location || null,
+    role || null,
   );
-}
 
-// ── Staff performance ────────────────────────────────────────────────────────
+  // Role options from the unfiltered facets, so the dropdown never hides a role
+  // just because the current location filter excludes it.
+  const roleOptions = useMemo(() => {
+    const roles = data ? Object.keys(data.facets.role) : [];
+    return roles
+      .sort((a, b) => roleLabel(a).localeCompare(roleLabel(b)))
+      .map((r) => ({ value: r, label: `${roleLabel(r)} (${data!.facets.role[r]})` }));
+  }, [data]);
 
-function StaffTab() {
-  const [preset, setPreset] = useState<RangePreset>("month");
-  const [brand, setBrand] = useState("");
-  const range: RangeBounds = useMemo(() => getRangeBounds(preset), [preset]);
-
-  const { data, isLoading, isError, error, isFetching } = useStaffPerformance({
-    from: range.from,
-    to: range.to,
-    brands: brand ? [brand] : [],
-  });
+  const shopCount = data?.facets.location.shop ?? 0;
+  const workshopCount = data?.facets.location.workshop ?? 0;
 
   return (
     <div>
+      <PageHeader icon={Users} title="Team" subtitle="Everyone across the shop and workshop" />
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+        <StatsCard icon={Users} value={data?.facets.total ?? 0} label="People" color="blue" />
+        <StatsCard icon={Store} value={shopCount} label="Shop" color="emerald" dimOnZero />
+        <StatsCard icon={Factory} value={workshopCount} label="Workshop" color="purple" dimOnZero />
+      </div>
+
       <FilterBar>
-        <FilterField label="Period">
-          <RangeFilter value={preset} onChange={setPreset} />
+        <FilterField label="Location">
+          <Segmented
+            value={location}
+            onChange={(v) => patch({ location: v })}
+            options={LOCATION_OPTIONS}
+          />
         </FilterField>
-        <FilterField label="Brand">
-          <BrandSelect value={brand} onChange={setBrand} />
+        <FilterField label="Role">
+          <FilterSelect
+            value={role}
+            onChange={(v) => patch({ role: v })}
+            options={roleOptions}
+            allLabel="All roles"
+            placeholder="All roles"
+            className="min-w-[11rem]"
+          />
         </FilterField>
       </FilterBar>
 
       {isError ? (
-        <EmptyState icon={AlertTriangle} message={(error as Error)?.message ?? "Failed to load staff performance"} />
+        <EmptyState icon={AlertTriangle} message={(error as Error)?.message ?? "Failed to load team"} />
       ) : isLoading || !data ? (
-        <LoadingSkeleton count={6} />
+        <LoadingSkeleton count={8} />
+      ) : data.data.length === 0 ? (
+        <EmptyState icon={Users} message="No one matches these filters" />
       ) : (
         <div className={isFetching ? "opacity-60 transition-opacity" : "transition-opacity"}>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-            <StatsCard icon={UserCog} value={data.stats.staff_count} label="Staff" color="blue" />
-            <StatsCard icon={Receipt} value={data.stats.total_orders} label="Orders taken" color="green" dimOnZero />
-            <StatsCard icon={Wallet} value={Math.round(num(data.stats.total_value))} label="Value (KWD)" color="emerald" dimOnZero />
-            <StatsCard icon={Ruler} value={data.stats.total_measurements} label="Measurements" color="purple" dimOnZero />
-            <StatsCard icon={Coins} value={Math.round(num(data.stats.total_collections))} label="Collections (KWD)" color="amber" dimOnZero />
-          </div>
-
-          {data.data.length === 0 ? (
-            <EmptyState icon={UserCog} message="No staff found" />
-          ) : (
-            <SectionCard bodyClassName="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-muted-foreground border-b border-border">
-                      <th className="py-2.5 px-4 font-medium">Name</th>
-                      <th className="py-2.5 px-3 font-medium text-right">Orders</th>
-                      <th className="py-2.5 px-3 font-medium text-right">Value</th>
-                      <th className="py-2.5 px-3 font-medium">Mix</th>
-                      <th className="py-2.5 px-3 font-medium text-right">Measurements</th>
-                      <th className="py-2.5 px-3 font-medium text-right">Collections</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.data.map((s) => <StaffPerfRowView key={s.id} s={s} preset={preset} />)}
-                  </tbody>
-                </table>
-              </div>
-              <div className="p-3 border-t border-border text-xs text-muted-foreground">{formatNum(data.data.length)} staff</div>
-            </SectionCard>
-          )}
+          <SectionCard bodyClassName="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-muted-foreground border-b border-border">
+                    <th className="py-2.5 px-4 font-medium">Name</th>
+                    <th className="py-2.5 px-3 font-medium">Role</th>
+                    <th className="py-2.5 px-3 font-medium">Location</th>
+                    <th className="py-2.5 px-3 font-medium">Units / Brands</th>
+                    <th className="py-2.5 px-3 font-medium">Contact</th>
+                    <th className="py-2.5 px-3 font-medium">Status</th>
+                    <th className="py-2.5 px-3 font-medium w-8" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.data.map((p) => <PersonRow key={p.person_key} p={p} />)}
+                </tbody>
+              </table>
+            </div>
+            <div className="p-3 border-t border-border text-xs text-muted-foreground">
+              {data.data.length} of {data.facets.total} people
+            </div>
+          </SectionCard>
         </div>
       )}
     </div>
   );
 }
 
-function Dim({ value, children }: { value: number; children: React.ReactNode }) {
-  return <span className={value === 0 ? "text-muted-foreground/40" : ""}>{children}</span>;
+/** The detail surface for a person, decided by classification + role. Terminal
+ *  people get the workshop performance drilldown; shop order-takers get their
+ *  order-taking detail; managers/supervisors/owners get a profile only. */
+function detailLink(p: TeamPerson): React.ReactNode {
+  const label = p.name;
+  if (p.classification === "terminal") {
+    const stage = p.stages[0] ?? "";
+    return (
+      <Link
+        to="/team/worker/$workerName"
+        params={{ workerName: p.name }}
+        search={{ stage, preset: "week" }}
+        className="font-medium hover:underline"
+      >
+        {label}
+      </Link>
+    );
+  }
+  const isOrderTaker =
+    p.role === "staff" || p.role === "measurement_taker" || p.role === "cashier";
+  if (isOrderTaker && p.user_id) {
+    return (
+      <Link
+        to="/team/staff/$userId"
+        params={{ userId: p.user_id }}
+        search={{ preset: "month" }}
+        className="font-medium hover:underline"
+      >
+        {label}
+      </Link>
+    );
+  }
+  if (p.user_id) {
+    return (
+      <Link
+        to="/team/person/$userId"
+        params={{ userId: p.user_id }}
+        className="font-medium hover:underline"
+      >
+        {label}
+      </Link>
+    );
+  }
+  return <span className="font-medium">{label}</span>;
 }
 
-function StaffPerfRowView({ s, preset }: { s: StaffPerfRow; preset: RangePreset }) {
-  const orders = num(s.orders_taken);
-  const measurements = num(s.measurements_taken);
-  const collections = num(s.collections_amount);
+function PersonRow({ p }: { p: TeamPerson }) {
+  const roleText =
+    p.classification === "terminal"
+      ? p.stages.map(stageLabel).join(", ") || "Terminal worker"
+      : roleLabel(p.role ?? "");
 
   return (
-    <tr className={"border-b border-border/60 hover:bg-muted/40 transition-colors " + (s.is_active ? "" : "opacity-50")}>
-      <td className="py-2.5 px-4">
-        <Link to="/team/staff/$userId" params={{ userId: s.id }} search={{ preset }} className="font-medium hover:underline">{s.name}</Link>
-        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-          {s.role ? titleCase(s.role) : "—"}
-          {!s.is_active && <StatusPill color="zinc">Inactive</StatusPill>}
-        </div>
+    <tr className={"border-b border-border/60 hover:bg-muted/40 transition-colors " + (p.is_active ? "" : "opacity-50")}>
+      <td className="py-2.5 px-4">{detailLink(p)}</td>
+      <td className="py-2.5 px-3 text-muted-foreground">{roleText || "-"}</td>
+      <td className="py-2.5 px-3">
+        {p.location === "shop" ? (
+          <StatusPill color="emerald">Shop</StatusPill>
+        ) : p.location === "workshop" ? (
+          <StatusPill color="violet">Workshop</StatusPill>
+        ) : (
+          <span className="text-muted-foreground/50">-</span>
+        )}
       </td>
-      <td className="py-2.5 px-3 text-right tabular-nums"><Dim value={orders}>{formatNum(orders)}</Dim></td>
-      <td className="py-2.5 px-3 text-right tabular-nums"><Dim value={num(s.orders_value)}>{formatKwd(s.orders_value)}</Dim></td>
-      <td className="py-2.5 px-3"><MixCell mix={s.order_mix} /></td>
-      <td className="py-2.5 px-3 text-right tabular-nums"><Dim value={measurements}>{formatNum(measurements)}</Dim></td>
-      <td className="py-2.5 px-3 text-right tabular-nums"><Dim value={collections}>{formatKwd(collections)}</Dim></td>
-    </tr>
-  );
-}
-
-function MixCell({ mix }: { mix: { WORK: number; SALES: number; ALTERATION: number } }) {
-  const bits: { label: string; value: number }[] = [
-    { label: "W", value: mix.WORK },
-    { label: "S", value: mix.SALES },
-    { label: "A", value: mix.ALTERATION },
-  ];
-  if (bits.every((b) => b.value === 0)) return <span className="text-muted-foreground/40">—</span>;
-  return (
-    <span className="inline-flex gap-2.5 text-xs tabular-nums">
-      {bits.map((b) => (
-        <span key={b.label} className={b.value === 0 ? "text-muted-foreground/40" : "text-muted-foreground"}>
-          <span className={b.value === 0 ? "" : "font-medium text-foreground"}>{formatNum(b.value)}</span>{b.label}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-// ── Workshop workers (unchanged roster, Phase 3 will extend) ──────────────────
-
-function WorkersTab() {
-  const { data, isLoading, isError, error } = useWorkshopRoster();
-
-  if (isError) return <EmptyState icon={AlertTriangle} message={(error as Error)?.message ?? "Failed to load workers"} />;
-  if (isLoading || !data) return <LoadingSkeleton count={6} />;
-  if (data.length === 0) return <EmptyState icon={Factory} message="No workshop workers found" />;
-
-  return (
-    <SectionCard bodyClassName="p-0">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-muted-foreground border-b border-border">
-              <th className="py-2.5 px-4 font-medium">Worker</th>
-              <th className="py-2.5 px-3 font-medium">Unit</th>
-              <th className="py-2.5 px-3 font-medium">Stage</th>
-              <th className="py-2.5 px-3 font-medium">Brand</th>
-              <th className="py-2.5 px-3 font-medium text-right">Rating</th>
-              <th className="py-2.5 px-3 font-medium text-right">Daily target</th>
-              <th className="py-2.5 px-3 font-medium">Linked user</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((w) => <WorkerRowView key={w.id} w={w} />)}
-          </tbody>
-        </table>
-      </div>
-      <div className="p-3 border-t border-border text-xs text-muted-foreground">{formatNum(data.length)} workers</div>
-    </SectionCard>
-  );
-}
-
-function WorkerRowView({ w }: { w: WorkerRow }) {
-  return (
-    <tr className="border-b border-border/60 hover:bg-muted/40 transition-colors">
-      <td className="py-2.5 px-4">
-        <div className="font-medium">{w.resource_name}</div>
-        {w.resource_type && <div className="text-xs text-muted-foreground">{titleCase(w.resource_type)}</div>}
-      </td>
-      <td className="py-2.5 px-3 text-muted-foreground">{w.unit_name ?? "—"}</td>
-      <td className="py-2.5 px-3 text-muted-foreground">{w.stage ? titleCase(w.stage) : "—"}</td>
-      <td className="py-2.5 px-3">{w.brand ? <BrandBadge brand={w.brand} /> : <span className="text-muted-foreground/50">—</span>}</td>
-      <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">{w.rating ?? "—"}</td>
-      <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">{w.daily_target ?? "—"}</td>
-      <td className="py-2.5 px-3 text-muted-foreground">
-        {w.user_name ? (
-          <span className="inline-flex items-center gap-1.5">
-            {w.user_name}
-            {w.user_active === false && <StatusPill color="zinc">Inactive</StatusPill>}
+      <td className="py-2.5 px-3">
+        {p.classification === "terminal" ? (
+          p.units.length ? (
+            <span className="text-muted-foreground">{p.units.join(", ")}</span>
+          ) : <span className="text-muted-foreground/50">-</span>
+        ) : p.brands.length ? (
+          <span className="inline-flex flex-wrap gap-1">
+            {p.brands.map((b) => <BrandBadge key={b} brand={b.toUpperCase()} />)}
           </span>
-        ) : <span className="text-muted-foreground/50">—</span>}
+        ) : <span className="text-muted-foreground/50">-</span>}
+      </td>
+      <td className="py-2.5 px-3 text-muted-foreground">
+        {p.phone ? <span className="tabular-nums">{p.phone}</span> : p.email ? p.email : <span className="text-muted-foreground/50">-</span>}
+      </td>
+      <td className="py-2.5 px-3">
+        {p.is_active ? <StatusPill color="green">Active</StatusPill> : <StatusPill color="zinc">Inactive</StatusPill>}
+      </td>
+      <td className="py-2.5 px-3 text-muted-foreground/40">
+        <ChevronRight className="w-4 h-4" />
       </td>
     </tr>
   );

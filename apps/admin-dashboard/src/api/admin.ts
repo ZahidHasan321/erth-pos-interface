@@ -11,6 +11,7 @@
  * getRangeBounds in lib/date-range.ts).
  */
 import { db } from "@/lib/db";
+import type { GarmentPerformanceRow, Resource } from "@repo/database";
 
 // ── Shared shapes ────────────────────────────────────────────────────────────
 
@@ -812,4 +813,107 @@ export async function getStaffDetail(
   });
   if (error) throw new Error(`Failed to load staff ${userId}: ${error.message}`);
   return (data as StaffDetail | null) ?? null;
+}
+
+// ── 12. Team: unified roster (shop + workshop) ───────────────────────────────
+// Backed by admin_team_roster (0052). One row per PERSON, classified so the UI
+// can route each to the right detail (terminal → worker performance, shop
+// order-taker → staff detail, manager/supervisor/admin → profile only).
+
+/** One resource (terminal assignment) folded into a person's roster row. */
+export interface TeamResource {
+  id: string;
+  stage: string | null;
+  unit: string | null;
+  unit_id: string | null;
+  daily_target: number | null;
+  rating: number | null;
+  resource_type: string | null;
+}
+
+export interface TeamPerson {
+  person_key: string;
+  user_id: string | null;
+  name: string;
+  /** 'terminal' | 'shop' | 'office' — decides the detail surface. */
+  classification: "terminal" | "shop" | "office";
+  /** 'shop' | 'workshop' | null (null = owner / super_admin). */
+  location: string | null;
+  /** users.role for non-terminal people; null for terminal (label from stages). */
+  role: string | null;
+  department: string | null;
+  primary_resource_id: string | null;
+  brands: string[];
+  stages: string[];
+  units: string[];
+  resources: TeamResource[];
+  is_active: boolean;
+  has_login: boolean;
+  phone: string | null;
+  email: string | null;
+  employee_id: string | null;
+  hire_date: string | null;
+  nationality: string | null;
+  job_functions: string[];
+  last_active_at: string | null;
+}
+
+export interface TeamFacets {
+  total: number;
+  /** location → count (e.g. { shop: 6, workshop: 24, other: 4 }). */
+  location: Record<string, number>;
+  /** role → count over non-terminal people, plus a 'terminal' bucket. */
+  role: Record<string, number>;
+  /** production stage → count of terminal people with that stage. */
+  stage: Record<string, number>;
+}
+
+export interface TeamRoster {
+  data: TeamPerson[];
+  facets: TeamFacets;
+}
+
+export async function getTeamRoster(
+  location: string | null,
+  role: string | null,
+): Promise<TeamRoster> {
+  const { data, error } = await db.rpc("admin_team_roster", {
+    p_location: location,
+    p_role: role,
+  });
+  if (error) throw new Error(`Failed to load team roster: ${error.message}`);
+  return data as TeamRoster;
+}
+
+// ── 13. Workshop performance passthrough (Team › worker detail) ──────────────
+// admin_performance_garments (0052) returns the same garment projection the
+// workshop reads directly; combined with the workshop roster (as Resource[]),
+// the shared @repo/database computeKpis produces identical numbers here.
+
+export async function getPerformanceGarments(from: string): Promise<GarmentPerformanceRow[]> {
+  const { data, error } = await db.rpc("admin_performance_garments", { p_from: from });
+  if (error) throw new Error(`Failed to load performance garments since ${from}: ${error.message}`);
+  return (data as GarmentPerformanceRow[]) ?? [];
+}
+
+/** Map the admin workshop roster (WorkerRow) to the Resource shape computeKpis
+ *  expects. `unit_name` becomes `unit`; fields the compute never reads are
+ *  filled with nulls. */
+export function workshopRosterToResources(rows: WorkerRow[]): Resource[] {
+  return rows.map((w) => ({
+    id: w.id,
+    user_id: w.user_id,
+    brand: (w.brand as Resource["brand"]) ?? null,
+    responsibility: w.responsibility,
+    resource_name: w.resource_name,
+    unit: w.unit_name,
+    unit_id: w.unit_id,
+    resource_type: w.resource_type,
+    rating: w.rating,
+    daily_target: w.daily_target,
+    overtime_target: w.overtime_target,
+    target_from: null,
+    target_to: null,
+    created_at: null,
+  }));
 }

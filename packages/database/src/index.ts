@@ -5,4 +5,6 @@ export * from "./workshop-surfaces";
 export * from "./auth";
 export * from "./capabilities";
 export * from "./measurements-spec";
+export * from "./stage-shape";
+export * from "./performance";
 export type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
