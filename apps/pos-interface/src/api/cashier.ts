@@ -441,6 +441,8 @@ export interface CashierPendingOrder {
     order_id: number;
     /** 'WORK' | 'ALTERATION' — both share the Pending queue (§3). */
     order_type: string;
+    /** The order's own customer — family key for the §3 family-link nudge. */
+    customer_id: number | null;
     invoice_number: number | null;
     customer_name: string | null;
     customer_phone: string | null;

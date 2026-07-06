@@ -22,6 +22,16 @@ function CashierPendingPage() {
                     search: { ids: ids.join(",") },
                 })
             }
+            onLinkFamily={(ids, primaryId) =>
+                navigate({
+                    to: "/$main/orders/order-management/link",
+                    params: { main },
+                    search: {
+                        orders: ids.join(","),
+                        primary: primaryId ?? undefined,
+                    },
+                })
+            }
         />
     );
 }

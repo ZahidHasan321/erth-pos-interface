@@ -66,6 +66,88 @@ export function relationLabel(o: {
 }
 
 /**
+ * The customer FAMILY an order belongs to, for the §3 family-link nudge: a
+ * Secondary account resolves to its Primary (`primary_customer_id`); a Primary
+ * or plain account is its own family head (its own `customer_id`). Returns null
+ * when we can't resolve a family key (missing ids) so the caller can skip it.
+ */
+export function familyKeyOf(o: {
+    account_type?: string | null;
+    customer_id?: number | null;
+    primary_customer_id?: number | null;
+}): number | null {
+    if (o.account_type === "Secondary") return o.primary_customer_id ?? o.customer_id ?? null;
+    return o.customer_id ?? null;
+}
+
+/** A family with co-pending orders that aren't yet linked into one group (§3). */
+export type FamilyLinkNudge = {
+    familyKey: number;
+    /** Display name of the family head (the Primary), for the notice copy. */
+    primaryName: string;
+    /** All this family's pending WORK order ids — the link-page preselection. */
+    orderIds: number[];
+    /** The Primary account's order to crown as group primary, or null (only
+     *  Secondaries' orders are pending — staff pick the primary on the page). */
+    primaryOrderId: number | null;
+};
+
+type FamilyOrderRow = {
+    order_id: number;
+    order_type: string;
+    linked_order_id: number | null;
+    account_type?: string | null;
+    customer_id?: number | null;
+    customer_name?: string | null;
+    primary_customer_id?: number | null;
+    primary_customer_name?: string | null;
+};
+
+/**
+ * Detect customer families with co-pending orders that are NOT already one link
+ * group, so the cashier can be nudged to link them (§3). Only `WORK` orders can
+ * link (§2.13), so alterations are ignored. A family qualifies when it has ≥2
+ * pending WORK orders spanning more than one link-group key
+ * (`COALESCE(linked_order_id, order_id)`) — i.e. at least one sibling isn't
+ * linked in with the others. Insertion order follows first appearance, so the
+ * nudge list is stable across renders.
+ */
+export function computeFamilyLinkNudges(orders: FamilyOrderRow[]): FamilyLinkNudge[] {
+    const byFamily = new Map<number, FamilyOrderRow[]>();
+    for (const o of orders) {
+        if (o.order_type !== "WORK") continue;
+        const key = familyKeyOf(o);
+        if (key == null) continue;
+        const bucket = byFamily.get(key);
+        if (bucket) bucket.push(o);
+        else byFamily.set(key, [o]);
+    }
+
+    const nudges: FamilyLinkNudge[] = [];
+    for (const [familyKey, rows] of byFamily) {
+        if (rows.length < 2) continue;
+        const groups = new Set(rows.map((o) => groupKeyOf(o.order_id, o.linked_order_id)));
+        if (groups.size < 2) continue; // already all in one link group — nothing to nudge
+
+        const head = rows.find((o) => o.account_type !== "Secondary");
+        const primaryName = (
+            head?.customer_name ??
+            rows[0].primary_customer_name ??
+            rows[0].customer_name ??
+            "This family"
+        ).trim();
+
+        nudges.push({
+            familyKey,
+            primaryName,
+            orderIds: rows.map((o) => o.order_id),
+            primaryOrderId: head?.order_id ?? null,
+        });
+    }
+    return nudges;
+}
+
+/**
  * Seed per-order payment amounts from a single lump the customer hands over for
  * several (typically linked) orders. ADVANCE-FIRST: fill each order's agreed
  * advance (capped at its remaining balance); if the lump can't cover every

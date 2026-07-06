@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, Inbox, Banknote, Check, Link2, Users, Scissors } from "lucide-react";
+import { Search, Inbox, Banknote, Check, Link2, Users, Scissors, X } from "lucide-react";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Checkbox } from "@repo/ui/checkbox";
@@ -13,7 +13,13 @@ import {
     useCashierConfirmNoPaymentMutation,
 } from "@/hooks/useCashier";
 import type { CashierPendingOrder } from "@/api/cashier";
-import { clusterByGroup, groupSizes, groupKeyOf, relationLabel } from "@/lib/cashier-grouping";
+import {
+    clusterByGroup,
+    groupSizes,
+    groupKeyOf,
+    relationLabel,
+    computeFamilyLinkNudges,
+} from "@/lib/cashier-grouping";
 
 const fmtK = (n: number): string => `${Number(Number(n).toFixed(3))} KWD`;
 
@@ -28,8 +34,11 @@ const fmtK = (n: number): string => `${Number(Number(n).toFixed(3))} KWD`;
  */
 export function PendingQueueBody({
     onProceedToPayment,
+    onLinkFamily,
 }: {
     onProceedToPayment: (orderIds: number[]) => void;
+    /** Open the shop link page pre-loaded with a family's orders (§3 nudge). */
+    onLinkFamily?: (orderIds: number[], primaryOrderId: number | null) => void;
 }) {
     const { user } = useAuth();
     const { data: result, isLoading } = useCashierPendingOrders();
@@ -38,8 +47,18 @@ export function PendingQueueBody({
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState<Set<number>>(new Set());
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const [dismissedFamilies, setDismissedFamilies] = useState<Set<number>>(new Set());
 
     const orders = useMemo(() => result?.data ?? [], [result]);
+
+    // §3 family-link nudge: families with co-pending orders not yet one group.
+    const familyNudges = useMemo(
+        () =>
+            computeFamilyLinkNudges(orders).filter(
+                (n) => !dismissedFamilies.has(n.familyKey),
+            ),
+        [orders, dismissedFamilies],
+    );
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -135,6 +154,46 @@ export function PendingQueueBody({
             </div>
 
             <div className="flex-1 min-h-0 overflow-auto p-4 pb-24">
+                {onLinkFamily && familyNudges.length > 0 && (
+                    <div className="mb-3 space-y-2">
+                        {familyNudges.map((n) => (
+                            <div
+                                key={n.familyKey}
+                                className="flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2.5"
+                            >
+                                <Link2 className="h-4 w-4 shrink-0 text-primary" />
+                                <p className="min-w-0 flex-1 text-xs text-foreground">
+                                    <span className="font-semibold">{n.primaryName}</span>
+                                    {"'s family has "}
+                                    <span className="font-semibold">{n.orderIds.length}</span>
+                                    {" orders that aren't linked together."}
+                                </p>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 shrink-0 text-xs"
+                                    onClick={() => onLinkFamily(n.orderIds, n.primaryOrderId)}
+                                >
+                                    <Link2 className="h-3.5 w-3.5 mr-1" />
+                                    Link orders
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7 shrink-0 text-muted-foreground/60 hover:text-foreground"
+                                    aria-label="Dismiss link suggestion"
+                                    onClick={() =>
+                                        setDismissedFamilies((prev) =>
+                                            new Set(prev).add(n.familyKey),
+                                        )
+                                    }
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                )}
                 {isLoading ? (
                     <div className="space-y-2">
                         {Array.from({ length: 5 }).map((_, i) => (

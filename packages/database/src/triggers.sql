@@ -1471,6 +1471,7 @@ BEGIN
     SELECT
       o.id AS order_id,
       o.order_type::text AS order_type,
+      o.customer_id,
       w.invoice_number,
       c.name AS customer_name,
       c.phone AS customer_phone,
@@ -1506,6 +1507,7 @@ BEGIN
     SELECT
       o.id AS order_id,
       o.order_type::text AS order_type,
+      o.customer_id,
       a.invoice_number,
       c.name AS customer_name,
       c.phone AS customer_phone,

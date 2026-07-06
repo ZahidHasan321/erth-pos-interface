@@ -51,11 +51,18 @@ type SelectedOrder = {
   isExistingChild?: boolean;
 };
 
-export default function LinkOrder() {
+export default function LinkOrder({
+  initialOrderIds,
+  initialPrimaryId,
+}: {
+  initialOrderIds?: number[];
+  initialPrimaryId?: number;
+} = {}) {
   const queryClient = useQueryClient();
 
   const [selectedOrders, setSelectedOrders] = useState<SelectedOrder[]>([]);
   const [primaryOrderId, setPrimaryOrderId] = useState<number | null>(null);
+  const seededRef = useRef(false);
 
   // Dialog (customer → pick orders to add)
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -140,6 +147,40 @@ export default function LinkOrder() {
       setPrimaryOrderId(existingPrimary?.id ?? newItems[0].id);
     }
   }
+
+  // Seed the selection once from a handed-off preselection (e.g. the cashier
+  // family-link nudge, §3). Fetches each order, keeps only confirmed WORK
+  // orders (same rule as manual add), then crowns the requested primary.
+  useEffect(() => {
+    if (seededRef.current) return;
+    if (!initialOrderIds || initialOrderIds.length === 0) return;
+    seededRef.current = true;
+    (async () => {
+      try {
+        const results = await Promise.all(
+          initialOrderIds.map((id) => getOrderForLinking(id)),
+        );
+        const fetched: Order[] = [];
+        for (const res of results) {
+          if (
+            res.status === "success" &&
+            res.data &&
+            res.data.checkout_status === "confirmed" &&
+            res.data.order_type === "WORK"
+          ) {
+            fetched.push(res.data);
+          }
+        }
+        if (fetched.length > 0) await addOrdersToSelection(fetched);
+        if (initialPrimaryId) setPrimaryOrderId(initialPrimaryId);
+      } catch (err) {
+        toast.error(
+          `preloadOrders: could not load the orders to link: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOrderIds, initialPrimaryId]);
 
   async function handleOrderLookup(idOrInvoice: number) {
     try {
