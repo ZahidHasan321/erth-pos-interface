@@ -3099,9 +3099,11 @@ $$ LANGUAGE plpgsql;
 -- zero / country-code differences still match). Powers the demographics form's
 -- duplicate-phone hard block (SPEC §5): entering a number already on file forces
 -- the staff to link as a family member or fix the number. For each match we also
--- resolve the Primary it belongs to (itself if it is a Primary, else its
--- primary_customer_id) and that primary's name, so the form can offer
--- "link as family member of X". Primary matches are returned first.
+-- resolve the Primary it belongs to and that primary's name, so the form can
+-- offer "link as family member of X". Only an explicitly-linked Secondary points
+-- elsewhere; a Primary OR a legacy blank (imported account_type IS NULL, which
+-- the UI already displays as Primary) resolves to ITSELF, so it can be picked as
+-- a family head. Non-Secondary matches are returned first.
 CREATE OR REPLACE FUNCTION find_accounts_by_phone(p_phone TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -3119,13 +3121,15 @@ BEGIN
            c.phone,
            c.account_type,
            c.primary_customer_id,
-           (CASE WHEN c.account_type = 'Primary' THEN c.id ELSE c.primary_customer_id END) AS resolved_primary_id,
+           (CASE WHEN c.account_type = 'Secondary' AND c.primary_customer_id IS NOT NULL
+                 THEN c.primary_customer_id ELSE c.id END) AS resolved_primary_id,
            p.name AS resolved_primary_name
     FROM customers c
     LEFT JOIN customers p
-      ON p.id = (CASE WHEN c.account_type = 'Primary' THEN c.id ELSE c.primary_customer_id END)
+      ON p.id = (CASE WHEN c.account_type = 'Secondary' AND c.primary_customer_id IS NOT NULL
+                      THEN c.primary_customer_id ELSE c.id END)
     WHERE normalize_phone(c.phone) = v_nat
-    ORDER BY (c.account_type = 'Primary') DESC, c.id ASC
+    ORDER BY (c.account_type IS DISTINCT FROM 'Secondary') DESC, c.id ASC
   ) sub;
 
   RETURN v_result;

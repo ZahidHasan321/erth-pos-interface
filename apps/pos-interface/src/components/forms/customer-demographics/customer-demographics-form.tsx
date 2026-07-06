@@ -346,16 +346,18 @@ export function CustomerDemographicsForm({
   };
 
   // Picking a primary from the search dialog. If a Secondary is picked, resolve
-  // to the Primary it belongs to (the link target must be a Primary).
+  // to the Primary it belongs to. Anything else (a Primary, or a legacy blank
+  // account_type the UI already shows as Primary) IS the link target itself.
   const handlePrimaryPicked = async (picked: Customer) => {
-    const targetId = picked.account_type === "Primary" ? picked.id : picked.primary_customer_id;
+    const targetId =
+      picked.account_type === "Secondary" ? picked.primary_customer_id : picked.id;
     if (!targetId) {
       toast.error("That account has no primary on file. Search for a primary account.");
       return;
     }
     form.setValue("account_type", "Secondary");
     form.setValue("primary_customer_id", targetId);
-    if (picked.account_type === "Primary") {
+    if (picked.account_type !== "Secondary") {
       setPrimaryAccount(picked);
     }
     setIsPrimaryPickerOpen(false);
