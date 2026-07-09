@@ -306,7 +306,7 @@ export const getDispatchHistory = async (
             garments!inner(garment_id, garment_type),
             orders!inner(
                 brand,
-                work_orders!work_orders_order_id_orders_id_fk(invoice_number),
+                work_orders!order_id(invoice_number),
                 customers(name, phone)
             )
         `)

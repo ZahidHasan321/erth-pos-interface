@@ -69,7 +69,7 @@ export const getGarmentsForRedispatch = async (): Promise<ApiResponse<Garment[]>
         id,
         customer_id,
         customers ( id, name, phone ),
-        work_orders!work_orders_order_id_orders_id_fk ( invoice_number )
+        work_orders!order_id ( invoice_number )
       ),
       garment_feedback!inner (
         id, action, distribution, satisfaction_level, notes, measurement_diffs, options_checklist, trip_number, created_at
