@@ -68,8 +68,9 @@ export function mapFormValuesToCustomer(formValues: CustomerDemographicsSchema):
         customer_segment: cleanValue(formValues.customer_segment),
         notes: cleanValue(formValues.notes),
         whatsapp_alt: formValues.whatsapp_alt,
-        relation: cleanValue(formValues.relation),
-        // A Secondary keeps its linked Primary; a Primary never carries one.
+        // A Secondary keeps its linked Primary and relation; a Primary carries
+        // neither (the DB enforces both, mig 0055).
+        relation: formValues.account_type === "Secondary" ? cleanValue(formValues.relation) : null,
         primary_customer_id:
             formValues.account_type === "Secondary" ? formValues.primary_customer_id ?? null : null,
     };

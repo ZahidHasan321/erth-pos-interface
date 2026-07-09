@@ -362,6 +362,16 @@ export function CustomerDemographicsForm({
       toast.error("That account has no primary on file. Search for a primary account.");
       return;
     }
+    // Picking yourself, or one of your own family members (who resolves back to
+    // you), would link this account to itself. The DB rejects it; say so here.
+    if (id && targetId === id) {
+      toast.error(
+        picked.id === id
+          ? "A customer cannot be linked to their own account."
+          : `${picked.name} is already a family member of this account, so it cannot be its primary.`,
+      );
+      return;
+    }
     form.setValue("account_type", "Secondary");
     form.setValue("primary_customer_id", targetId);
     if (picked.account_type !== "Secondary") {

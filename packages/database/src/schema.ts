@@ -460,7 +460,7 @@ export const customers = pgTable("customers", {
     nationality: text("nationality"),
     dob: timestamp("dob"),
     customer_segment: text("customer_segment"),
-    account_type: accountTypeEnum("account_type"),
+    account_type: accountTypeEnum("account_type").notNull().default("Primary"),
     relation: text("relation"),
     // Secondary -> its Primary (SPEC §5). The link is this FK, not a shared
     // phone; self-reference, cleared (not blocked) if a primary is deleted.
@@ -483,10 +483,23 @@ export const customers = pgTable("customers", {
     primaryLinkIdx: index("customers_primary_customer_id_idx")
         .on(t.primary_customer_id)
         .where(sql`${t.primary_customer_id} IS NOT NULL`),
-    // Secondary <=> has a linked primary; Primary/NULL type carry none (SPEC §5).
+    // SPEC §5 invariants, enforced in the DB by mig 0055 (these were declared
+    // here but never applied live). A Secondary carries a linked Primary AND a
+    // relation; a Primary carries neither; nobody links to themselves. The
+    // depth-one rule (a Secondary links to a Primary, never to another
+    // Secondary) needs to read another row, so it lives in the
+    // customers_family_link_guard trigger rather than a check.
     secondaryRequiresPrimary: check(
         "customers_secondary_requires_primary",
         sql`(${t.account_type} = 'Secondary') = (${t.primary_customer_id} IS NOT NULL)`,
+    ),
+    secondaryRequiresRelation: check(
+        "customers_secondary_requires_relation",
+        sql`(${t.account_type} = 'Secondary') = (${t.relation} IS NOT NULL AND ${t.relation} <> '')`,
+    ),
+    primaryLinkNotSelf: check(
+        "customers_primary_link_not_self",
+        sql`${t.primary_customer_id} IS NULL OR ${t.primary_customer_id} <> ${t.id}`,
     ),
 }));
 

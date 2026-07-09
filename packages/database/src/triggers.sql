@@ -3138,6 +3138,47 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- 15c. Guard the customer family tree (SPEC §5). The pairwise rules (Secondary
+-- <=> primary + relation, no self-link) are CHECK constraints on the table; the
+-- depth-one rule needs to read another row, so it lives here. Together the two
+-- rules below make a chain -- and therefore a cycle -- unreachable: you cannot
+-- point at a non-Primary, and you cannot stop being a Primary while anyone
+-- points at you. See mig 0055.
+CREATE OR REPLACE FUNCTION customers_family_link_guard()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_target_type account_type;
+BEGIN
+  IF NEW.primary_customer_id IS NOT NULL THEN
+    SELECT account_type INTO v_target_type
+    FROM customers WHERE id = NEW.primary_customer_id;
+
+    IF v_target_type IS NULL THEN
+      RAISE EXCEPTION 'Cannot link customer % to primary account %: that account does not exist',
+        COALESCE(NEW.id, 0), NEW.primary_customer_id;
+    END IF;
+
+    IF v_target_type <> 'Primary' THEN
+      RAISE EXCEPTION 'Cannot link customer % to account %: that account is a Secondary, not a Primary. Link to the family''s primary account instead',
+        COALESCE(NEW.id, 0), NEW.primary_customer_id;
+    END IF;
+  END IF;
+
+  IF NEW.account_type = 'Secondary'
+     AND EXISTS (SELECT 1 FROM customers WHERE primary_customer_id = NEW.id) THEN
+    RAISE EXCEPTION 'Cannot make customer % a Secondary: other customers are linked to it as their primary account. Move them to another primary first',
+      NEW.id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS customers_family_link_guard_trg ON customers;
+CREATE TRIGGER customers_family_link_guard_trg
+  BEFORE INSERT OR UPDATE OF account_type, primary_customer_id ON customers
+  FOR EACH ROW EXECUTE FUNCTION customers_family_link_guard();
+
 -- 16. RPC: Paginated customer search with fuzzy matching
 -- Used by the customers list page. Returns page of results + total count.
 CREATE OR REPLACE FUNCTION search_customers_paginated(
