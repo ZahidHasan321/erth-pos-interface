@@ -69,6 +69,19 @@ const RELATION_OPTIONS = [
   "Others",
 ] as const;
 
+// The family an account belongs to (SPEC §5): a Secondary belongs to the Primary
+// it is linked to, anyone else heads their own. Null when unknowable (a new
+// customer, or a Secondary whose Primary is not picked yet) — that never matches
+// a real family, so every same-phone account stays a duplicate to resolve.
+function familyIdOf(
+  accountType: AccountType | null | undefined,
+  ownId: number | undefined,
+  linkedPrimaryId: number | null | undefined,
+): number | null {
+  if (accountType === "Secondary") return linkedPrimaryId ?? null;
+  return ownId ?? null;
+}
+
 interface CustomerDemographicsFormProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<CustomerDemographicsSchema, any, any>;
@@ -216,28 +229,26 @@ export function CustomerDemographicsForm({
   }
 
   // A phone already on file forces a choice (SPEC §5) — never a silent flip to
-  // Secondary. Open the duplicate dialog unless this entry is already linked to
-  // the family it shares the number with. Primary matches come first (RPC order).
+  // Secondary. A linked family legitimately shares one number, so a match that
+  // resolves to MY OWN family is not a duplicate: not my own row, not my linked
+  // Primary, and — when I am the Primary — not one of my own Secondaries.
+  // Anything else is an unrelated account and opens the dialog. Primary matches
+  // come first (RPC order).
   React.useEffect(() => {
-    const others = (phoneMatches?.data ?? []).filter((m) => m.id !== id);
-    if (others.length === 0) {
-      setWarnings((prev) => ({ ...prev, phone: undefined }));
-      setDuplicateMatch(null);
-      return;
-    }
-    const top = others[0];
     const current = form.getValues();
-    const alreadyLinkedHere =
-      current.account_type === "Secondary" &&
-      !!current.primary_customer_id &&
-      current.primary_customer_id === top.resolved_primary_id;
-    if (alreadyLinkedHere) {
+    const myFamilyId = familyIdOf(current.account_type, id, current.primary_customer_id);
+    const conflicts = (phoneMatches?.data ?? []).filter(
+      (m) =>
+        m.id !== id && !(myFamilyId !== null && m.resolved_primary_id === myFamilyId),
+    );
+    if (conflicts.length === 0) {
       setWarnings((prev) => ({ ...prev, phone: undefined }));
       setDuplicateMatch(null);
       return;
     }
+    const top = conflicts[0];
     const primaryName =
-      top.account_type === "Primary" ? top.name : top.resolved_primary_name ?? top.name;
+      top.account_type === "Secondary" ? top.resolved_primary_name ?? top.name : top.name;
     setWarnings((prev) => ({
       ...prev,
       phone: `This mobile number is already used by Primary account: ${primaryName}.`,
@@ -274,11 +285,7 @@ export function CustomerDemographicsForm({
 
   const unresolvedDuplicate =
     !!duplicateMatch &&
-    !(
-      AccountType === "Secondary" &&
-      !!primaryCustomerId &&
-      primaryCustomerId === duplicateMatch.resolved_primary_id
-    );
+    familyIdOf(AccountType, id, primaryCustomerId) !== duplicateMatch.resolved_primary_id;
 
   // Account type is an explicit choice. Primary clears any link; Secondary needs
   // a linked Primary, so open the picker when none is set yet.

@@ -36,17 +36,28 @@ vi.mock("@/api/orders", () => ({
 }));
 
 // Exposes the live form values so the test can assert the committed link.
-function Harness() {
+function Harness({
+  initial,
+  client: injected,
+  isEditing = true,
+}: {
+  initial?: Partial<CustomerDemographicsSchema>;
+  client?: QueryClient;
+  isEditing?: boolean;
+}) {
   const form = useForm<CustomerDemographicsSchema>({
-    defaultValues: customerDemographicsDefaults,
+    defaultValues: { ...customerDemographicsDefaults, ...initial },
   });
   const vals = useWatch({ control: form.control });
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+  const client =
+    injected ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={client}>
-      <CustomerDemographicsForm form={form} onCustomerChange={vi.fn()} />
+      <CustomerDemographicsForm
+        form={form}
+        onCustomerChange={vi.fn()}
+        initialIsEditing={isEditing}
+      />
       <div data-testid="vals">
         {JSON.stringify({
           account_type: vals.account_type,
@@ -145,5 +156,114 @@ describe("CustomerDemographicsForm — link as family member", () => {
       account_type: "Primary",
       primary_customer_id: null,
     });
+  });
+});
+
+// SPEC §5: "linked family may share or differ on mobile". So an account that
+// shares its number with its OWN family is not a duplicate, and must not be
+// blocked from editing. Only an unrelated account on that number is.
+describe("CustomerDemographicsForm — a linked family sharing one mobile", () => {
+  // FGE (Primary) and his son RAKAN (Secondary of FGE) both on 99111693.
+  const FGE = {
+    id: 287,
+    name: "FGE",
+    phone: "99111693",
+    account_type: "Primary" as const,
+    primary_customer_id: null,
+    resolved_primary_id: 287,
+    resolved_primary_name: "FGE",
+  };
+  const RAKAN = {
+    id: 965,
+    name: "RAKAN",
+    phone: "99111693",
+    account_type: "Secondary" as const,
+    primary_customer_id: 287,
+    resolved_primary_id: 287,
+    resolved_primary_name: "FGE",
+  };
+
+  beforeEach(() => {
+    findAccountsByPhone.mockReset();
+    getCustomerById.mockReset();
+    getCustomerById.mockResolvedValue({
+      status: "success",
+      data: { id: 287, name: "FGE", account_type: "Primary" },
+    });
+    findAccountsByPhone.mockResolvedValue({
+      status: "success",
+      data: [FGE, RAKAN],
+    });
+  });
+
+  // Probe the number, then give the (debounced) duplicate effect room to run.
+  async function probePhone(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByPlaceholderText("Enter mobile number"), "99111693");
+    await waitFor(() => expect(findAccountsByPhone).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 50));
+  }
+
+  it("does not flag the Primary as a duplicate of his own Secondary", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<Harness initial={{ id: 287, account_type: "Primary", phone: "" }} />);
+
+    await probePhone(user);
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    // ...and the Primary stays saveable.
+    expect(screen.getByRole("button", { name: /save/i })).toBeEnabled();
+  });
+
+  it("does not flag the Secondary as a duplicate of his own Primary", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <Harness
+        initial={{
+          id: 965,
+          account_type: "Secondary",
+          primary_customer_id: 287,
+          relation: "Son",
+          phone: "",
+        }}
+      />,
+    );
+
+    await probePhone(user);
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  // The reported symptom: staff probed 99111693 earlier in the session (React
+  // Query caches it under ["phoneMatches", phone]), then merely OPENED FGE.
+  // useQuery replays the cached matches even though it is disabled, so the
+  // duplicate effect runs with no typing at all.
+  it("does not pop the duplicate dialog just for opening the Primary read-only", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["phoneMatches", "99111693"], {
+      status: "success",
+      data: [FGE, RAKAN],
+    });
+
+    render(
+      <Harness
+        client={client}
+        isEditing={false}
+        initial={{ id: 287, account_type: "Primary", phone: "99111693" }}
+      />,
+    );
+
+    await new Promise((r) => setTimeout(r, 100));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(findAccountsByPhone).not.toHaveBeenCalled();
+  });
+
+  it("still flags an unrelated account on the same number", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    // A different Primary (999) editing his own record onto the family's number.
+    render(<Harness initial={{ id: 999, account_type: "Primary", phone: "" }} />);
+
+    await probePhone(user);
+
+    expect(await screen.findByRole("dialog", undefined, { timeout: 2000 })).toBeTruthy();
   });
 });
