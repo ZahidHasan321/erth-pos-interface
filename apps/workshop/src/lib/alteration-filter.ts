@@ -220,7 +220,8 @@ function resolveValueText(optName: string, value: unknown): string {
     if (value === "__standard__") return "Standard";
   }
   if (optName === "lines") {
-    return value === "1" || value === 1 ? "Single" : value === "2" || value === 2 ? "Double" : String(value);
+    // Shown as a number ("Line 2 (was 1)") to match the terminal's meta cell.
+    return String(value);
   }
   return String(value);
 }

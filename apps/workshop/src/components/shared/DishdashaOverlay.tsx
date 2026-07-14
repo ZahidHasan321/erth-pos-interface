@@ -103,14 +103,14 @@ function StyleImage({
         src={image}
         alt={alt}
         className={cn(
-          "h-14 rounded-md border border-border bg-card object-contain",
-          rotate ? "w-14 mx-auto rotate-90" : "w-full",
+          "h-14 portrait:h-10 rounded-md border border-border bg-card object-contain",
+          rotate ? "w-14 portrait:w-10 mx-auto rotate-90" : "w-full",
         )}
       />
     );
   }
   return (
-    <div className="h-14 w-full rounded-md border border-border bg-card flex items-center justify-center text-[10px] font-medium text-muted-foreground">
+    <div className="h-14 portrait:h-10 w-full rounded-md border border-border bg-card flex items-center justify-center text-[10px] font-medium text-muted-foreground">
       {sentenceCase(fallback)}
     </div>
   );
@@ -168,18 +168,20 @@ function MeasureLayout({
   accessories?: React.ReactNode;
 }) {
   const heightBase =
-    "inline-flex h-14 min-w-[2.75rem] px-1.5 items-center justify-center rounded-md border text-lg font-medium";
+    "inline-flex h-14 portrait:h-10 min-w-[2.75rem] portrait:min-w-0 portrait:flex-1 px-1.5 portrait:px-1 items-center justify-center rounded-md border text-lg font-medium";
   const widthBase =
-    "flex items-center justify-center rounded-md border px-1 py-1 text-center text-base font-medium";
+    "flex items-center justify-center rounded-md border px-1 py-1 portrait:py-0.5 text-center text-base font-medium";
   const heightDefault = "border-border bg-card text-foreground";
   const widthDefault = "border-border bg-card text-foreground";
   return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
+    <div className="space-y-2 portrait:space-y-1">
+      {/* Portrait columns are narrow, so extras drop BELOW the image instead of
+          into a side column (a side column would make the strip tall). */}
+      <div className="flex gap-2 portrait:flex-col portrait:gap-1">
         {/* Left col: image + rotated height, width below */}
-        <div className="space-y-1.5 shrink-0">
-          <div className="flex items-stretch gap-1.5">
-            <div className="w-20 shrink-0">
+        <div className="space-y-1.5 portrait:space-y-1 shrink-0">
+          <div className="flex items-stretch gap-1.5 portrait:gap-1">
+            <div className="w-20 portrait:w-10 shrink-0">
               <StyleImage image={image} alt={imageAlt} fallback={imageFallback} rotate={rotateImage} />
             </div>
             <HoverValueBox
@@ -190,7 +192,7 @@ function MeasureLayout({
             </HoverValueBox>
           </div>
           {width !== undefined && (
-            <div className="w-[7.5rem]">
+            <div className="w-[7.5rem] portrait:w-full">
               <HoverValueBox
                 label={widthLabel}
                 className={cn(widthBase, widthTintClass || widthDefault)}
@@ -200,14 +202,17 @@ function MeasureLayout({
             </div>
           )}
         </div>
-        {/* Right col: extras stacked vertically */}
+        {/* Right col: extras stacked vertically. Portrait flows them two-up so a
+            section with several extras (front pocket) doesn't drive the strip tall. */}
         {extras && (
-          <div className="flex-1 flex flex-col gap-1.5 min-w-0">{extras}</div>
+          <div className="flex-1 flex flex-col gap-1.5 min-w-0 portrait:grid portrait:grid-cols-2 portrait:gap-1">
+            {extras}
+          </div>
         )}
       </div>
       {/* Accessories span full section width to avoid clipping when many pills present */}
       {accessories && (
-        <div className="flex flex-wrap gap-1">{accessories}</div>
+        <div className="flex flex-wrap gap-1 portrait:gap-0.5">{accessories}</div>
       )}
     </div>
   );
@@ -215,7 +220,7 @@ function MeasureLayout({
 
 function ThicknessBadge({ value }: { value: string | null | undefined }) {
   return (
-    <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
+    <span className="shrink-0 rounded-md border border-border bg-muted px-2 portrait:px-1 py-0.5 text-xs portrait:text-[10px] font-medium text-foreground">
       {fmtThick(value)}
     </span>
   );
@@ -294,9 +299,9 @@ function StyleSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-border bg-background p-2">
-      <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-border pb-1">
-        <h4 className="text-xs font-medium text-muted-foreground">{title}</h4>
+    <div className="rounded-md border border-border bg-background p-2 portrait:p-1.5">
+      <div className="mb-1.5 portrait:mb-1 flex items-center justify-between gap-2 portrait:gap-1 border-b border-border pb-1 portrait:pb-0.5">
+        <h4 className="text-xs portrait:text-[11px] font-medium text-muted-foreground leading-tight">{title}</h4>
         {thickness !== undefined && <ThicknessBadge value={thickness} />}
       </div>
       {changes && changes.length > 0 && (
@@ -394,7 +399,7 @@ function MeasureRow({
     <HoverValueBox
       label={tooltip}
       className={cn(
-        "flex flex-col items-center justify-center rounded-md border px-2 py-1 text-center",
+        "flex flex-col items-center justify-center rounded-md border px-2 py-1 text-center portrait:px-1 portrait:py-0.5",
         tintClass || "border-border bg-card",
       )}
     >
@@ -502,9 +507,15 @@ export function DishdashaOverlay({
   };
 
   const styleLabel = sentenceCase(String(g.style ?? "kuwaiti"));
+  // Lines read as a number on the floor ("line 1" / "line 2"), not Single/Double,
+  // and each carries its own colour so the sewer can spot it at a glance.
   const lineCount = String(g.lines ?? 1);
-  const lineLabel =
-    lineCount === "1" ? "Single" : lineCount === "2" ? "Double" : lineCount;
+  const lineTone =
+    lineCount === "1"
+      ? "border-blue-500 bg-blue-50 text-blue-800"
+      : lineCount === "2"
+        ? "border-red-500 bg-red-50 text-red-800"
+        : null;
   const frontPocket = g.front_pocket_type
     ? STYLE_IMAGE_MAP[g.front_pocket_type]
     : null;
@@ -535,16 +546,24 @@ export function DishdashaOverlay({
 
   return (
     <div
-      className="bg-card border border-border rounded-md overflow-hidden text-foreground flex flex-col landscape:flex-row landscape:h-[calc(100vh-180px)] landscape:max-h-[calc(100vh-180px)]"
+      className="bg-card border border-border rounded-md overflow-hidden text-foreground flex flex-col h-[calc(100dvh-205px)] max-h-[calc(100dvh-205px)] landscape:flex-row"
     >
-        {/* Template frame with measurement cells.
-            Landscape: height-driven (fits viewport vertically).
-            Portrait: width-driven (full width, stacks above panel). */}
+        {/* Template frame with measurement cells. Height-driven in BOTH
+            orientations so the whole screen fits a tablet without scrolling:
+            the frame takes the height left over after the style panel and
+            derives its width from the aspect ratio. */}
         <div
-          className="relative shrink-0 border-b landscape:border-b-0 landscape:border-r border-border w-full landscape:w-auto landscape:h-full"
+          className="relative border-b landscape:border-b-0 landscape:border-r border-border w-full landscape:shrink-0 landscape:w-auto landscape:h-full portrait:flex-1 portrait:min-h-0 portrait:w-auto portrait:mx-auto"
           style={{ aspectRatio: "952.512 / 1122.5601" }}
         >
-          <div className="relative w-full h-full">
+          {/* Container query root: cell font size scales with the frame's WIDTH
+              via cqw. (It used to be `clamp(16px, 2.8%, 22px)` — but a % in
+              font-size resolves against the parent's font-size, not the width,
+              so it silently pinned every cell to the 16px floor.) */}
+          <div
+            className="relative w-full h-full"
+            style={{ containerType: "inline-size" }}
+          >
           <img
             src={templateSvg}
             alt="Measurement template"
@@ -592,7 +611,7 @@ export function DishdashaOverlay({
                       top: `${field.top}%`,
                       width: `${field.width}%`,
                       height: `${field.height}%`,
-                      fontSize: "clamp(16px, 2.8%, 22px)",
+                      fontSize: "clamp(19px, 4cqw, 30px)",
                       writingMode: isVertical ? "vertical-rl" : undefined,
                       borderRadius: "4px",
                       boxSizing: "content-box",
@@ -631,15 +650,16 @@ export function DishdashaOverlay({
           </div>
         </div>
 
-        {/* Style panel */}
-        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
+        {/* Style panel. Landscape: a scrollable column beside the frame.
+            Portrait: a fixed-height strip under it that never scrolls. */}
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto portrait:flex-none portrait:shrink-0 portrait:overflow-visible">
           {/* Meta row — tints when the underlying option (style / lines) changed
               this trip, with a small "(changed from X)" hint so the sewer
               doesn't miss a meta-level spec change. */}
-          <div className="grid grid-cols-3 gap-1.5 p-2 border-b border-border shrink-0">
+          <div className="grid grid-cols-3 gap-1.5 p-2 portrait:py-1 portrait:px-1.5 border-b border-border shrink-0">
             {([
-              { label: styleLabel, optName: "style" as const },
-              { label: `Line ${lineLabel}`, optName: "lines" as const },
+              { label: styleLabel, optName: "style" as const, tone: null },
+              { label: `Line ${lineCount}`, optName: "lines" as const, tone: lineTone },
               {
                 // Type lives in the page header strip — duplicating it here
                 // wastes the cell. Fabric is the one thing the worker needs
@@ -648,12 +668,17 @@ export function DishdashaOverlay({
                   ? `${g.fabric_name}${g.fabric_color ? ` · ${g.fabric_color}` : ""}`
                   : "Outside fabric",
                 optName: null,
+                tone: null,
               },
             ]).map((meta, i) => {
               const change = meta.optName
                 ? metaChanges.find((c) => c.label.toLowerCase() === meta.optName)
                 : undefined;
-              const tone = change ? "border-amber-500 bg-amber-50 text-amber-900" : "border-border bg-card text-foreground";
+              // A change this trip still wins the cell — the amber "was X" signal
+              // matters more than the line colour.
+              const tone = change
+                ? "border-amber-500 bg-amber-50 text-amber-900"
+                : (meta.tone ?? "border-border bg-card text-foreground");
               return (
                 <span
                   key={i}
@@ -674,8 +699,9 @@ export function DishdashaOverlay({
             })}
           </div>
 
-          {/* Sections */}
-          <div className="p-2 grid grid-cols-2 gap-2 auto-rows-min">
+          {/* Sections. Portrait lays all five across one row so the panel stays
+              a short strip; landscape keeps the roomier 2-up column. */}
+          <div className="p-2 grid grid-cols-2 gap-2 auto-rows-min portrait:grid-cols-5 portrait:gap-1.5 portrait:p-1.5">
             {/* Front Pocket */}
             {(!alterationFilter?.hideUnchanged || alterationFilter.visibleSections.has("frontPocket")) && (
             <StyleSection title="Front Pocket" thickness={g.front_pocket_thickness} defects={buildSectionDefects(qcFailOptionActuals, "frontPocket")} changes={sectionChanges("frontPocket")} attachments={sectionMedia("frontPocket")}>
@@ -858,11 +884,13 @@ export function DishdashaOverlay({
             )}
 
             {notes && (
-              <div className="col-span-2 rounded-md border border-[color:var(--status-warn)]/30 bg-[var(--status-warn-bg)] p-2">
-                <h4 className="text-xs font-medium text-[var(--status-warn)] mb-1">
+              <div className="col-span-2 portrait:col-span-5 rounded-md border border-[color:var(--status-warn)]/30 bg-[var(--status-warn-bg)] p-2 portrait:p-1.5">
+                <h4 className="text-xs font-medium text-[var(--status-warn)] mb-1 portrait:mb-0.5">
                   Notes
                 </h4>
-                <p className="text-xs text-foreground whitespace-pre-wrap leading-snug">{notes}</p>
+                {/* Keep the text clear of the floating Start/Done button, which
+                    sits over the panel's bottom-right corner in portrait. */}
+                <p className="text-xs text-foreground whitespace-pre-wrap leading-snug portrait:line-clamp-2 portrait:pr-44">{notes}</p>
               </div>
             )}
           </div>
