@@ -61,8 +61,21 @@ echo "    drizzle-kit push:pg"
 # Run from packages/database so drizzle.config.ts's relative paths
 # (./src/schema.ts) resolve. Its dotenv.config() does NOT override our explicit
 # DATABASE_URL (dotenv default is no-override), so this stays pinned to local.
-( builtin cd -- "$ROOT/packages/database" \
-  && DATABASE_URL="$LOCAL_DB_URL" "$DRIZZLE_KIT" push:pg >/dev/null )
+# Do NOT silence this. Swallowing the output hides two failure modes that both
+# surface later as a confusing "column ... does not exist" from triggers.sql:
+#   - drizzle prompts interactively on a data-loss diff and aborts with no TTY
+#   - the push fails outright (e.g. a new NOT NULL column over existing nulls)
+# Fail loudly, here, where the message is about the actual problem.
+if ! ( builtin cd -- "$ROOT/packages/database" \
+       && DATABASE_URL="$LOCAL_DB_URL" "$DRIZZLE_KIT" push:pg ); then
+  echo "" >&2
+  echo "    drizzle-kit push:pg FAILED — the local schema is now out of date." >&2
+  echo "    If it aborted on a data-loss prompt, the local DB is disposable:" >&2
+  echo "      DATABASE_URL='$LOCAL_DB_URL' pnpm --filter @repo/database exec drizzle-kit push:pg" >&2
+  echo "    and answer the prompt. NEVER run that bare (no DATABASE_URL) — the" >&2
+  echo "    drizzle config falls back to packages/database/.env, which is PROD." >&2
+  exit 3
+fi
 
 echo "    accessory_category placeholder type (triggers.sql cast-bootstrap needs it)"
 docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q -c \
@@ -79,6 +92,11 @@ echo "    login_with_pin RPC (migration 0014)"
 docker cp "$ROOT/packages/database/migrations/0014_login_with_pin_rpc.sql" "$DB_CONTAINER:/tmp/login_rpc.sql" >/dev/null
 docker exec -e PGOPTIONS='-c client_min_messages=warning' "$DB_CONTAINER" \
   psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f /tmp/login_rpc.sql >/dev/null
+
+echo "    stage-history RPC (migration 0056)"
+docker cp "$ROOT/packages/database/src/migrations/0056_stage_history_rpc.sql" "$DB_CONTAINER:/tmp/stage_history_rpc.sql" >/dev/null
+docker exec -e PGOPTIONS='-c client_min_messages=warning' "$DB_CONTAINER" \
+  psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f /tmp/stage_history_rpc.sql >/dev/null
 
 echo "==> [3/3] Seeding reference data + loginnable users"
 pnpm --filter e2e exec tsx scripts/seed-users.ts

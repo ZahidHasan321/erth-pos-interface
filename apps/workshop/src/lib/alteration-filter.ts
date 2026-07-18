@@ -26,6 +26,15 @@ export interface AlterationFilter {
   measurementKeys: Set<string>;
   /** per-field reason label (only set when the diff row has one) */
   fieldReasons: Map<string, AlterationReason>;
+  /** Per-field value the flagged cell supersedes — the number the worker must
+   *  NOT build. Rendered in red beneath the plain spec value, the same shape a
+   *  QC return uses. Absent when no baseline exists (external alteration-out),
+   *  in which case the cell simply carries no red value. */
+  fieldPrevious?: Map<string, unknown>;
+  /** Cause shown in words for every field in this filter, when there is no
+   *  per-field reason to state ("QC found", "Customer request"). Colour never
+   *  encodes cause — red means "wrong value" and nothing else. */
+  causeLabel?: string;
   /** sidebar sections that should render (something changed in them) */
   visibleSections: Set<AlterationStyleSection>;
   /** Exact style/option keys (QC_OPTIONS keys) the shop changed. Only populated
@@ -123,6 +132,7 @@ export function buildAlterationFilter(
 
   const measurementKeys = new Set<string>();
   const fieldReasons = new Map<string, AlterationReason>();
+  const fieldPrevious = new Map<string, unknown>();
   for (const d of diffs) {
     if (!d?.field) continue;
     // Keep a row when its value changed from the prior trip OR a fault reason
@@ -136,6 +146,16 @@ export function buildAlterationFilter(
     });
     if (!flagged) continue;
     measurementKeys.add(d.field);
+    // The prior-trip number is the value being superseded — the worker needs to
+    // see what it was, not just what it becomes. Only when it ACTUALLY changed:
+    // a reason-only flag (SPEC 2.5) leaves the target untouched, so there is no
+    // superseded value and printing the same number twice in red is noise.
+    const changed =
+      d.original_value != null &&
+      d.actual_value != null &&
+      d.actual_value !== "" &&
+      Number(d.original_value) !== Number(d.actual_value);
+    if (changed) fieldPrevious.set(d.field, d.original_value);
     if (d.reason && REASON_LABELS.has(d.reason as AlterationReason)) {
       fieldReasons.set(d.field, d.reason as AlterationReason);
     }
@@ -155,7 +175,7 @@ export function buildAlterationFilter(
   }
 
   if (measurementKeys.size === 0 && visibleSections.size === 0) return null;
-  return { measurementKeys, fieldReasons, visibleSections, hideUnchanged: true };
+  return { measurementKeys, fieldReasons, fieldPrevious, visibleSections, hideUnchanged: true };
 }
 
 /** Tailwind classes for the measurement cell tint per fault category. */
@@ -390,18 +410,27 @@ export function buildAltOutFilter(garment: {
   garment_type?: string | null;
   alteration_measurements?: unknown;
   alteration_styles?: unknown;
+  original_garment_measurement?: Record<string, unknown> | null;
 }): AlterationFilter | null {
   if (garment.garment_type !== "alteration") return null;
 
   const altMeas = parseJson<Record<string, unknown>>(garment.alteration_measurements) ?? {};
   const altStyles = parseJson<Record<string, unknown>>(garment.alteration_styles) ?? {};
+  // Internal alteration (we made the garment, source garment linked) has the
+  // original measurement on hand, so each changed cell can show what it
+  // supersedes. External has no baseline at all — the cell carries the target
+  // only, and no red value, because none exists.
+  const original = garment.original_garment_measurement ?? null;
 
   const measurementKeys = new Set<string>();
   const fieldReasons = new Map<string, AlterationReason>();
+  const fieldPrevious = new Map<string, unknown>();
   for (const k of Object.keys(altMeas)) {
     if (altMeas[k] == null || altMeas[k] === "") continue;
     measurementKeys.add(k);
     fieldReasons.set(k, "Customer Request");
+    const prev = original?.[k];
+    if (prev != null && prev !== "") fieldPrevious.set(k, prev);
   }
 
   const visibleSections = new Set<AlterationStyleSection>();
@@ -421,7 +450,15 @@ export function buildAltOutFilter(garment: {
   }
 
   if (measurementKeys.size === 0 && visibleSections.size === 0 && optionKeys.size === 0) return null;
-  return { measurementKeys, fieldReasons, visibleSections, optionKeys, hideUnchanged: true };
+  return {
+    measurementKeys,
+    fieldReasons,
+    fieldPrevious,
+    causeLabel: "Customer request",
+    visibleSections,
+    optionKeys,
+    hideUnchanged: true,
+  };
 }
 
 /**

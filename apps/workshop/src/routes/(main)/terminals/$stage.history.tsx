@@ -35,6 +35,7 @@ interface HistoryRow {
   result?: "pass" | "fail";  // QC only
   failReason?: string | null;
   returnStages?: string[];
+  trip?: number;             // QC only: which trip's attempts to open
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ function extractQcRows(g: WorkshopGarment, dateStr: string): HistoryRow[] {
         result: a.result,
         failReason: a.fail_reason,
         returnStages: getQcReturnStages(a),
+        trip: trip.trip,
       });
     });
   }
@@ -95,13 +97,18 @@ function extractSoakingRows(g: WorkshopGarment, dateStr: string): HistoryRow[] {
   ];
 }
 
-function formatTime(iso: string): string {
-  try {
-    const d = parseUtcTimestamp(iso);
-    return d.toLocaleTimeString(undefined, { timeZone: TIMEZONE, hour: "numeric", minute: "2-digit" });
-  } catch {
-    return "-";
-  }
+/** How long the worker was on the piece — the span of the closed session.
+ * Clock times aren't shown: what matters here is time spent, not when. */
+function formatDuration(startIso: string | null, endIso: string): string {
+  if (!startIso) return "-";
+  const ms = parseUtcTimestamp(endIso).getTime() - parseUtcTimestamp(startIso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "-";
+  const mins = Math.round(ms / 60_000);
+  if (mins < 1) return "<1m";
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  if (hrs === 0) return `${mins}m`;
+  return rem === 0 ? `${hrs}h` : `${hrs}h ${rem}m`;
 }
 
 function shiftDateStr(dateStr: string, days: number): string {
@@ -117,17 +124,14 @@ function formatDateLong(dateStr: string): string {
 
 // ── skeleton row ─────────────────────────────────────────────────────────────
 
-function SkeletonRow({ isQc, showStarted, showWorker }: { isQc: boolean; showStarted: boolean; showWorker: boolean }) {
+function SkeletonRow({ isQc, showDuration, showWorker }: { isQc: boolean; showDuration: boolean; showWorker: boolean }) {
   return (
     <TableRow>
-      {showStarted && <TableCell className="px-3 py-3"><Skeleton className="h-4 w-12" /></TableCell>}
-      <TableCell className="px-3 py-3"><Skeleton className="h-4 w-12" /></TableCell>
+      {showDuration && <TableCell className="px-3 py-3"><Skeleton className="h-4 w-12" /></TableCell>}
       <TableCell className="px-3 py-3"><Skeleton className="h-4 w-16" /></TableCell>
       <TableCell className="px-3 py-3"><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
       <TableCell className="px-3 py-3"><Skeleton className="h-4 w-20" /></TableCell>
       <TableCell className="px-3 py-3"><Skeleton className="h-4 w-32" /></TableCell>
-      <TableCell className="px-3 py-3"><Skeleton className="h-4 w-28" /></TableCell>
-      <TableCell className="px-3 py-3"><Skeleton className="h-4 w-28" /></TableCell>
       <TableCell className="px-3 py-3"><Skeleton className="h-5 w-12 rounded-full" /></TableCell>
       {showWorker && <TableCell className="px-3 py-3"><Skeleton className="h-4 w-20" /></TableCell>}
       {isQc && <TableCell className="px-3 py-3"><Skeleton className="h-5 w-16 rounded-full" /></TableCell>}
@@ -147,7 +151,9 @@ function TerminalHistoryPage() {
 
   const isQc = stage === "quality_check";
   const isSoaking = stage === "soaking";
-  const showStarted = !isQc;
+  // QC records only the attempt date (no open/close session), so there is no
+  // duration to report for it.
+  const showDuration = !isQc;
   const showWorker = !isSoaking;
   const stageLabel = PIECE_STAGE_LABELS[stage as keyof typeof PIECE_STAGE_LABELS] ?? stage;
 
@@ -174,8 +180,15 @@ function TerminalHistoryPage() {
   const passCount = isQc ? rows.filter((r) => r.result === "pass").length : 0;
   const failCount = isQc ? rows.filter((r) => r.result === "fail").length : 0;
 
-  const handleRowClick = (g: WorkshopGarment) => {
-    navigate({ to: "/terminals/garment/$garmentId", params: { garmentId: g.id } });
+  // A garment opened from QC history has already left the QC stage, so the
+  // detail page would otherwise render the ordinary production view. Carrying
+  // the trip tells it to show that trip's QC record instead.
+  const handleRowClick = (r: HistoryRow) => {
+    navigate({
+      to: "/terminals/garment/$garmentId",
+      params: { garmentId: r.garment.id },
+      search: r.trip != null ? { qcTrip: r.trip } : {},
+    });
   };
 
   const today = getLocalDateStr();
@@ -267,14 +280,11 @@ function TerminalHistoryPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
-                {showStarted && <TableHead className="w-[90px]">Started</TableHead>}
-                <TableHead className="w-[90px]">{isSoaking ? "Completed" : "Time"}</TableHead>
+                {showDuration && <TableHead className="w-[90px]">Duration</TableHead>}
                 <TableHead className="w-[120px]">Garment</TableHead>
                 <TableHead className="w-[80px]">Type</TableHead>
                 <TableHead className="w-[110px]">Order / Invoice</TableHead>
                 <TableHead className="w-[170px]">Customer</TableHead>
-                <TableHead className="w-[160px]">Fabric</TableHead>
-                <TableHead className="w-[160px]">Style</TableHead>
                 <TableHead className="w-[80px]">Brand</TableHead>
                 {showWorker && <TableHead className="w-[140px]">Worker</TableHead>}
                 {isQc && <TableHead className="w-[110px]">Result</TableHead>}
@@ -282,7 +292,7 @@ function TerminalHistoryPage() {
             </TableHeader>
             <TableBody>
               {Array.from({ length: 6 }, (_, i) => (
-                <SkeletonRow key={i} isQc={isQc} showStarted={showStarted} showWorker={showWorker} />
+                <SkeletonRow key={i} isQc={isQc} showDuration={showDuration} showWorker={showWorker} />
               ))}
             </TableBody>
           </Table>
@@ -294,14 +304,11 @@ function TerminalHistoryPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 border-b-2 border-border/60 hover:bg-muted/40">
-                {showStarted && <TableHead className="w-[90px]">Started</TableHead>}
-                <TableHead className="w-[90px]">{isSoaking ? "Completed" : "Time"}</TableHead>
+                {showDuration && <TableHead className="w-[90px]">Duration</TableHead>}
                 <TableHead className="w-[120px]">Garment</TableHead>
                 <TableHead className="w-[80px]">Type</TableHead>
                 <TableHead className="w-[110px]">Order / Invoice</TableHead>
                 <TableHead className="w-[170px]">Customer</TableHead>
-                <TableHead className="w-[160px]">Fabric</TableHead>
-                <TableHead className="w-[160px]">Style</TableHead>
                 <TableHead className="w-[80px]">Brand</TableHead>
                 {showWorker && <TableHead className="w-[140px]">Worker</TableHead>}
                 {isQc && <TableHead className="w-[110px]">Result</TableHead>}
@@ -313,18 +320,15 @@ function TerminalHistoryPage() {
                 return (
                   <TableRow
                     key={r.key}
-                    {...clickableProps(() => handleRowClick(g))}
-                    onClick={() => handleRowClick(g)}
+                    {...clickableProps(() => handleRowClick(r))}
+                    onClick={() => handleRowClick(r)}
                     className="cursor-pointer hover:bg-muted/40"
                   >
-                    {showStarted && (
-                      <TableCell className="px-3 py-3 font-mono text-xs tabular-nums text-muted-foreground">
-                        {r.startedAt ? formatTime(r.startedAt) : "-"}
+                    {showDuration && (
+                      <TableCell className="px-3 py-3 font-mono text-sm tabular-nums">
+                        {formatDuration(r.startedAt, r.completedAt)}
                       </TableCell>
                     )}
-                    <TableCell className="px-3 py-3 font-mono text-xs tabular-nums text-muted-foreground">
-                      {formatTime(r.completedAt)}
-                    </TableCell>
                     <TableCell className="px-3 py-3">
                       <div className="flex flex-col gap-1">
                         <span className="font-mono text-base">
@@ -351,21 +355,6 @@ function TerminalHistoryPage() {
                           <span className="text-xs font-mono text-muted-foreground">{g.customer_mobile}</span>
                         )}
                       </div>
-                    </TableCell>
-                    <TableCell className="px-3 py-3 text-sm">
-                      {g.fabric_name ? (
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <span className="font-medium truncate">{g.fabric_name}</span>
-                          {g.fabric_color && (
-                            <span className="text-xs text-muted-foreground truncate">{g.fabric_color}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Outside</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="px-3 py-3 text-sm">
-                      <span className="truncate block max-w-[160px]">{g.style_name ?? g.style ?? "-"}</span>
                     </TableCell>
                     <TableCell className="px-3 py-3">
                       <BrandBadge brand={g.order_brand} />

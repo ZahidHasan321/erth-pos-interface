@@ -4,6 +4,22 @@ Lean **index + governance** for this product. The authoritative detailed spec is
 
 ---
 
+## 0a. THE DATABASE IS PRODUCTION (read before any DB action)
+
+**`packages/database/.env` points at the LIVE production database** (`aws-1-ap-south-1.pooler.supabase.com`). Real customers, real orders, real money. There is no staging copy. Assume every DB connection is production unless you have *proved* otherwise.
+
+**Never run a schema or data change against it without an explicit, specific confirmation from the user for that exact change.** "Go ahead", "do what works", or a general approval to work on a feature is **not** consent to touch prod. Ask, name the change, and wait.
+
+- **`drizzle-kit` is LOCAL-ONLY.** It is how the local test stack is built (`e2e/scripts/setup.sh`), never how prod changes. Run bare from `packages/database`, it silently resolves to prod and offers to DROP TABLES. `drizzle.config.ts` now fails closed on a non-local host; do not work around that guard.
+- **Prod schema changes go through the idempotent `apply-*.ts` scripts** in `packages/database/scripts/`, one migration at a time, and only when the user has asked to deploy.
+- **Always pass an explicit `DATABASE_URL`** for local work: `postgresql://postgres:postgres@127.0.0.1:54322/postgres`. Never rely on `.env` fallback to be local, because it is not.
+- **The local DB (port 54322) is disposable** — truncate, reset, re-push it freely. That freedom stops at the pooler hostname.
+- **Reads are not free either.** Ask before connecting to prod even to `SELECT`; a read is fine to *request*, not to assume.
+
+If a command's target is ambiguous, resolve the ambiguity before running it, not after.
+
+---
+
 ## 0. How to use these files (governance — read first)
 
 1. **`SPEC.md` is the spec.** Every feature, branch, and edge case lives there in plain language (§1–§6). This file is its lean index — the per-area summaries below are lossy; when a summary and `SPEC.md` differ, **`SPEC.md` wins**. Behavior not described in `SPEC.md` isn't specified — surface the gap, don't infer it from code.

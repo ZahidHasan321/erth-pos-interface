@@ -318,7 +318,6 @@ function SoakSection({
                 <TableHead className="w-[80px]">Type</TableHead>
                 <TableHead className="w-[110px]">Order / Invoice</TableHead>
                 <TableHead className="w-[170px]">Customer</TableHead>
-                <TableHead className="w-[160px]">Fabric</TableHead>
                 <TableHead className="w-[80px]">Brand</TableHead>
                 {mode === "started" && (
                   <TableHead className="w-[140px]">Started</TableHead>
@@ -373,20 +372,6 @@ function SoakSection({
                         </span>
                       )}
                     </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-3 text-sm">
-                    {g.fabric_name ? (
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="font-medium truncate">{g.fabric_name}</span>
-                        {g.fabric_color && (
-                          <span className="text-xs text-muted-foreground truncate">
-                            {g.fabric_color}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Outside</span>
-                    )}
                   </TableCell>
                   <TableCell className="px-3 py-3">
                     <BrandBadge brand={g.order_brand} />

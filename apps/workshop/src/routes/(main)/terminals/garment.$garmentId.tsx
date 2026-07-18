@@ -19,8 +19,8 @@ import {
 import { useCan } from "@/lib/can";
 import { CAPS } from "@/lib/capabilities";
 import { WorkerDropdown } from "@/components/shared/WorkerDropdown";
-import { HISTORY_KEY_MAP, GarmentHeader } from "@/components/shared/GarmentDetailSections";
-import { DishdashaOverlay } from "@/components/shared/DishdashaOverlay";
+import { HISTORY_KEY_MAP, GarmentHeader, QcAttemptList } from "@/components/shared/GarmentDetailSections";
+import { DishdashaOverlay, FLAGGED_TINT } from "@/components/shared/DishdashaOverlay";
 import { BrandBadge } from "@/components/shared/StageBadge";
 import { TerminalQualityTemplatePrint } from "@/components/print/TerminalQualityTemplatePrint";
 import { QualityCheckForm } from "@/components/terminals/QualityCheckForm";
@@ -63,8 +63,11 @@ export const Route = createFileRoute("/(main)/terminals/garment/$garmentId")({
   // `station` = the stage of the terminal the operator came from. Optional so
   // other entry points (history, direct links) still resolve; when present it
   // locks completion to that stage (TerminalActions).
-  validateSearch: (search: Record<string, unknown>): { station?: string } => ({
+  // `qcTrip` = opened from QC history: show that trip's QC record read-only
+  // instead of the production view (the garment has already left QC).
+  validateSearch: (search: Record<string, unknown>): { station?: string; qcTrip?: number } => ({
     station: typeof search.station === "string" ? search.station : undefined,
+    qcTrip: Number.isFinite(Number(search.qcTrip)) && search.qcTrip != null ? Number(search.qcTrip) : undefined,
   }),
 });
 
@@ -72,7 +75,7 @@ export const Route = createFileRoute("/(main)/terminals/garment/$garmentId")({
 
 function TerminalGarmentPage() {
   const { garmentId } = Route.useParams();
-  const { station } = Route.useSearch();
+  const { station, qcTrip } = Route.useSearch();
   const { data: garment, isLoading } = useGarment(garmentId);
   const router = useRouter();
 
@@ -130,7 +133,15 @@ function TerminalGarmentPage() {
   const tripHistory = garment.trip_history as TripHistoryEntry[] | null;
   const tripEntry = tripHistory?.find((t) => t.trip === currentTrip);
   const hasQcFail = !!tripEntry?.qc_attempts?.some((a) => a.result === "fail");
-  const lastQcFail = tripEntry?.qc_attempts?.filter((a) => a.result === "fail").at(-1);
+  // Opened from QC history: the garment has already moved past quality_check,
+  // so `isQC` is false and nothing below would show the inspection itself.
+  const qcRecordEntry = qcTrip == null ? null : tripHistory?.find((t) => t.trip === qcTrip) ?? null;
+  const qcRecordAttempts = qcRecordEntry?.qc_attempts ?? [];
+  const showQcRecord = !isQC && qcRecordAttempts.length > 0;
+  // Internal = we made the garment and its source order is linked, so the
+  // original spec is on file and each changed cell can show what it replaces.
+  // External has no baseline at all. The worker needs to know which.
+  const isAltOutInternal = isAltOut && !!(garment as { original_garment_id?: string | null }).original_garment_id;
   const altNum = getAlterationNumber(currentTrip, garment.garment_type);
   const isRepair = hasQcFail || isAltIn || isAltOut;
 
@@ -145,6 +156,8 @@ function TerminalGarmentPage() {
   const alterationFilter = qcFailContext?.filter ?? baseAlterationFilter;
   const qcFailActuals = qcFailContext?.actuals ?? null;
   const qcFailOptionActuals = qcFailContext?.optionActuals ?? null;
+  const qcFailMetaActuals = qcFailContext?.metaActuals ?? null;
+  const qcFailQuality = qcFailContext?.failedQuality ?? null;
   // Option diffs (add/remove/change/hashwa) derived from prior-trip feedback —
   // tells the sewer what to physically do, not just what the final state is.
   // QC-fail rework re-uses the alteration filter but option changes don't
@@ -223,6 +236,19 @@ function TerminalGarmentPage() {
           </div>
         )}
 
+        {showQcRecord && (
+          <div className="mb-3 rounded-md border bg-card p-3">
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">
+              Quality check{qcRecordAttempts.length > 1 ? ` (${qcRecordAttempts.length} attempts)` : ""}
+            </h3>
+            <QcAttemptList
+              qcAttempts={qcRecordAttempts}
+              reentryStage={qcRecordEntry?.reentry_stage ?? null}
+              garment={garment}
+            />
+          </div>
+        )}
+
         {!isQC && effectiveMeasurement?.notes && (
           <div className="mb-3 rounded-md border border-[color:var(--status-warn)]/30 bg-[var(--status-warn-bg)] p-2">
             <h4 className="text-xs font-medium text-[var(--status-warn)] mb-1">
@@ -248,34 +274,35 @@ function TerminalGarmentPage() {
                     : `Alteration ${altNum}`}
                 {isAltOut && (
                   <span className="font-normal">
-                    {" "}(customer-brought garment, only flagged cells need work)
+                    {" "}
+                    ({isAltOutInternal
+                      ? "our garment, source order linked"
+                      : "another shop's garment, no original spec on file"}
+                    , only flagged cells need work)
                   </span>
                 )}
               </p>
-              {hasQcFail && lastQcFail?.fail_reason && (
-                <p className="text-xs mt-0.5 opacity-80">Reason: {lastQcFail.fail_reason}</p>
-              )}
             </StatusBanner>
           </div>
         )}
 
-        {(isAltIn || isAltOut) && alterationFilter && alterationFilter.fieldReasons.size > 0 && (
+        {/* One key for the one visual language: a marked cell needs work, and a
+            red struck value is the thing NOT to build. Shown for every case
+            that flags anything, QC included - previously a QC fix showed marked
+            cells with no key at all. */}
+        {isRepair && alterationFilter && (
           <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border bg-card px-3.5 py-2 text-xs">
-            <span className="font-medium text-muted-foreground">Cell colors:</span>
-            {/* Swatch colors must match the printed QC sheet palette in index.css (terminal-qc-measure-cell-reason-*) so the worker sees the same hues on screen and on paper. */}
-            {/* eslint-disable-next-line no-restricted-syntax */}
             <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-sm border-2 border-emerald-500 bg-emerald-100" />
-              Customer Request
-            </span>
-            {/* eslint-disable-next-line no-restricted-syntax */}
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-sm border-2 border-red-500 bg-red-100" />
-              Workshop Error
+              <span className={cn("inline-block h-3 w-3 rounded-sm border-2", FLAGGED_TINT)} />
+              Needs work
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-sm border-2 border-zinc-500 bg-zinc-200" />
-              Shop Error
+              {/* eslint-disable-next-line no-restricted-syntax */}
+              <span className="text-red-600 line-through decoration-red-600/50 font-medium">12</span>
+              Wrong value, do not build
+            </span>
+            <span className="text-muted-foreground">
+              Plain value is the spec. Hover a cell for the reason.
             </span>
           </div>
         )}
@@ -287,6 +314,8 @@ function TerminalGarmentPage() {
             alterationFilter={alterationFilter}
             qcFailActuals={qcFailActuals}
             qcFailOptionActuals={qcFailOptionActuals}
+            qcFailMetaActuals={qcFailMetaActuals}
+            qcFailQuality={qcFailQuality}
             optionChanges={optionChanges}
             sectionAttachments={sectionAttachments}
             notes={garment.notes}
@@ -307,7 +336,7 @@ function TerminalGarmentPage() {
               isAlteration={(isAltIn || isAltOut) && !hasQcFail}
               alterationFilter={baseAlterationFilter}
             />
-          ) : isProductionStage ? (
+          ) : isProductionStage && !showQcRecord ? (
             <TerminalActions garment={garment} station={station} />
           ) : null}
         </div>

@@ -988,6 +988,158 @@ input[type="number"] {
   }
 }
 
+/* ── Dispatch Manifest Print ───────────────────────── */
+
+@media print {
+  body.dispatch-printing {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.dispatch-printing * {
+    visibility: hidden !important;
+  }
+
+  body.dispatch-printing .dispatch-print-only,
+  body.dispatch-printing .dispatch-print-only * {
+    visibility: visible !important;
+  }
+
+  body.dispatch-printing .dispatch-print-only {
+    display: block !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    z-index: 99999 !important;
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.dispatch-printing .dispatch-print-sheet {
+    font-family: "Montserrat", "Cairo", "Arial", sans-serif;
+    color: #000;
+    background: #fff;
+  }
+
+  /* ── Header ── */
+  body.dispatch-printing .dispatch-print-header {
+    border-bottom: 0.6mm solid #000;
+    padding-bottom: 2mm;
+    margin-bottom: 3mm;
+  }
+
+  body.dispatch-printing .dispatch-print-header h1 {
+    font-size: 5mm;
+    font-weight: 900;
+    letter-spacing: 0.2mm;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  body.dispatch-printing .dispatch-print-header p {
+    font-size: 3mm;
+    font-weight: 600;
+    margin: 1mm 0 0 0;
+  }
+
+  /* ── Table ── */
+  body.dispatch-printing .dispatch-print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 3mm;
+  }
+
+  body.dispatch-printing .dispatch-print-table th {
+    border: 0.3mm solid #000;
+    background: #eee;
+    padding: 1.2mm 1.5mm;
+    text-align: left;
+    font-size: 2.4mm;
+    font-weight: 900;
+    letter-spacing: 0.1mm;
+    text-transform: uppercase;
+  }
+
+  body.dispatch-printing .dispatch-print-table td {
+    border: 0.3mm solid #000;
+    padding: 1.4mm 1.5mm;
+    vertical-align: top;
+  }
+
+  /* Keep an order's row intact across a page break. */
+  body.dispatch-printing .dispatch-print-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.dispatch-printing .dispatch-print-table thead {
+    display: table-header-group;
+  }
+
+  body.dispatch-printing .dispatch-print-primary {
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  body.dispatch-printing .dispatch-print-secondary {
+    font-size: 2.5mm;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  body.dispatch-printing .dispatch-print-count {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  body.dispatch-printing .dispatch-col-date {
+    width: 22mm;
+    font-variant-numeric: tabular-nums;
+  }
+  body.dispatch-printing .dispatch-col-order {
+    width: 24mm;
+  }
+  body.dispatch-printing .dispatch-col-garments {
+    width: 26mm;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  body.dispatch-printing .dispatch-col-counts {
+    width: 34mm;
+  }
+  body.dispatch-printing .dispatch-col-brand {
+    width: 20mm;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* ── Sign-off ── */
+  body.dispatch-printing .dispatch-print-signoff {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8mm;
+    margin-top: 10mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.dispatch-printing .dispatch-print-signoff span {
+    font-size: 2.4mm;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1mm;
+  }
+
+  body.dispatch-printing .dispatch-print-rule {
+    margin-top: 8mm;
+    border-bottom: 0.3mm solid #000;
+  }
+}
+
 /* Respect reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,

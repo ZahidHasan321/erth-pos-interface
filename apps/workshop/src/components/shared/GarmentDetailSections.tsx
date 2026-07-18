@@ -1232,7 +1232,7 @@ function QcPassDetails({
   );
 }
 
-function QcAttemptList({
+export function QcAttemptList({
   qcAttempts,
   reentryStage,
   garment,

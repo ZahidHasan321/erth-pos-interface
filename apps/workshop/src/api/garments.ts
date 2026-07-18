@@ -353,22 +353,18 @@ export const getHistoryGarments = async (
   dateStr: string,
   range: { start: string; end: string },
 ): Promise<WorkshopGarment[]> => {
-  let query = db
-    .from('garments')
-    .select(WORKSHOP_QUERY_LIGHT)
-    .eq('order.checkout_status', 'confirmed');
-
-  if (stage === 'soaking') {
-    query = query
-      .gte('soaking_completed_at', range.start)
-      .lte('soaking_completed_at', range.end);
-  } else if (stage === 'quality_check') {
-    query = query.not('trip_history', 'is', null);
-  } else {
-    query = query.not('stage_timings', 'is', null);
-  }
-
-  const { data, error } = await query.order('id', { ascending: true });
+  // The day filter runs in SQL (get_stage_history_garments). Filtering it in
+  // the browser meant fetching every garment that had any history at all,
+  // which PostgREST truncates at 1000 rows -- past that, the newest days came
+  // back empty because the cap kept the oldest ids.
+  const { data, error } = await db
+    .rpc('get_stage_history_garments', {
+      p_stage: stage,
+      p_date: dateStr,
+      p_start: range.start,
+      p_end: range.end,
+    })
+    .select(WORKSHOP_QUERY_LIGHT);
   if (error) {
     throw new Error(`getHistoryGarments: failed to fetch '${stage}' history for ${dateStr}: ${error.message}`);
   }
@@ -822,9 +818,13 @@ const GARMENT_DETAIL_QUERY = `
   ),
   measurement:measurements!measurement_id(*),
   full_measurement_set:measurements!full_measurement_set_id(*),
-  original_garment:garments!original_garment_id(measurement:measurements!measurement_id(*)),
   fabric_ref:fabrics!fabric_id(name, color)
 `;
+// NOTE: the linked original garment is deliberately NOT embedded here.
+// `garments!original_garment_id` is ambiguous on a self-referencing FK and
+// PostgREST resolves it BACKWARDS — it returns the garments pointing AT this
+// row, so an alteration garment always got `original_garment: []` and its
+// baseline measurement was silently null. Fetched explicitly below instead.
 
 /**
  * Fetch a single garment by ID — no location filter. Uses GARMENT_DETAIL_QUERY
@@ -841,7 +841,27 @@ export const getGarmentById = async (id: string): Promise<WorkshopGarment | null
     console.error('getGarmentById error:', error);
     return null;
   }
-  return flattenDetailGarment(data);
+  const garment = flattenDetailGarment(data);
+
+  // Internal alteration: pull the source garment's measurement in its own
+  // query. This is the baseline each changed cell is measured against, so
+  // without it an internal alteration renders exactly like an external one.
+  const originalId = (data as { original_garment_id?: string | null }).original_garment_id;
+  if (originalId) {
+    const { data: orig, error: origError } = await db
+      .from('garments')
+      .select('measurement:measurements!measurement_id(*)')
+      .eq('id', originalId)
+      .maybeSingle();
+    if (origError) {
+      console.error('getGarmentById: original garment measurement fetch failed:', origError);
+    } else if (orig?.measurement) {
+      garment.original_garment_measurement = (
+        Array.isArray(orig.measurement) ? orig.measurement[0] : orig.measurement
+      ) as WorkshopGarment['original_garment_measurement'];
+    }
+  }
+  return garment;
 };
 
 /** Flatten helper for GARMENT_DETAIL_QUERY rows. Mirrors flattenGarment but
@@ -1404,6 +1424,37 @@ export const getDispatchHistory = async (
       brand: o?.brand ?? null,
     };
   });
+};
+
+/**
+ * Per-order garment counts by type, for the orders given. Used by the dispatch
+ * history print sheet to show "1/1 Brova, 0/4 Finals" - the denominator is the
+ * order's whole garment set, not just what was dispatched.
+ */
+export type OrderGarmentTotals = Record<number, Record<string, number>>;
+
+export const getOrderGarmentTotals = async (
+  orderIds: number[],
+): Promise<OrderGarmentTotals> => {
+  if (orderIds.length === 0) return {};
+
+  const { data, error } = await db
+    .from('garments')
+    .select('order_id, garment_type')
+    .in('order_id', orderIds);
+
+  if (error) {
+    console.error('Error fetching order garment totals:', error);
+    return {};
+  }
+
+  const totals: OrderGarmentTotals = {};
+  for (const row of (data ?? []) as { order_id: number; garment_type: string | null }[]) {
+    const type = row.garment_type ?? 'final';
+    totals[row.order_id] ??= {};
+    totals[row.order_id][type] = (totals[row.order_id][type] ?? 0) + 1;
+  }
+  return totals;
 };
 
 /** Release finals from waiting_for_acceptance → waiting_cut so they can enter production */

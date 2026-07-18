@@ -295,6 +295,7 @@ function GarmentRow({
   showExpressFlag,
   showActions,
   showType = true,
+  showCutSpec,
 }: {
   garment: WorkshopGarment;
   stage: string;
@@ -303,6 +304,8 @@ function GarmentRow({
   showExpressFlag?: boolean;
   showActions?: boolean;
   showType?: boolean;
+  /** Cutting only: the jabzour + lines the cutter needs to mark out. */
+  showCutSpec?: boolean;
 }) {
   const { user } = useAuth();
   const showAssignee = !isTerminalUser(user);
@@ -313,6 +316,8 @@ function GarmentRow({
   const plan = garment.production_plan as ProductionPlan | null;
   const assignee = planKey ? ((plan?.[planKey] as string | undefined) ?? null) : null;
   const assigneeLabel = stage === "sewing" ? "Unit" : "Worker";
+  const jabzourLabel =
+    [garment.jabzour_1, garment.jabzour_2].filter(Boolean).join(" / ") || "-";
 
   return (
     <TableRow
@@ -363,25 +368,16 @@ function GarmentRow({
           )}
         </div>
       </TableCell>
-      <TableCell className="px-3 py-3 text-sm">
-        {garment.fabric_name ? (
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <span className="font-medium truncate">{garment.fabric_name}</span>
-            {garment.fabric_color && (
-              <span className="text-xs text-muted-foreground truncate">
-                {garment.fabric_color}
-              </span>
-            )}
-          </div>
-        ) : (
-          <span className="text-xs text-muted-foreground">Outside</span>
-        )}
-      </TableCell>
-      <TableCell className="px-3 py-3 text-sm">
-        <span className="truncate block max-w-[160px]">
-          {garment.style_name ?? garment.style ?? "-"}
-        </span>
-      </TableCell>
+      {showCutSpec && (
+        <>
+          <TableCell className="px-3 py-3 text-sm">
+            <span className="truncate block max-w-[140px]">{jabzourLabel}</span>
+          </TableCell>
+          <TableCell className="px-3 py-3 text-sm tabular-nums">
+            {garment.lines ?? "-"}
+          </TableCell>
+        </>
+      )}
       <TableCell className="px-3 py-3">
         <BrandBadge brand={garment.order_brand} />
       </TableCell>
@@ -434,6 +430,9 @@ function SectionTable({
   const { user } = useAuth();
   const showAssignee = !isTerminalUser(user);
   const assigneeHeader = stage === "sewing" ? "Unit" : "Worker";
+  // Jabzour + lines are what the cutter marks out; every other station works
+  // from the already-cut piece and doesn't need them.
+  const showCutSpec = stage === "cutting";
   return (
     <TableContainer>
       <Table>
@@ -444,8 +443,12 @@ function SectionTable({
             {showAlt && <TableHead className="w-[80px]">Alt</TableHead>}
             <TableHead className="w-[110px]">Order / Invoice</TableHead>
             <TableHead className="w-[170px]">Customer</TableHead>
-            <TableHead className="w-[160px]">Fabric</TableHead>
-            <TableHead className="w-[160px]">Style</TableHead>
+            {showCutSpec && (
+              <>
+                <TableHead className="w-[140px]">Jabzour</TableHead>
+                <TableHead className="w-[70px]">Lines</TableHead>
+              </>
+            )}
             <TableHead className="w-[80px]">Brand</TableHead>
             {showAssignee && (
               <TableHead className="w-[140px]">{assigneeHeader}</TableHead>
@@ -466,6 +469,7 @@ function SectionTable({
               showExpressFlag={showExpressFlag}
               showActions={showActions}
               showType={showType}
+              showCutSpec={showCutSpec}
             />
           ))}
         </TableBody>

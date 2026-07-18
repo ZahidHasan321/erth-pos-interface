@@ -17,7 +17,8 @@ import { matchesGarmentSearch } from "@/lib/garment-search";
 import { ConfirmationDialog } from "@repo/ui/confirmation-dialog";
 import { Truck, Package, History, Printer, ChevronDown, Loader2 } from "lucide-react";
 import { formatDate, cn, parseUtcTimestamp, getKuwaitMidnight, getLocalDateStr, TIMEZONE } from "@/lib/utils";
-import { getDispatchHistory, type DispatchHistoryRow } from "@/api/garments";
+import { getDispatchHistory, getOrderGarmentTotals, type DispatchHistoryRow, type OrderGarmentTotals } from "@/api/garments";
+import { DispatchHistoryPrint, groupDispatchRows } from "@/components/print/DispatchHistoryPrint";
 import type { WorkshopGarment } from "@repo/database";
 import { dispatchTab } from "@repo/database";
 
@@ -448,12 +449,46 @@ function DispatchHistoryTab() {
     gcTime: 1000 * 60 * 5,
   });
 
-  const handlePrint = () => window.print();
+  // Denominators for the printed "1/1 Brova, 0/4 Finals" counts come from the
+  // orders' whole garment sets, not from what was dispatched.
+  const orderIds = useMemo(
+    () => [...new Set(rows.map((r) => r.order_id))],
+    [rows],
+  );
+  const { data: orderTotals = {} } = useQuery<OrderGarmentTotals>({
+    queryKey: ['orderGarmentTotals', orderIds],
+    queryFn: () => getOrderGarmentTotals(orderIds),
+    enabled: orderIds.length > 0,
+    staleTime: 1000 * 30,
+    gcTime: 1000 * 60 * 5,
+  });
+
+  const printGroups = useMemo(
+    () => groupDispatchRows(rows, orderTotals),
+    [rows, orderTotals],
+  );
+
+  // Scope the print to the manifest only - a bare window.print() dumps the
+  // whole app shell (sidebar, toolbar, chrome) onto the page.
+  const handlePrint = () => {
+    const className = "dispatch-printing";
+
+    const cleanup = () => {
+      document.body.classList.remove(className);
+      window.removeEventListener("afterprint", cleanup);
+    };
+
+    document.body.classList.add(className);
+    window.addEventListener("afterprint", cleanup);
+    window.setTimeout(cleanup, 2000);
+
+    window.print();
+  };
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 print:hidden">
+      <div className="flex flex-wrap items-center gap-3">
         <SlidingPillSwitcher value={period} options={PERIOD_OPTIONS} onChange={setPeriod} />
 
         <span className="text-sm font-medium text-muted-foreground">
@@ -477,12 +512,13 @@ function DispatchHistoryTab() {
         </div>
       </div>
 
-      {/* Print header */}
-      <div className="hidden print:block mb-4">
-        <h1 className="text-xl font-semibold">Dispatch History: {period === 'today' ? 'Today' : period === 'week' ? 'This Week' : 'This Month'}</h1>
-        <p className="text-sm text-muted-foreground">
-          Workshop → Shop · {periodLabel} · {rows.length} record{rows.length === 1 ? '' : 's'}
-        </p>
+      {/* Printed manifest: order-level, hidden on screen. */}
+      <div className="dispatch-print-only hidden" aria-hidden="true">
+        <DispatchHistoryPrint
+          groups={printGroups}
+          periodLabel={periodLabel}
+          garmentCount={rows.length}
+        />
       </div>
 
       {/* Body */}
@@ -495,7 +531,7 @@ function DispatchHistoryTab() {
       ) : rows.length === 0 ? (
         <EmptyState icon={History} message={`No dispatches in ${periodLabel}`} />
       ) : (
-        <TableContainer className="print:border-0 print:shadow-none">
+        <TableContainer>
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 border-b border-border hover:bg-muted/40">
