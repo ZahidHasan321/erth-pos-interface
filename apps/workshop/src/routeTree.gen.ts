@@ -28,6 +28,7 @@ import { Route as mainCompletedRouteRouteImport } from './routes/(main)/complete
 import { Route as mainAssignedRouteRouteImport } from './routes/(main)/assigned/route'
 import { Route as mainUsersIndexRouteImport } from './routes/(main)/users/index'
 import { Route as mainPerformanceIndexRouteImport } from './routes/(main)/performance/index'
+import { Route as mainGuidesIndexRouteImport } from './routes/(main)/guides/index'
 import { Route as mainCompletedIndexRouteImport } from './routes/(main)/completed/index'
 import { Route as mainAssignedIndexRouteImport } from './routes/(main)/assigned/index'
 import { Route as mainUsersNewRouteImport } from './routes/(main)/users/new'
@@ -42,6 +43,7 @@ import { Route as mainStoreTransfersRouteImport } from './routes/(main)/store/tr
 import { Route as mainStoreSuppliersRouteImport } from './routes/(main)/store/suppliers'
 import { Route as mainStoreReportsRouteImport } from './routes/(main)/store/reports'
 import { Route as mainStoreInventoryRouteImport } from './routes/(main)/store/inventory'
+import { Route as mainGuidesChapterIdRouteImport } from './routes/(main)/guides/$chapterId'
 import { Route as mainCompletedOrderIdRouteImport } from './routes/(main)/completed/$orderId'
 import { Route as mainAssignedOrderIdRouteImport } from './routes/(main)/assigned/$orderId'
 import { Route as mainUsersUserIdIndexRouteImport } from './routes/(main)/users/$userId.index'
@@ -148,6 +150,11 @@ const mainPerformanceIndexRoute = mainPerformanceIndexRouteImport.update({
   path: '/performance/',
   getParentRoute: () => mainRouteRoute,
 } as any)
+const mainGuidesIndexRoute = mainGuidesIndexRouteImport.update({
+  id: '/guides/',
+  path: '/guides/',
+  getParentRoute: () => mainRouteRoute,
+} as any)
 const mainCompletedIndexRoute = mainCompletedIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -218,6 +225,11 @@ const mainStoreReportsRoute = mainStoreReportsRouteImport.update({
 const mainStoreInventoryRoute = mainStoreInventoryRouteImport.update({
   id: '/store/inventory',
   path: '/store/inventory',
+  getParentRoute: () => mainRouteRoute,
+} as any)
+const mainGuidesChapterIdRoute = mainGuidesChapterIdRouteImport.update({
+  id: '/guides/$chapterId',
+  path: '/guides/$chapterId',
   getParentRoute: () => mainRouteRoute,
 } as any)
 const mainCompletedOrderIdRoute = mainCompletedOrderIdRouteImport.update({
@@ -301,6 +313,7 @@ export interface FileRoutesByFullPath {
   '/team': typeof mainTeamRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/completed/$orderId': typeof mainCompletedOrderIdRoute
+  '/guides/$chapterId': typeof mainGuidesChapterIdRoute
   '/store/inventory': typeof mainStoreInventoryRoute
   '/store/reports': typeof mainStoreReportsRoute
   '/store/suppliers': typeof mainStoreSuppliersRoute
@@ -315,6 +328,7 @@ export interface FileRoutesByFullPath {
   '/users/new': typeof mainUsersNewRoute
   '/assigned/': typeof mainAssignedIndexRoute
   '/completed/': typeof mainCompletedIndexRoute
+  '/guides/': typeof mainGuidesIndexRoute
   '/performance/': typeof mainPerformanceIndexRoute
   '/users/': typeof mainUsersIndexRoute
   '/assigned/$orderId/add-garment': typeof mainAssignedOrderIdAddGarmentRoute
@@ -344,6 +358,7 @@ export interface FileRoutesByTo {
   '/team': typeof mainTeamRoute
   '/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/completed/$orderId': typeof mainCompletedOrderIdRoute
+  '/guides/$chapterId': typeof mainGuidesChapterIdRoute
   '/store/inventory': typeof mainStoreInventoryRoute
   '/store/reports': typeof mainStoreReportsRoute
   '/store/suppliers': typeof mainStoreSuppliersRoute
@@ -358,6 +373,7 @@ export interface FileRoutesByTo {
   '/users/new': typeof mainUsersNewRoute
   '/assigned': typeof mainAssignedIndexRoute
   '/completed': typeof mainCompletedIndexRoute
+  '/guides': typeof mainGuidesIndexRoute
   '/performance': typeof mainPerformanceIndexRoute
   '/users': typeof mainUsersIndexRoute
   '/assigned/$orderId/add-garment': typeof mainAssignedOrderIdAddGarmentRoute
@@ -391,6 +407,7 @@ export interface FileRoutesById {
   '/(main)/team': typeof mainTeamRoute
   '/(main)/assigned/$orderId': typeof mainAssignedOrderIdRoute
   '/(main)/completed/$orderId': typeof mainCompletedOrderIdRoute
+  '/(main)/guides/$chapterId': typeof mainGuidesChapterIdRoute
   '/(main)/store/inventory': typeof mainStoreInventoryRoute
   '/(main)/store/reports': typeof mainStoreReportsRoute
   '/(main)/store/suppliers': typeof mainStoreSuppliersRoute
@@ -405,6 +422,7 @@ export interface FileRoutesById {
   '/(main)/users/new': typeof mainUsersNewRoute
   '/(main)/assigned/': typeof mainAssignedIndexRoute
   '/(main)/completed/': typeof mainCompletedIndexRoute
+  '/(main)/guides/': typeof mainGuidesIndexRoute
   '/(main)/performance/': typeof mainPerformanceIndexRoute
   '/(main)/users/': typeof mainUsersIndexRoute
   '/(main)/assigned/$orderId_/add-garment': typeof mainAssignedOrderIdAddGarmentRoute
@@ -438,6 +456,7 @@ export interface FileRouteTypes {
     | '/team'
     | '/assigned/$orderId'
     | '/completed/$orderId'
+    | '/guides/$chapterId'
     | '/store/inventory'
     | '/store/reports'
     | '/store/suppliers'
@@ -452,6 +471,7 @@ export interface FileRouteTypes {
     | '/users/new'
     | '/assigned/'
     | '/completed/'
+    | '/guides/'
     | '/performance/'
     | '/users/'
     | '/assigned/$orderId/add-garment'
@@ -481,6 +501,7 @@ export interface FileRouteTypes {
     | '/team'
     | '/assigned/$orderId'
     | '/completed/$orderId'
+    | '/guides/$chapterId'
     | '/store/inventory'
     | '/store/reports'
     | '/store/suppliers'
@@ -495,6 +516,7 @@ export interface FileRouteTypes {
     | '/users/new'
     | '/assigned'
     | '/completed'
+    | '/guides'
     | '/performance'
     | '/users'
     | '/assigned/$orderId/add-garment'
@@ -527,6 +549,7 @@ export interface FileRouteTypes {
     | '/(main)/team'
     | '/(main)/assigned/$orderId'
     | '/(main)/completed/$orderId'
+    | '/(main)/guides/$chapterId'
     | '/(main)/store/inventory'
     | '/(main)/store/reports'
     | '/(main)/store/suppliers'
@@ -541,6 +564,7 @@ export interface FileRouteTypes {
     | '/(main)/users/new'
     | '/(main)/assigned/'
     | '/(main)/completed/'
+    | '/(main)/guides/'
     | '/(main)/performance/'
     | '/(main)/users/'
     | '/(main)/assigned/$orderId_/add-garment'
@@ -696,6 +720,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof mainPerformanceIndexRouteImport
       parentRoute: typeof mainRouteRoute
     }
+    '/(main)/guides/': {
+      id: '/(main)/guides/'
+      path: '/guides'
+      fullPath: '/guides/'
+      preLoaderRoute: typeof mainGuidesIndexRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
     '/(main)/completed/': {
       id: '/(main)/completed/'
       path: '/'
@@ -792,6 +823,13 @@ declare module '@tanstack/react-router' {
       path: '/store/inventory'
       fullPath: '/store/inventory'
       preLoaderRoute: typeof mainStoreInventoryRouteImport
+      parentRoute: typeof mainRouteRoute
+    }
+    '/(main)/guides/$chapterId': {
+      id: '/(main)/guides/$chapterId'
+      path: '/guides/$chapterId'
+      fullPath: '/guides/$chapterId'
+      preLoaderRoute: typeof mainGuidesChapterIdRouteImport
       parentRoute: typeof mainRouteRoute
     }
     '/(main)/completed/$orderId': {
@@ -918,6 +956,7 @@ interface mainRouteRouteChildren {
   mainReceivingRoute: typeof mainReceivingRoute
   mainSchedulerRoute: typeof mainSchedulerRoute
   mainTeamRoute: typeof mainTeamRoute
+  mainGuidesChapterIdRoute: typeof mainGuidesChapterIdRoute
   mainStoreInventoryRoute: typeof mainStoreInventoryRoute
   mainStoreReportsRoute: typeof mainStoreReportsRoute
   mainStoreSuppliersRoute: typeof mainStoreSuppliersRoute
@@ -930,6 +969,7 @@ interface mainRouteRouteChildren {
   mainTerminalsSewingRoute: typeof mainTerminalsSewingRoute
   mainTerminalsSoakingRoute: typeof mainTerminalsSoakingRoute
   mainUsersNewRoute: typeof mainUsersNewRoute
+  mainGuidesIndexRoute: typeof mainGuidesIndexRoute
   mainPerformanceIndexRoute: typeof mainPerformanceIndexRoute
   mainUsersIndexRoute: typeof mainUsersIndexRoute
   mainPerformanceWorkerWorkerNameRoute: typeof mainPerformanceWorkerWorkerNameRoute
@@ -955,6 +995,7 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainReceivingRoute: mainReceivingRoute,
   mainSchedulerRoute: mainSchedulerRoute,
   mainTeamRoute: mainTeamRoute,
+  mainGuidesChapterIdRoute: mainGuidesChapterIdRoute,
   mainStoreInventoryRoute: mainStoreInventoryRoute,
   mainStoreReportsRoute: mainStoreReportsRoute,
   mainStoreSuppliersRoute: mainStoreSuppliersRoute,
@@ -967,6 +1008,7 @@ const mainRouteRouteChildren: mainRouteRouteChildren = {
   mainTerminalsSewingRoute: mainTerminalsSewingRoute,
   mainTerminalsSoakingRoute: mainTerminalsSoakingRoute,
   mainUsersNewRoute: mainUsersNewRoute,
+  mainGuidesIndexRoute: mainGuidesIndexRoute,
   mainPerformanceIndexRoute: mainPerformanceIndexRoute,
   mainUsersIndexRoute: mainUsersIndexRoute,
   mainPerformanceWorkerWorkerNameRoute: mainPerformanceWorkerWorkerNameRoute,

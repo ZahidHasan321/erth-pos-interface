@@ -39,6 +39,7 @@ import {
   UserCog,
   Package,
   Building2,
+  BookOpen,
 } from "lucide-react";
 import { IconNeedle, IconIroning1, IconRosette, IconSparkles /*, IconStack2 */ } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
@@ -103,6 +104,10 @@ export function WorkshopSidebar() {
     { label: "Transfers", icon: ArrowRightLeft, href: "/store/transfers", count: transfersBadge, badgeTone: "warn" as const },
     { label: "Suppliers", icon: Building2,      href: "/store/suppliers" },
     { label: "Reports",   icon: BarChart,       href: "/store/reports" },
+  ];
+
+  const helpItems = [
+    { label: "Guides", icon: BookOpen, href: "/guides" },
   ];
 
   const terminalItems = [
@@ -321,6 +326,26 @@ export function WorkshopSidebar() {
                       {item.count}
                     </SidebarMenuBadge>
                   )}
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Help</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {helpItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild isActive={isActive(item.href)}>
+                    <Link to={item.href}>
+                      <item.icon className="w-4 h-4" aria-hidden="true" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

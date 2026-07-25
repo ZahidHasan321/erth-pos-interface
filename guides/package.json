@@ -1,0 +1,29 @@
+{
+  "name": "guides",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "capture": "playwright test",
+    "capture:headed": "playwright test --headed",
+    "render": "tsx render/build.ts",
+    "render:app": "tsx render/build-app-content.ts",
+    "sync": "tsx render/sync-app-public.ts",
+    "build": "pnpm run capture && pnpm run render && pnpm run pdf",
+    "pdf": "pnpm run tex && bash render/compile.sh",
+    "tex": "tsx render/latex.ts",
+    "pdf:html": "tsx render/pdf.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@repo/database": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^20.11.16",
+    "postgres": "^3.4.3",
+    "tsx": "^4.7.0",
+    "typescript": "5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

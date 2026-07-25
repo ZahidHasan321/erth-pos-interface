@@ -19,6 +19,7 @@ import {
   Banknote,
   CalendarDays,
   Package,
+  BookOpen,
 } from "lucide-react";
 
 import {
@@ -162,6 +163,17 @@ const data = {
           title: "End of Day Report",
           url: "store/end-of-day-report",
           icon: FileText,
+        },
+      ],
+    },
+    {
+      title: "Help",
+      url: "",
+      items: [
+        {
+          title: "Guides",
+          url: "guides",
+          icon: BookOpen,
         },
       ],
     },

@@ -1,0 +1,149 @@
+{
+  "$meta": {
+    "lang": "en",
+    "dir": "ltr",
+    "title": "Order Processing Manual",
+    "subtitle": "The lifecycle of a work order, from creation to handover",
+    "$conventions": "This manual follows a single work order through the shop and the workshop, in the order the work actually happens. Read it front to back once; afterwards each chapter stands alone as a reference for that step.\n\nEvery screenshot is marked with numbered callouts. A number always indicates something you do: a control to click, a field to type into, or a choice to make. Numbers in the surrounding text refer to those callouts. Nothing is marked merely to draw the eye.\n\nUnder each step heading you will find the application (Shop or Workshop) and the page address, so you can confirm you are in the right place before acting.",
+    "$glossary": {
+      "Work order": "An order for custom tailoring, as opposed to a sales order for a ready-made item off the shelf.",
+      "Garment": "One physical piece. An order may contain several, and each is tracked independently through production.",
+      "Brova": "A trial garment made for the customer to try on before the remaining pieces are produced.",
+      "Final": "A finished garment for the customer to keep, as distinct from a brova.",
+      "Parked": "Held deliberately and not worked on. Finals are parked while a brova is awaiting the customer's verdict.",
+      "Trip": "One journey between the shop and the workshop. The first production run is trip 1; each return for alteration increases the number.",
+      "Dispatch": "Sending garments from one side to the other. They remain in transit until the receiving side records them.",
+      "Cashier processing": "The point at which a cashier either records a payment or confirms the order without one. Until this happens the order cannot be sent to the workshop.",
+      "Primary account": "A customer in their own right.",
+      "Secondary account": "A customer belonging to a family, linked to a primary account and carrying a stated relation to it."
+    }
+  },
+  "01-take-order": {
+    "$title": "Creating a work order",
+    "$intro": "A work order is created on the New Work Order form, a five-step wizard: customer details, garments and measurements, fabric, shelf items, and a final review. No record is written until the review step is confirmed. This chapter covers the customer step, including the procedure when the mobile number is already held on file.",
+    "open-from-sidebar": {
+      "title": "Open the New Work Order form",
+      "body": "In the sidebar, select New Work Order (1). The form opens at the customer step."
+    },
+    "enter-name": {
+      "title": "Enter the customer's name",
+      "body": "Enter the customer's full name (1). Only the name and the mobile number are mandatory. Other fields carry an asterisk but are not enforced."
+    },
+    "enter-mobile": {
+      "title": "Enter the mobile number",
+      "body": "Retain the default country code, Kuwait +965, unless the customer holds a foreign number (1). Enter the mobile number (2). The system checks the number against existing records as it is entered. If the number is already held, the form is blocked; see section [[ref:01-take-order.duplicate-block]]."
+    },
+    "choose-account-type": {
+      "title": "Set nationality and account type",
+      "body": "Nationality defaults to Kuwait (1). Account Type (2) determines how the customer is recorded. A Primary account is a customer in their own right. A Secondary account belongs to a family and requires both a linked Primary account and a stated relation. The account type is never inferred; retain Primary unless the customer is known to belong to an existing family."
+    },
+    "press-confirm-customer": {
+      "title": "Submit the customer details",
+      "body": "With the name and mobile number entered, select Confirm Customer (1)."
+    },
+    "confirm-customer-dialog": {
+      "title": "Confirm the customer record",
+      "body": "A confirmation dialog is displayed. Verify the details, then select Confirm (1). The customer record is created, the order is opened, and the form advances to the Measurement step. Select Cancel to return to the form without creating a record."
+    },
+    "duplicate-block": {
+      "title": "Resolving a mobile number already on file",
+      "body": "Where the number entered at section [[ref:01-take-order.enter-mobile]] belongs to an existing customer, the form is blocked and the holder of the number is named. The order cannot proceed until one of three options is selected. Same customer (1) loads the existing record and continues the order against it. Family member (2) records a different individual who shares the number, for example a son using his father's telephone. It's a typo (3) closes the dialog so the number can be corrected."
+    },
+    "link-as-family": {
+      "title": "Link the customer as a family member",
+      "body": "Where Family member was selected at section [[ref:01-take-order.duplicate-block]], a relation must be recorded (1) before Link as family member (2) becomes available. The new customer is created as a Secondary account under the existing Primary."
+    },
+    "choose-relation": {
+      "title": "Select the relation",
+      "body": "Select the relation from the list (1): Son, Father, Cousin, Brother, Grandfather, Grandson, Nephew, Friend, or Others. Select Link as family member to apply it and continue with the order."
+    }
+  },
+  "02-cashier": {
+    "$title": "Cashier processing",
+    "$intro": "Every confirmed work order enters the cashier's Pending queue. The order cannot be dispatched to the workshop until a cashier has processed it here. Note that the gate is opened by the act of processing, not by payment: an order confirmed without payment is free to proceed.",
+    "pending-queue": {
+      "title": "Open the Pending queue",
+      "body": "Select Cashier in the sidebar (1). The Pending tab opens by default and lists every confirmed order awaiting processing. Select the customer's order (2). No action buttons are displayed until an order is selected."
+    },
+    "order-selected": {
+      "title": "Select a processing method",
+      "body": "Two options become available. Confirm without payment (1) opens the dispatch gate with no money taken and does not require an open register. Proceed to payment (2) records a payment and does require an open register. Either option opens the gate."
+    },
+    "confirm-dialog": {
+      "title": "Confirm the processing",
+      "body": "Verify that the order shown is correct, then confirm (1). The order leaves the Pending queue and becomes available for dispatch, as described in chapter [[ref:03-dispatch.new-orders-tab]]."
+    }
+  },
+  "03-dispatch": {
+    "$title": "Dispatching to the workshop",
+    "$intro": "Dispatch records garments leaving the showroom for the workshop. Only orders already processed by a cashier appear in this queue.",
+    "new-orders-tab": {
+      "title": "Dispatch the order",
+      "body": "Select Dispatch Orders in the sidebar (1). The New orders tab lists all orders available for dispatch. Select Dispatch against the order (2)."
+    },
+    "after-dispatch": {
+      "title": "Confirming the dispatch",
+      "body": "The order is removed from the New orders tab and is recorded as in transit to the workshop. A dispatch made in error can be reversed using Undo on the notification, for approximately one minute and only until the workshop records receipt."
+    }
+  },
+  "04-workshop-receive": {
+    "$title": "Receiving at the workshop",
+    "$intro": "Garments in transit are listed on the workshop Receiving page. Recording receipt transfers responsibility for the garment to the workshop.",
+    "receiving-list": {
+      "title": "Record receipt of the garment",
+      "body": "Open Receiving. Select Receive against the incoming garment (1). Receive holds the garment in Parking for later scheduling. Receive and Start passes it directly to the scheduler."
+    },
+    "parking": {
+      "title": "Release the garment from Parking",
+      "body": "A received garment is held in Parking until its work is planned. Select Schedule (1) to pass it to the scheduler."
+    }
+  },
+  "05-schedule": {
+    "$title": "Scheduling production",
+    "$intro": "Cutting cannot begin until every production stage has an assigned owner. Assignment is recorded in the scheduler.",
+    "scheduler-list": {
+      "title": "Select the garment to plan",
+      "body": "Open Scheduler and select the garment (1), then select Create plan (2). Several garments may be selected together where they are to be assigned to the same workers."
+    },
+    "plan-dialog-empty": {
+      "title": "Review the production plan",
+      "body": "The plan dialog lists every stage the garment must pass through. Each stage requires an assigned worker (1) before the plan can be saved."
+    },
+    "plan-dialog-filled": {
+      "title": "Assign the stages and schedule",
+      "body": "Assign a worker to each stage. Sewing is assigned to a unit rather than to an individual (1). Once all stages carry an assignment, Schedule becomes available (2). On scheduling, the garment advances to cutting."
+    }
+  },
+  "07-workshop-dispatch": {
+    "$title": "Dispatching back to the showroom",
+    "$intro": "A garment that has passed quality check is available for return to the showroom.",
+    "ready-tab": {
+      "title": "Dispatch the garment to the showroom",
+      "body": "Open Dispatch in the workshop. The Ready tab lists all garments that have passed quality check. Select Dispatch (1). Where dispatching this garment would leave another garment from the same order at the workshop, a warning is displayed before the dispatch is recorded."
+    }
+  },
+  "08-shop-receive": {
+    "$title": "Receiving at the showroom",
+    "$intro": "Garments returning from the workshop are listed on the Receiving Brova / Final page.",
+    "receiving-list": {
+      "title": "Record receipt at the showroom",
+      "body": "Open Receiving Brova / Final, locate the order, and select Receive (1). A final becomes ready for pickup and proceeds to handover, as described in chapter [[ref:09-handover.order-detail]]. A brova instead becomes awaiting trial, since the customer has yet to try it."
+    }
+  },
+  "09-handover": {
+    "$title": "Handover to the customer",
+    "$intro": "Handover is recorded from the cashier's order page. Handover is not gated on payment: whether to release a garment against an outstanding balance is a matter for staff judgment.",
+    "order-detail": {
+      "title": "Open the order in Handover mode",
+      "body": "Open the order from the cashier. Where a balance is outstanding the page opens in Payment mode. Select Handover (1)."
+    },
+    "handover-tab": {
+      "title": "Record the collection",
+      "body": "Select each garment being handed over (1), then select Collect (2). Only garments the customer is physically taking should be selected."
+    },
+    "completed": {
+      "title": "Order completion",
+      "body": "The selected garments are recorded as completed. When every garment on the order has reached a terminal state, the order itself is closed."
+    }
+  }
+}
