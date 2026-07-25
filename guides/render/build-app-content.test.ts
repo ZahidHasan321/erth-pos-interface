@@ -75,7 +75,18 @@ describe("buildForLang", () => {
     const result = buildForLang("en", chapters, { en: enLocale });
 
     expect(result.toc.chapters).toEqual([
-      { id: "01-take-order", order: 1, app: "shop", title: "Creating a work order", intro: "Intro text.", stepCount: 2 },
+      {
+        id: "01-take-order",
+        order: 1,
+        app: "shop",
+        title: "Creating a work order",
+        intro: "Intro text.",
+        stepCount: 2,
+        steps: [
+          { key: "open-from-sidebar", title: "Open the form" },
+          { key: "enter-name", title: "Enter the name" },
+        ],
+      },
     ]);
     expect(result.searchIndex).toHaveLength(2);
     expect(result.searchIndex[0]).toMatchObject({

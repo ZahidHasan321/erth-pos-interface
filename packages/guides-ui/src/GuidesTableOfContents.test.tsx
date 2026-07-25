@@ -20,6 +20,10 @@ const toc: Toc = {
       title: "Creating a work order",
       intro: "How to open a new order.",
       stepCount: 9,
+      steps: [
+        { key: "open-from-sidebar", title: "Open the New Work Order form" },
+        { key: "duplicate-block", title: "Resolving a mobile number already on file" },
+      ],
     },
     {
       id: "03-dispatch",
@@ -28,6 +32,7 @@ const toc: Toc = {
       title: "Dispatch to workshop",
       intro: "Sending garments to the workshop.",
       stepCount: 5,
+      steps: [{ key: "new-orders-tab", title: "Open the new orders tab" }],
     },
   ],
 };
@@ -91,6 +96,18 @@ describe("GuidesTableOfContents", () => {
 
     await userEvent.click(screen.getByText("Creating a work order"));
     expect(onNavigateToChapter).toHaveBeenCalledWith("01-take-order");
+  });
+
+  it("lists each chapter's steps and navigates to the matching chapter+step when one is clicked", async () => {
+    mockHooks();
+    const onNavigateToChapter = vi.fn();
+    render(<GuidesTableOfContents lang="en" onNavigateToChapter={onNavigateToChapter} />);
+
+    expect(screen.getByText("Open the New Work Order form")).toBeInTheDocument();
+    expect(screen.getByText("Open the new orders tab")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("Resolving a mobile number already on file"));
+    expect(onNavigateToChapter).toHaveBeenCalledWith("01-take-order", "duplicate-block");
   });
 
   it("switches to search results when typing, hiding the chapter list", async () => {

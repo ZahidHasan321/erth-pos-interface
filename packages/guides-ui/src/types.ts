@@ -1,5 +1,10 @@
 export type GuideApp = "shop" | "workshop";
 
+export type TocStepEntry = {
+  key: string;
+  title: string;
+};
+
 export type TocEntry = {
   id: string;
   order: number;
@@ -7,6 +12,7 @@ export type TocEntry = {
   title: string;
   intro: string;
   stepCount: number;
+  steps: TocStepEntry[];
 };
 
 export type Toc = {

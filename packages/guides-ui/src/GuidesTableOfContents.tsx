@@ -75,19 +75,19 @@ function ChapterList({
   onNavigateToChapter,
 }: {
   chapters: TocEntry[];
-  onNavigateToChapter: (chapterId: string) => void;
+  onNavigateToChapter: (chapterId: string, stepKey?: string) => void;
 }) {
   if (chapters.length === 0) {
     return <p className="text-muted-foreground text-sm">No chapters yet.</p>;
   }
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-4">
       {chapters.map((chapter) => (
-        <li key={chapter.id}>
+        <li key={chapter.id} className="rounded-md border">
           <button
             type="button"
             onClick={() => onNavigateToChapter(chapter.id)}
-            className="hover:bg-accent w-full rounded-md border p-4 text-left transition-colors"
+            className="hover:bg-accent w-full rounded-t-md p-4 text-left transition-colors"
           >
             <div className="flex items-center gap-2">
               <BookOpenIcon className="text-muted-foreground size-4 shrink-0" />
@@ -98,6 +98,22 @@ function ChapterList({
             </div>
             {chapter.intro && <p className="text-muted-foreground mt-1 text-sm">{chapter.intro}</p>}
           </button>
+          {chapter.steps.length > 0 && (
+            <ol className="space-y-1 border-t px-4 py-2">
+              {chapter.steps.map((step, i) => (
+                <li key={step.key}>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToChapter(chapter.id, step.key)}
+                    className="hover:bg-accent flex w-full items-baseline gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors"
+                  >
+                    <span className="text-muted-foreground w-5 shrink-0 text-right text-xs">{i + 1}.</span>
+                    <span>{step.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
         </li>
       ))}
     </ul>

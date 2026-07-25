@@ -70,6 +70,11 @@ export type ChapterDetail = {
   steps: ChapterDetailStep[];
 };
 
+export type TocStepEntry = {
+  key: string;
+  title: string;
+};
+
 export type TocEntry = {
   id: string;
   order: number;
@@ -77,6 +82,7 @@ export type TocEntry = {
   title: string;
   intro: string;
   stepCount: number;
+  steps: TocStepEntry[];
 };
 
 export type Toc = {
@@ -176,7 +182,16 @@ export function buildForLang(
       };
     });
 
-    tocChapters.push({ id: ch.id, order: ch.order, app: ch.app, title, intro, stepCount: steps.length });
+    const tocSteps: TocStepEntry[] = steps.map((s) => ({ key: s.key, title: s.title }));
+    tocChapters.push({
+      id: ch.id,
+      order: ch.order,
+      app: ch.app,
+      title,
+      intro,
+      stepCount: steps.length,
+      steps: tocSteps,
+    });
     chapterDetails.push({ id: ch.id, order: ch.order, app: ch.app, title, intro, steps });
   }
 
