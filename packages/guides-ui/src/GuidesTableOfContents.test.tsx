@@ -79,12 +79,11 @@ describe("GuidesTableOfContents", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the chapter list with title, intro and step count", () => {
+  it("renders the chapter list with title and step count", () => {
     mockHooks();
     render(<GuidesTableOfContents lang="en" onNavigateToChapter={vi.fn()} />);
 
     expect(screen.getByText("Creating a work order")).toBeInTheDocument();
-    expect(screen.getByText("How to open a new order.")).toBeInTheDocument();
     expect(screen.getByText("9 steps")).toBeInTheDocument();
     expect(screen.getByText("Dispatch to workshop")).toBeInTheDocument();
   });
@@ -98,24 +97,36 @@ describe("GuidesTableOfContents", () => {
     expect(onNavigateToChapter).toHaveBeenCalledWith("01-take-order");
   });
 
-  it("lists each chapter's steps and navigates to the matching chapter+step when one is clicked", async () => {
+  it("keeps a chapter's steps collapsed until its toggle is clicked", async () => {
+    mockHooks();
+    render(<GuidesTableOfContents lang="en" onNavigateToChapter={vi.fn()} />);
+
+    expect(screen.queryByText("Open the New Work Order form")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText("Show steps for Creating a work order"));
+
+    expect(screen.getByText("Open the New Work Order form")).toBeInTheDocument();
+    expect(screen.queryByText("Open the new orders tab")).not.toBeInTheDocument();
+  });
+
+  it("navigates to the matching chapter+step when an expanded step is clicked", async () => {
     mockHooks();
     const onNavigateToChapter = vi.fn();
     render(<GuidesTableOfContents lang="en" onNavigateToChapter={onNavigateToChapter} />);
 
-    expect(screen.getByText("Open the New Work Order form")).toBeInTheDocument();
-    expect(screen.getByText("Open the new orders tab")).toBeInTheDocument();
-
+    await userEvent.click(screen.getByLabelText("Show steps for Creating a work order"));
     await userEvent.click(screen.getByText("Resolving a mobile number already on file"));
+
     expect(onNavigateToChapter).toHaveBeenCalledWith("01-take-order", "duplicate-block");
   });
 
-  it("switches to search results when typing, hiding the chapter list", async () => {
+  it("switches to search results when typing, grouping matches under their chapter title", async () => {
     mockHooks();
     render(<GuidesTableOfContents lang="en" onNavigateToChapter={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText("Search guides"), "mobile number");
 
+    expect(screen.getByText("Creating a work order")).toBeInTheDocument();
     expect(screen.getByText("Resolving a mobile number already on file")).toBeInTheDocument();
     expect(screen.queryByText("Dispatch to workshop")).not.toBeInTheDocument();
   });
@@ -129,6 +140,17 @@ describe("GuidesTableOfContents", () => {
     await userEvent.click(screen.getByText("Resolving a mobile number already on file"));
 
     expect(onNavigateToChapter).toHaveBeenCalledWith("01-take-order", "duplicate-block");
+  });
+
+  it("navigates to just the chapter when a search result group's chapter heading is clicked", async () => {
+    mockHooks();
+    const onNavigateToChapter = vi.fn();
+    render(<GuidesTableOfContents lang="en" onNavigateToChapter={onNavigateToChapter} />);
+
+    await userEvent.type(screen.getByLabelText("Search guides"), "mobile number");
+    await userEvent.click(screen.getByText("Creating a work order"));
+
+    expect(onNavigateToChapter).toHaveBeenCalledWith("01-take-order");
   });
 
   it("shows a no-match message when the search has no results", async () => {
