@@ -21,7 +21,7 @@ import {
   resolveCard2Locale,
 } from './formatters/card2Formatters'
 import informationSvg from './assets/information.svg'
-import logoSvg from './assets/logo.svg'
+import { getCard2BrandLogo } from './brandLogo'
 import { Card2CustomerCopySectionHtml } from './components/Card2CustomerCopySectionHtml'
 import { Card2GarmentMeasurementTemplateHtml } from './components/Card2GarmentMeasurementTemplateHtml'
 import { Card2LineItemStyleMatrixTableHtml } from './components/Card2LineItemStyleMatrixTableHtml'
@@ -167,6 +167,7 @@ export function Card2HtmlDocument({
 }: Card2HtmlDocumentProps) {
   const resolvedLocale = resolveCard2Locale(locale ?? data.meta?.locale)
   const lineItems = buildLineItemsGrid(data)
+  const brandLogo = getCard2BrandLogo()
 
   return (
     <article
@@ -178,7 +179,7 @@ export function Card2HtmlDocument({
     >
       <header className="card2-html-header">
         <img className="card2-html-header__information" src={informationSvg} alt="Information" />
-        <img className="card2-html-header__logo" src={logoSvg} alt="Logo" />
+        <img className="card2-html-header__logo" src={brandLogo.src} alt={brandLogo.alt} />
       </header>
 
       <section className="card2-html-section">

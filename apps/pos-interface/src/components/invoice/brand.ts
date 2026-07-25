@@ -21,8 +21,23 @@ const BRANDS: Record<InvoiceBrandKey, InvoiceBrand> = {
   QASS: { key: "QASS", name: "QASS", logo: QassLogo },
 };
 
-/** Resolve the active brand from the <html> class list. */
+const BY_SLUG: Record<string, InvoiceBrand> = {
+  erth: BRANDS.ERTH,
+  sakkba: BRANDS.SAKKBA,
+  qass: BRANDS.QASS,
+};
+
+/**
+ * Resolve the active brand. The URL's first segment is the brand shell and is
+ * available on the very first render; the <html> class is only applied in the
+ * shell's effect, so a document mounted in the same commit (the hidden invoice
+ * on the order form) would otherwise read no class and fall back to ERTH.
+ */
 export const getInvoiceBrand = (): InvoiceBrand => {
+  if (typeof window !== "undefined") {
+    const slug = window.location.pathname.split("/")[1]?.toLowerCase();
+    if (slug && BY_SLUG[slug]) return BY_SLUG[slug];
+  }
   const cl = typeof document !== "undefined" ? document.documentElement.classList : null;
   if (cl?.contains("qass")) return BRANDS.QASS;
   if (cl?.contains("sakkba")) return BRANDS.SAKKBA;

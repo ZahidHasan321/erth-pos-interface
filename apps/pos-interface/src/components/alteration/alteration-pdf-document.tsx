@@ -9,6 +9,7 @@ import {
 } from "@react-pdf/renderer";
 
 import templatePng from "@/assets/template.png";
+import { getInvoiceBrand } from "@/components/invoice/brand";
 
 import {
   defaultAlterationIssueColumns,
@@ -587,7 +588,9 @@ function AlterationSheetPage({ sheet }: { sheet: AlterationSheet }) {
             </View>
 
             <View style={styles.sideMetaColumn}>
-              <Text style={[styles.brand, styles.sidebarBrand]}>ERTH</Text>
+              <Text style={[styles.brand, styles.sidebarBrand]}>
+                {getInvoiceBrand().name.toUpperCase()}
+              </Text>
 
               <View style={styles.sideMetaItem}>
                 <View style={styles.qtyLabel}>

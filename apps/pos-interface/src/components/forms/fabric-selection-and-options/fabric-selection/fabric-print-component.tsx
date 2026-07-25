@@ -3,9 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { getFabrics } from '@/api/fabrics';
 import Barcode from 'react-barcode';
 import { BRAND_NAMES } from '@/lib/constants';
+import { BRAND_META, type BrandKey } from '@/lib/brands';
 import { useParams } from '@tanstack/react-router';
-import erthLogo from '@/assets/erth-light.svg';
-import sakkbaLogo from '@/assets/Sakkba.png';
 import { displaySoakHours, parseUtcTimestamp, TIMEZONE } from '@/lib/utils';
 
 interface FabricLabelProps {
@@ -32,7 +31,7 @@ interface FabricLabelProps {
 export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
   ({ fabricData }, ref) => {
     const { main } = useParams({ strict: false }) as { main?: string };
-    const logo = main === BRAND_NAMES.showroom ? erthLogo : sakkbaLogo;
+    const brand = BRAND_META[(main ?? BRAND_NAMES.showroom) as BrandKey] ?? BRAND_META[BRAND_NAMES.showroom];
 
     const { data: fabrics = [] } = useQuery({
       queryKey: ["fabrics"],
@@ -103,8 +102,8 @@ export const FabricLabel = React.forwardRef<HTMLDivElement, FabricLabelProps>(
               borderRight: '1px solid #ccc',
             }}>
               <img
-                src={logo}
-                alt={main === BRAND_NAMES.showroom ? 'ERTH Logo' : 'Sakkba Logo'}
+                src={brand.logo}
+                alt={`${brand.name} Logo`}
                 style={{
                   height: '40px',
                   width: 'auto',

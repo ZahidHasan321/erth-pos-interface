@@ -2,7 +2,7 @@ import type { Card2BrovaStatus, Card2PaymentMethod, Card2PdfData } from '../type
 import checkboxIcon from '../assets/checkbox.svg'
 import checkboxMarkedIcon from '../assets/checkbox_marked.svg'
 import customerCopyHeaderSvg from '../assets/customer_copy_header.svg'
-import logoSvg from '../assets/logo.svg'
+import { getCard2BrandLogo } from '../brandLogo'
 import { card2ArabicTerms } from '../content/card2ArabicTerms'
 import { formatKd, formatValue } from '../formatters/card2Formatters'
 
@@ -70,6 +70,7 @@ export function Card2CustomerCopySectionHtml({
   const paymentSummary = data.customerCopy?.paymentSummary
   const paymentMethods = paymentSummary?.paymentMethods ?? data.pricing?.paymentMethods ?? []
   const selectedPaymentMethods = new Set(paymentMethods)
+  const brandLogo = getCard2BrandLogo()
 
   return (
     <section className="card2-customer-copy" aria-label="Customer copy section">
@@ -79,7 +80,7 @@ export function Card2CustomerCopySectionHtml({
           src={customerCopyHeaderSvg}
           alt="Customer copy header"
         />
-        <img className="card2-customer-copy__logo" src={logoSvg} alt="Logo" />
+        <img className="card2-customer-copy__logo" src={brandLogo.src} alt={brandLogo.alt} />
       </header>
 
       <div className="card2-customer-copy__row card2-customer-copy__row--number">
