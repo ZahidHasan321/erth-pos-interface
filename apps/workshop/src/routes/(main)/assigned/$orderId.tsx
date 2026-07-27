@@ -559,8 +559,10 @@ function SharedPlanSection({
       ),
     );
     if (skippedCount > 0) {
+      // Skipped = in production (plan locked) or not scheduled yet (the
+      // Scheduler owns those, not this dialog), so keep the reason generic.
       toast.info(
-        `Updated ${editableGarments.length} garment${editableGarments.length !== 1 ? "s" : ""}, ${skippedCount} in production skipped`,
+        `Updated ${editableGarments.length} garment${editableGarments.length !== 1 ? "s" : ""}, ${skippedCount} skipped`,
       );
     }
   };

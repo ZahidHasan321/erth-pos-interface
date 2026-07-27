@@ -67,8 +67,9 @@ awaiting_trial / ready_for_pickup → brova_trialed → completed
 
 - **Terminal:** `completed` and `discarded`.
 - `discarded` is a dead end (Reject-Redo, or final Needs-Redo on a non-alteration garment); a brand-new replacement row is created instead (§2.5).
-- `soaking` is a **parallel track**, not a chain step.
+- `soaking` is a **parallel track**, not a chain step. It runs alongside whatever stage the garment is actually in, and never becomes its `piece_stage`. **Soaking applies to new garments on their first trip only** - never to an alteration order's garment, and never again on a return trip. A soak-flagged garment enters the soak terminal the moment the workshop receives it, and is worked by two manual actions (start, then done); neither touches `piece_stage`, `location`, or `in_production`. The one place soak affects the pipeline is the **cutting gate**: a first-trip garment awaiting its soak is held out of the cutting terminal until the soak is marked done. Because soak is first-trip-only, that gate never applies past trip 1.
 - `post_cutting` exists in the set but is **currently disabled** in the production chain.
+- **Every workshop-side garment must belong to a queue.** A garment that is not terminal and sits at the workshop always appears on exactly one working surface (parking, scheduler, a stage terminal, or the parallel soak terminal). In particular `waiting_cut` **with** a `production_plan` is not a legal resting state: it is the shape that belongs to no queue, so planning a garment and advancing it out of `waiting_cut` are one action, never two. Scheduling is the scheduler's job; the production tracker edits an existing plan but never creates one for an unscheduled piece.
 
 ### 2.3 Alteration thresholds (trip number)
 

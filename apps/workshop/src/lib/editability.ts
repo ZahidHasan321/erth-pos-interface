@@ -185,6 +185,27 @@ export function getGarmentEditability(garment: WorkshopGarment): GarmentEditabil
       };
     }
 
+    // Not scheduled yet — the Scheduler owns a fresh waiting_cut piece, not the
+    // tracker. The tracker's "new" plan dialog writes production_plan without a
+    // re-entry stage, so it never advances piece_stage: the garment would sit at
+    // waiting_cut WITH a plan, invisible to the Scheduler (wants no plan) and to
+    // the cutting terminal (wants piece_stage='cutting'). Scheduling sets both,
+    // so it belongs to the Scheduler.
+    //
+    // Returns (trip 2+) are exempt: they use the dialog's "rework" mode, which
+    // always resolves a re-entry stage and therefore always moves the garment
+    // out of waiting_cut. Editing an existing plan stays open from cutting on.
+    if (stage === "waiting_cut" && (garment.trip_number ?? 1) < 2) {
+      return {
+        canEditPlan: false,
+        canEditDeliveryDate: true,
+        canStart: false,
+        canComplete: false,
+        lockedPlanSteps: new Set(),
+        readOnlyReason: "Not scheduled yet. Assign the plan from the Scheduler.",
+      };
+    }
+
     const lockedPlanSteps = getLockedPlanSteps(garment);
     const allStepsLocked = lockedPlanSteps.size === PLAN_STEP_ORDER.length;
     // canEditPlan true as long as at least one future step remains open.

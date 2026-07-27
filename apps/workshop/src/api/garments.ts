@@ -250,10 +250,17 @@ export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
 
 /**
  * Scheduler-specific fetch: only garments that can be scheduled.
- * Narrowed at the server to location=workshop, in_production, no plan,
+ * Narrowed at the server to location=workshop, in_production,
  * piece_stage=waiting_cut — which is exactly the Scheduler's set. Uses the
  * light query (no measurements) because Scheduler cards don't render any
  * measurement fields.
+ *
+ * Deliberately NOT filtered on production_plan IS NULL. A garment carrying a
+ * plan while still at waiting_cut has not actually been scheduled (scheduling
+ * advances it to cutting), and excluding it here was half of a dead zone: the
+ * cutting terminal skips it too, so it belonged to no queue at all. Listing it
+ * here keeps the guarantee that every waiting_cut piece has exactly one home;
+ * scheduling it overwrites the stale plan, which is the correct outcome.
  */
 export const getSchedulerGarments = async (): Promise<WorkshopGarment[]> => {
   const { data, error } = await db
@@ -262,7 +269,6 @@ export const getSchedulerGarments = async (): Promise<WorkshopGarment[]> => {
     .eq('location', 'workshop')
     .eq('in_production', true)
     .eq('piece_stage', 'waiting_cut')
-    .is('production_plan', null)
     .eq('order.checkout_status', 'confirmed');
 
   if (error) {
@@ -281,6 +287,12 @@ export const getSchedulerGarments = async (): Promise<WorkshopGarment[]> => {
  * `soaking` flag + `soaking_completed_at` (see getSoakingQueue). Garments
  * still pending soak must not appear in the cutting terminal even if their
  * piece_stage was advanced to 'cutting' by the scheduler.
+ *
+ * The gate applies to trip 1 only, matching the soak queue itself: soaking is
+ * a first-trip step for new garments, never for alterations or returns. Without
+ * the trip escape a piece that came back on trip 2 without a recorded soak
+ * would be held out of cutting forever while the soak terminal (trip 1 only)
+ * refused to show it — another queue with no home.
  */
 export const getTerminalStageGarments = async (stage: string): Promise<WorkshopGarment[]> => {
   let query = db
@@ -291,8 +303,8 @@ export const getTerminalStageGarments = async (stage: string): Promise<WorkshopG
     .eq('order.checkout_status', 'confirmed');
 
   if (stage === 'cutting') {
-    // soaking=false OR soaking_completed_at IS NOT NULL
-    query = query.or('soaking.eq.false,soaking_completed_at.not.is.null');
+    // soaking=false OR soak done OR past trip 1 (soak is trip-1 only)
+    query = query.or('soaking.eq.false,soaking_completed_at.not.is.null,trip_number.gt.1');
   }
 
   const { data, error } = await query
@@ -1585,6 +1597,20 @@ export const updateGarmentDetails = async (
 
   // If nothing left to update, skip
   if (Object.keys(filtered).length === 0) return;
+
+  // Invariant: a garment must never end up at waiting_cut WITH a production_plan.
+  // That combination belongs to no queue — the Scheduler filters on
+  // production_plan IS NULL and the cutting terminal on piece_stage='cutting' —
+  // so the garment silently disappears from every workshop surface. Scheduling
+  // (Scheduler) and re-entry planning (rework dialog) both move the stage; only
+  // a plain tracker plan-edit can land here, and the UI now blocks that too.
+  const resultingStage = (filtered.piece_stage as string | undefined) ?? stage;
+  if (filtered.production_plan && resultingStage === 'waiting_cut') {
+    throw new Error(
+      'updateGarmentDetails: refusing to save a production plan on a garment still at "waiting_cut" — ' +
+      'it would vanish from both the Scheduler and the cutting terminal. Schedule it from the Scheduler instead.',
+    );
+  }
 
   const { error } = await withWriteRetry(
     () => db

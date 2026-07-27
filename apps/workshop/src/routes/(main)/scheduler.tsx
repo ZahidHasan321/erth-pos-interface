@@ -509,8 +509,10 @@ function SchedulerPage() {
 
   // ── Data slices ───────────────────────────────────────────────────────────
   // Server guarantees every row is piece_stage=waiting_cut, location=workshop,
-  // in_production=true, production_plan=null. So here we only split by trip /
-  // garment_type / express / whether the order had a brova.
+  // in_production=true. So here we only split by trip / garment_type / express /
+  // whether the order had a brova. A row may already carry a stale
+  // production_plan (never scheduled, so never advanced past waiting_cut);
+  // scheduling it overwrites that plan, which is what we want.
   // Alteration-order garments (garment_type='alteration') get their own tab
   // regardless of trip — they don't share the brova/final/returns flow.
   const alterationOutGarments = useMemo(
