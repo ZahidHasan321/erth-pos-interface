@@ -4,6 +4,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { AuthProvider, useAuth } from "./context/auth";
 import { router } from "./router";
 import { db } from "./lib/db";
+import { PwaUpdatePrompt } from "./components/pwa-update-prompt";
 
 // Detect supabase/PostgREST JWT-related errors. supabase-js sometimes
 // surfaces these as PGRST301 (JWSInvalid) or generic "JWT expired" messages.
@@ -74,6 +75,9 @@ function InnerApp() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      {/* Above the auth gate: the service worker should register on first
+          paint, not wait for a session to resolve. */}
+      <PwaUpdatePrompt />
       <AuthProvider>
         <InnerApp />
       </AuthProvider>

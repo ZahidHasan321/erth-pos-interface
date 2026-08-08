@@ -7,6 +7,7 @@ import "./index.css";
 import { RouterProvider } from "@tanstack/react-router";
 import { AuthProvider, useAuth } from "@/context/auth";
 import { db } from "@/lib/db";
+import { PwaUpdatePrompt } from "@/components/global/pwa-update-prompt";
 
 function isJwtError(err: unknown): boolean {
   const e = err as { code?: string; message?: string } | null;
@@ -78,6 +79,9 @@ export default function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
+        {/* Above the auth gate: the service worker should register on first
+            paint, not wait for a session to resolve. */}
+        <PwaUpdatePrompt />
         <InnerApp />
       </QueryClientProvider>
     </AuthProvider>

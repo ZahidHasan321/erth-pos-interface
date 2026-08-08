@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
+import { VitePWA } from "vite-plugin-pwa";
 // https://vite.dev/config/
 export default defineConfig({
   server: {
@@ -21,6 +22,56 @@ export default defineConfig({
       },
     }),
     tailwindcss(),
+    VitePWA({
+      // 'prompt', not 'autoUpdate': an auto-reload on a half-filled order form
+      // would throw the entry away. <PwaUpdatePrompt /> asks before reloading.
+      registerType: "prompt",
+      includeAssets: ["favicon.png", "apple-touch-icon.png"],
+      manifest: {
+        // Explicit id, so a future start_url change updates the installed app
+        // instead of minting a second one on every staff device.
+        id: "/",
+        name: "Shop",
+        short_name: "Shop",
+        description: "Order taking, cashier and stock",
+        start_url: "/",
+        scope: "/",
+        display: "standalone",
+        background_color: "#f3f3f0",
+        theme_color: "#f3f3f0",
+        icons: [
+          { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
+          { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png" },
+          { src: "/pwa-maskable-512x512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        ],
+      },
+      workbox: {
+        // App shell only. Supabase is deliberately absent from runtimeCaching so
+        // order/stock/cashier reads always hit the network - stale rows here are
+        // worse than a spinner.
+        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        // ~2.8MB of guide screenshots, fetched on demand instead.
+        globIgnores: ["**/guides/**"],
+        navigateFallback: "/index.html",
+        cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.origin === "https://fonts.googleapis.com",
+            handler: "StaleWhileRevalidate",
+            options: { cacheName: "google-fonts-stylesheets" },
+          },
+          {
+            urlPattern: ({ url }) => url.origin === "https://fonts.gstatic.com",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-webfonts",
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+    }),
   ],
   resolve: {
     alias: {
