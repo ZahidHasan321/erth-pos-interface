@@ -9041,3 +9041,116 @@ BEGIN
     );
   END LOOP;
 END $$;
+
+-- BEGIN rls-initplan
+-- ════════════════════════════════════════════════════════════════════
+-- RLS per-statement helper evaluation (keep LAST — rewrites every policy above)
+-- ════════════════════════════════════════════════════════════════════
+-- Every policy helper (is_active_user(), can_access_brand(), ...) is a
+-- SECURITY DEFINER function that looks the caller up in `users`. Called bare in
+-- a policy, Postgres re-runs it for EVERY candidate row: a list of 7k garments
+-- did ~50k `users` lookups and drained the production Disk IO budget. Wrapped
+-- as `(SELECT fn())` it becomes an initPlan evaluated ONCE per statement
+-- (Supabase RLS performance guidance). Same result, since none of these
+-- helpers depend on the row.
+--
+-- can_access_brand(<row brand>) does depend on the row, so it cannot be wrapped
+-- as-is. It is rewritten into its row-independent parts, each wrapped:
+--   can_access_brand(x)
+--     ≡ (SELECT can_access_all_brands()) OR lower(x) = ANY ((SELECT my_brands())::text[])
+-- (the ::text[] cast matters: without it `= ANY ((SELECT ...))` parses as the
+-- subquery form and compares text to text[]).
+-- users.auth_id is unique, so both sides read the same single active row.
+-- The rewrite yields NULL where the original yielded false (unknown brand or
+-- no active user); policies only use these checks positively (never under
+-- NOT), so NULL and false both deny. can_access_brand() itself is unchanged and
+-- still used by the RPC guards.
+--
+-- The rewrite edits the live policy expressions in place (ALTER POLICY keeps
+-- name, command, roles and permissiveness), so it is idempotent and also covers
+-- policies created outside this file. Applied to production by
+-- scripts/apply-0057-rls-initplan.ts, which runs exactly this block.
+
+CREATE OR REPLACE FUNCTION my_brands()
+RETURNS TEXT[] AS $$
+  SELECT brands FROM users WHERE auth_id = auth.uid() AND is_active = true;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
+
+-- The can_access_brand() branches that grant every brand: super_admin, or the
+-- workshop department (it processes orders for every brand).
+CREATE OR REPLACE FUNCTION can_access_all_brands()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM users
+    WHERE auth_id = auth.uid() AND is_active = true
+      AND (role = 'super_admin' OR department = 'workshop')
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
+
+DO $$
+DECLARE
+  r record;
+  exprs TEXT[];
+  e TEXT;
+  k INT;
+  i INT;
+  j INT;
+  depth INT;
+  call_start INT;
+  stmt TEXT;
+BEGIN
+  FOR r IN
+    SELECT schemaname, tablename, policyname, qual, with_check
+    FROM pg_policies
+    WHERE schemaname = 'public'
+  LOOP
+    exprs := ARRAY[r.qual, r.with_check];
+    FOR k IN 1..2 LOOP
+      e := exprs[k];
+      CONTINUE WHEN e IS NULL;
+
+      -- 1. Zero-arg helpers → (SELECT fn()). Skips calls already wrapped
+      --    (preceded by "SELECT ") and names that are only a suffix.
+      e := regexp_replace(
+        e,
+        '(?<!SELECT )(?<![\w.])((?:public\.)?(?:is_super_admin|is_active_user|is_admin|is_manager_or_above|get_my_role|get_my_department|get_my_user_id|get_my_job_functions)|auth\.uid)\(\)',
+        '(SELECT \1())',
+        'g'
+      );
+
+      -- 2. can_access_brand(x) → row-independent parts (see header).
+      LOOP
+        i := strpos(e, 'can_access_brand(');
+        EXIT WHEN i = 0;
+        call_start := CASE WHEN i > 7 AND substr(e, i - 7, 7) = 'public.' THEN i - 7 ELSE i END;
+        j := i + length('can_access_brand(');
+        depth := 1;
+        WHILE depth > 0 LOOP
+          IF j > length(e) THEN
+            RAISE EXCEPTION 'rls-initplan: unbalanced can_access_brand( in policy % on %', r.policyname, r.tablename;
+          END IF;
+          IF substr(e, j, 1) = '(' THEN depth := depth + 1;
+          ELSIF substr(e, j, 1) = ')' THEN depth := depth - 1;
+          END IF;
+          j := j + 1;
+        END LOOP;
+        e := substr(e, 1, call_start - 1)
+          || format(
+               '((SELECT can_access_all_brands()) OR (lower(%s) = ANY ((SELECT my_brands())::text[])))',
+               substr(e, i + length('can_access_brand('), j - 1 - i - length('can_access_brand('))
+             )
+          || substr(e, j);
+      END LOOP;
+
+      exprs[k] := e;
+    END LOOP;
+
+    IF exprs[1] IS DISTINCT FROM r.qual OR exprs[2] IS DISTINCT FROM r.with_check THEN
+      stmt := format('ALTER POLICY %I ON %I.%I', r.policyname, r.schemaname, r.tablename);
+      IF exprs[1] IS NOT NULL THEN stmt := stmt || ' USING (' || exprs[1] || ')'; END IF;
+      IF exprs[2] IS NOT NULL THEN stmt := stmt || ' WITH CHECK (' || exprs[2] || ')'; END IF;
+      EXECUTE stmt;
+    END IF;
+  END LOOP;
+END $$;
+-- END rls-initplan
