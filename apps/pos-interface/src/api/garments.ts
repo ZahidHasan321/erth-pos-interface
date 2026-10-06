@@ -61,8 +61,10 @@ export const rejectBrovaReparkFinals = async (
 export const getGarmentsForRedispatch = async (): Promise<ApiResponse<Garment[]>> => {
   // Find garments at shop that have a feedback record requesting "workshop" distribution
   // for the garment's current trip number
+  // Source = garments with workshop-bound feedback (see
+  // garments_with_workshop_feedback); the select + filters below are unchanged.
   const { data, error } = await db
-    .from(TABLE_NAME)
+    .rpc('garments_with_workshop_feedback')
     .select(`
       *,
       orders!inner (
@@ -87,7 +89,7 @@ export const getGarmentsForRedispatch = async (): Promise<ApiResponse<Garment[]>
 
   // Filter client-side: only keep garments where the feedback trip_number matches the garment's current trip
   type FeedbackRow = { distribution: string | null; created_at: string | null; trip_number: number | null };
-  const filtered = (data || []).filter(g => {
+  const filtered = ((data || []) as Array<Garment & { garment_feedback?: unknown }>).filter(g => {
     const latestWorkshopFeedback = (g.garment_feedback as FeedbackRow[] | undefined)
       ?.filter((f) => f.distribution === 'workshop')
       ?.sort((a, b) => parseUtcTimestamp(b.created_at || "").getTime() - parseUtcTimestamp(a.created_at || "").getTime())[0];

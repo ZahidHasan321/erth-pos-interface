@@ -208,15 +208,18 @@ export const getOrderForLinking = async (idOrInvoice: number): Promise<ApiRespon
  * Fetch orders that have garments in transit to shop or lost in transit.
  */
 export const getInTransitToWorkshopOrders = async (): Promise<ApiResponse<Order[]>> => {
+    // Source = orders that have a garment at these locations (see
+    // orders_with_garments_at); the select + filters below are unchanged.
+    // GET: PostgREST only reports the exact count for a GET rpc.
     const { data, error, count } = await db
-        .from(TABLE_NAME)
+        .rpc('orders_with_garments_at', { p_locations: ['transit_to_workshop', 'lost_in_transit'] }, { count: 'exact', get: true })
         .select(`
             *,
             workOrder:work_orders!order_id(*),
             alterationOrder:alteration_orders!order_id(*),
             customer:customers(id, name, nick_name, phone, country_code),
             garments:garments!inner(*, fabric:fabrics(name, color))
-            `, { count: 'exact' })
+            `)
             .in('garments.location', ['transit_to_workshop', 'lost_in_transit'])
             .eq('brand', getBrand())
             .eq('checkout_status', 'confirmed')
@@ -227,19 +230,22 @@ export const getInTransitToWorkshopOrders = async (): Promise<ApiResponse<Order[
         console.error('Error fetching in-transit to workshop orders:', error);
         return { status: 'error', message: error.message, data: [], count: 0 };
     }
-    return { status: 'success', data: flattenOrder(data), count: count || 0 };
+    return { status: 'success', data: flattenOrder((data ?? []) as unknown[]), count: count || 0 };
 };
 
 export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
+    // Source = orders that have a garment at these locations (see
+    // orders_with_garments_at); the select + filters below are unchanged.
+    // GET: PostgREST only reports the exact count for a GET rpc.
     const { data, error, count } = await db
-        .from(TABLE_NAME)
+        .rpc('orders_with_garments_at', { p_locations: ['transit_to_shop', 'lost_in_transit'] }, { count: 'exact', get: true })
         .select(`
             *,
             workOrder:work_orders!order_id(*),
             alterationOrder:alteration_orders!order_id(*),
             customer:customers(id, name, nick_name, phone, country_code),
             garments:garments!inner(*, fabric:fabrics(name, color))
-            `, { count: 'exact' })
+            `)
             .in('garments.location', ['transit_to_shop', 'lost_in_transit'])
             .eq('brand', getBrand())
             .eq('checkout_status', 'confirmed')
@@ -250,7 +256,7 @@ export const getDispatchedOrders = async (): Promise<ApiResponse<Order[]>> => {
         console.error('Error fetching dispatched orders:', error);
         return { status: 'error', message: error.message, data: [], count: 0 };
     }
-    return { status: 'success', data: flattenOrder(data), count: count || 0 };
+    return { status: 'success', data: flattenOrder((data ?? []) as unknown[]), count: count || 0 };
 };
 
 export const dispatchOrder = async (orderId: number, garmentIds?: string[]): Promise<ApiResponse<Order>> => {
@@ -620,8 +626,10 @@ export const getOrdersList = async (filters: Record<string, string | number | bo
  * what the dispatch page wants to render.
  */
 export const getOrdersForDispatch = async (): Promise<ApiResponse<Order[]>> => {
+    // Source = orders with a trip-0, non-terminal garment (see
+    // orders_with_undispatched_garments); the select + filters below are unchanged.
     const { data, error } = await db
-        .from(TABLE_NAME)
+        .rpc('orders_with_undispatched_garments')
         .select(`
             *,
             workOrder:work_orders!order_id(*),
@@ -656,7 +664,7 @@ export const getOrdersForDispatch = async (): Promise<ApiResponse<Order[]>> => {
         workOrder?: { cashier_processed_at?: string | null } | null;
         alterationOrder?: { cashier_processed_at?: string | null } | null;
     };
-    const visible = (data ?? []).filter((row) => {
+    const visible = ((data ?? []) as unknown[]).filter((row) => {
         const r = row as DispatchRow;
         if (r.order_type === 'WORK') return r.workOrder?.cashier_processed_at != null;
         if (r.order_type === 'ALTERATION') return r.alterationOrder?.cashier_processed_at != null;

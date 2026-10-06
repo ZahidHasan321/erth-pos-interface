@@ -5964,6 +5964,12 @@ BEGIN
             OR COALESCE(wo.order_phase::text, ao.order_phase::text) = 'in_progress'
           )
           AND (agg.has_shop_items OR agg.finals_in_transit)
+          -- Both flags need a garment that is not completed/discarded; finding
+          -- those orders once up front keeps the per-order garment summary off
+          -- the brand's finished history. Same rows. ARRAY(...) makes it a
+          -- once-per-call value that filters the orders scan itself.
+          AND o.id = ANY (ARRAY(SELECT g3.order_id FROM garments g3
+                                WHERE g3.piece_stage::text NOT IN ('completed', 'discarded')))
     ),
     pre_stage AS (
         SELECT * FROM base
@@ -9074,6 +9080,7 @@ RETURNS JSONB AS $$
       min(delivery_date) AS delivery_date,
       max(collected_at)  AS last_delivered_at
     FROM garments
+    WHERE brand = p_brand          -- only this brand's orders are joined below
     GROUP BY order_id
   )
   SELECT COALESCE(
@@ -9159,17 +9166,19 @@ AS $$
       FROM orders o
       WHERE o.brand = p_brand
         AND o.checkout_status = 'confirmed'
-        AND (
-          o.order_date >= now() - interval '15 days'
-          OR EXISTS (SELECT 1 FROM work_orders wo
-                     WHERE wo.order_id = o.id AND wo.order_phase IS DISTINCT FROM 'completed')
-          OR EXISTS (SELECT 1 FROM garments g
-                     WHERE g.order_id = o.id
-                       AND (g.piece_stage IS NULL OR g.piece_stage NOT IN ('completed', 'discarded')))
-          OR EXISTS (SELECT 1 FROM garments g
-                     WHERE g.order_id = o.id AND g.location = 'shop'
-                       AND g.feedback_status IN ('needs_repair', 'needs_redo'))
-        )
+        -- One once-per-call id list (all four conditions) so it filters the
+        -- orders scan by index instead of being checked per order.
+        AND o.id = ANY (ARRAY(
+               SELECT r.id FROM orders r WHERE r.order_date >= now() - interval '15 days'
+               UNION ALL
+               SELECT wo.order_id FROM work_orders wo
+               WHERE wo.order_phase IS DISTINCT FROM 'completed'
+               UNION ALL
+               SELECT g.order_id FROM garments g
+               WHERE g.piece_stage IS NULL OR g.piece_stage NOT IN ('completed', 'discarded')
+               UNION ALL
+               SELECT g.order_id FROM garments g
+               WHERE g.location = 'shop' AND g.feedback_status IN ('needs_repair', 'needs_redo')))
     ), '[]'::jsonb),
     'confirmed_count', (SELECT count(*) FROM orders o
                         WHERE o.brand = p_brand AND o.checkout_status = 'confirmed'),
@@ -9177,6 +9186,42 @@ AS $$
                         WHERE o.brand = p_brand AND o.checkout_status = 'confirmed'
                           AND wo.order_phase = 'completed')
   );
+$$;
+
+-- ─── Shop dispatch lists: candidate rows ─────────────────────────────────────
+-- The dispatch / receiving lists select orders (or garments) with an embedded
+-- inner-join filter on garments. PostgREST evaluates that per row of the
+-- brand's whole order history. These return just the rows that can match
+-- (a superset); the app keeps its exact select + filters on top via
+-- db.rpc(...).select(...), so the result is unchanged. SECURITY INVOKER: RLS
+-- applies to every row they read and return.
+CREATE OR REPLACE FUNCTION orders_with_garments_at(p_locations TEXT[])
+RETURNS SETOF orders
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT o.* FROM orders o
+  WHERE o.id = ANY (ARRAY(SELECT g.order_id FROM garments g WHERE g.location::text = ANY (p_locations)));
+$$;
+
+CREATE OR REPLACE FUNCTION orders_with_undispatched_garments()
+RETURNS SETOF orders
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT o.* FROM orders o
+  WHERE o.id = ANY (ARRAY(SELECT g.order_id FROM garments g
+                          WHERE g.trip_number = 0
+                            AND g.piece_stage::text NOT IN ('completed', 'discarded')));
+$$;
+
+CREATE OR REPLACE FUNCTION garments_with_workshop_feedback()
+RETURNS SETOF garments
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT g.* FROM garments g
+  WHERE g.id = ANY (ARRAY(SELECT f.garment_id FROM garment_feedback f WHERE f.distribution = 'workshop'));
 $$;
 
 -- ─── Fabric/stock consumption broken down by consuming brand (SPEC §1/§4) ───

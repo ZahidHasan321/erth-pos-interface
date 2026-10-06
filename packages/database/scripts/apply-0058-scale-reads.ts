@@ -15,8 +15,15 @@ import path from "path";
  *   - get_dashboard_orders: the shop dashboard's source rows (was every
  *     confirmed order, cut at PostgREST max_rows)
  *   - get_scheduled_day_counts: scheduler calendar counts
+ *   - get_showroom_orders_page / get_delivery_orders: skip the brand's
+ *     finished history
+ *   - orders_with_garments_at / orders_with_undispatched_garments /
+ *     garments_with_workshop_feedback: candidate rows for the shop dispatch
+ *     lists (the app keeps its exact select + filters on top)
  *   - indexes: garments(assigned_date), notifications(expires_at)
- * Idempotent, safe to re-run. One transaction: all or nothing.
+ * Requires 0059 first (get_delivery_orders reads garments.brand); run in the
+ * wrong order it fails and rolls back. Idempotent, safe to re-run. One
+ * transaction: all or nothing.
  */
 const FUNCTIONS = [
   "my_brands",
@@ -29,6 +36,11 @@ const FUNCTIONS = [
   "get_assigned_orders_page",
   "get_dashboard_orders",
   "get_scheduled_day_counts",
+  "get_showroom_orders_page",
+  "get_delivery_orders",
+  "orders_with_garments_at",
+  "orders_with_undispatched_garments",
+  "garments_with_workshop_feedback",
 ];
 const INDEXES = ["garments_assigned_date_idx", "notifications_expires_at_idx"];
 
