@@ -3588,6 +3588,27 @@ RETURNS BOOLEAN AS $$
     OR EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND is_active = true AND lower(brand_value) = ANY(brands));
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
+-- Row-independent halves of can_access_brand(), for callers that check many
+-- rows: can_access_brand(x) ≡ can_access_all_brands() OR lower(x) = ANY (my_brands()).
+-- Wrapped as `(SELECT ...)` they run once per statement (RLS policies via the
+-- rls-initplan block at the end of this file, and the notification RPCs).
+-- The caller's brands, lowercase as stored (NULL when inactive / unknown).
+CREATE OR REPLACE FUNCTION my_brands()
+RETURNS TEXT[] AS $$
+  SELECT brands FROM users WHERE auth_id = auth.uid() AND is_active = true;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
+
+-- The can_access_brand() branches that grant every brand: super_admin, or the
+-- workshop department (it processes orders for every brand).
+CREATE OR REPLACE FUNCTION can_access_all_brands()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM users
+    WHERE auth_id = auth.uid() AND is_active = true
+      AND (role = 'super_admin' OR department = 'workshop')
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
+
 -- Brand-isolation guard for the SECURITY DEFINER order/consumption RPCs
 -- (complete_work_order / complete_sales_order / create_complete_sales_order /
 -- consume_for_order). Those run as the table owner so non-manager shop
@@ -5532,6 +5553,9 @@ DROP FUNCTION IF EXISTS get_my_notifications(INTEGER);
 DROP FUNCTION IF EXISTS get_my_notifications(INTEGER, TEXT);
 DROP FUNCTION IF EXISTS get_my_notifications(INTEGER, TEXT, INTEGER);
 DROP FUNCTION IF EXISTS get_my_notifications(INTEGER, TEXT, INTEGER, TEXT);
+-- The caller lookups below are written `(SELECT fn())` so they run once per
+-- call, not once per notification row; the brand fence is split the same way
+-- as the RLS policies (see the rls-initplan block at the end of this file).
 CREATE OR REPLACE FUNCTION get_my_notifications(
   p_limit INTEGER DEFAULT 50,
   p_department TEXT DEFAULT NULL,
@@ -5558,17 +5582,17 @@ RETURNS JSONB AS $$
     FROM notifications n
     LEFT JOIN notification_reads nr
       ON nr.notification_id = n.id
-      AND nr.user_id = get_my_user_id()
+      AND nr.user_id = (SELECT get_my_user_id())
     WHERE n.expires_at > now()
       AND (p_brand IS NULL OR n.brand = p_brand::brand)
       -- server-side brand fence: never return a brand the caller can't access,
       -- regardless of the client-supplied p_brand (SPEC §1 per-brand isolation)
-      AND (n.brand IS NULL OR can_access_brand(n.brand::text))
+      AND (n.brand IS NULL OR ((SELECT can_access_all_brands()) OR lower(n.brand::text) = ANY ((SELECT my_brands())::text[])))
       AND (p_type IS NULL OR n.type::text = p_type)
       AND (NOT p_unread_only OR nr.read_at IS NULL)
       AND (
-        (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
-        OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
+        (n.scope = 'department' AND n.department = COALESCE(p_department, (SELECT get_my_department()))::department)
+        OR (n.scope = 'user' AND n.recipient_user_id = (SELECT get_my_user_id()))
       )
     ORDER BY n.created_at DESC
     LIMIT p_limit
@@ -5590,15 +5614,15 @@ RETURNS INTEGER AS $$
   FROM notifications n
   LEFT JOIN notification_reads nr
     ON nr.notification_id = n.id
-    AND nr.user_id = get_my_user_id()
+    AND nr.user_id = (SELECT get_my_user_id())
   WHERE n.expires_at > now()
     AND (p_brand IS NULL OR n.brand = p_brand::brand)
-    AND (n.brand IS NULL OR can_access_brand(n.brand::text))
+    AND (n.brand IS NULL OR ((SELECT can_access_all_brands()) OR lower(n.brand::text) = ANY ((SELECT my_brands())::text[])))
     AND (p_type IS NULL OR n.type::text = p_type)
     AND (NOT p_unread_only OR nr.read_at IS NULL)
     AND (
-      (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
-      OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
+      (n.scope = 'department' AND n.department = COALESCE(p_department, (SELECT get_my_department()))::department)
+      OR (n.scope = 'user' AND n.recipient_user_id = (SELECT get_my_user_id()))
     );
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
@@ -5612,15 +5636,15 @@ RETURNS INTEGER AS $$
   FROM notifications n
   WHERE n.expires_at > now()
     AND (p_brand IS NULL OR n.brand = p_brand::brand)
-    AND (n.brand IS NULL OR can_access_brand(n.brand::text))
+    AND (n.brand IS NULL OR ((SELECT can_access_all_brands()) OR lower(n.brand::text) = ANY ((SELECT my_brands())::text[])))
     AND (
-      (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
-      OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
+      (n.scope = 'department' AND n.department = COALESCE(p_department, (SELECT get_my_department()))::department)
+      OR (n.scope = 'user' AND n.recipient_user_id = (SELECT get_my_user_id()))
     )
     AND NOT EXISTS (
       SELECT 1 FROM notification_reads nr
       WHERE nr.notification_id = n.id
-        AND nr.user_id = get_my_user_id()
+        AND nr.user_id = (SELECT get_my_user_id())
     );
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
 
@@ -5642,19 +5666,19 @@ CREATE OR REPLACE FUNCTION mark_all_notifications_read(p_department TEXT DEFAULT
 RETURNS void AS $$
 BEGIN
   INSERT INTO notification_reads (notification_id, user_id)
-  SELECT n.id, get_my_user_id()
+  SELECT n.id, (SELECT get_my_user_id())
   FROM notifications n
   WHERE n.expires_at > now()
     AND (p_brand IS NULL OR n.brand = p_brand::brand)
-    AND (n.brand IS NULL OR can_access_brand(n.brand::text))
+    AND (n.brand IS NULL OR ((SELECT can_access_all_brands()) OR lower(n.brand::text) = ANY ((SELECT my_brands())::text[])))
     AND (
-      (n.scope = 'department' AND n.department = COALESCE(p_department, get_my_department())::department)
-      OR (n.scope = 'user' AND n.recipient_user_id = get_my_user_id())
+      (n.scope = 'department' AND n.department = COALESCE(p_department, (SELECT get_my_department()))::department)
+      OR (n.scope = 'user' AND n.recipient_user_id = (SELECT get_my_user_id()))
     )
     AND NOT EXISTS (
       SELECT 1 FROM notification_reads nr
       WHERE nr.notification_id = n.id
-        AND nr.user_id = get_my_user_id()
+        AND nr.user_id = (SELECT get_my_user_id())
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
@@ -5717,6 +5741,14 @@ CREATE INDEX IF NOT EXISTS work_orders_phase_idx
     ON work_orders(order_phase);
 CREATE INDEX IF NOT EXISTS garments_order_location_idx
     ON garments(order_id, location) WHERE piece_stage IS DISTINCT FROM 'completed';
+-- Scheduler calendar day counts (get_scheduled_day_counts) and the selected
+-- day's worker breakdown read garments by assigned_date.
+CREATE INDEX IF NOT EXISTS garments_assigned_date_idx
+    ON garments(assigned_date) WHERE assigned_date IS NOT NULL;
+-- Every notification reader filters expires_at > now(); expired rows are kept,
+-- so without this each call reads the whole (ever-growing) table.
+CREATE INDEX IF NOT EXISTS notifications_expires_at_idx
+    ON notifications(expires_at);
 
 CREATE OR REPLACE FUNCTION get_showroom_orders_page(
     p_brand TEXT,
@@ -6300,7 +6332,19 @@ STABLE
 AS $$
 DECLARE
     v_result JSONB;
+    v_order_ids INT[];
 BEGIN
+    -- Candidate orders: every order `base` can keep (a superset; `base` still
+    -- applies the exact phase rule). Driven from the phase columns so it never
+    -- walks the order history.
+    SELECT array_agg(o.id) INTO v_order_ids
+    FROM orders o
+    WHERE o.checkout_status::text = 'confirmed'
+      AND o.order_type::text IN ('WORK', 'ALTERATION')
+      AND o.id IN (SELECT order_id FROM work_orders WHERE order_phase = 'in_progress'
+                   UNION ALL
+                   SELECT order_id FROM alteration_orders WHERE order_phase = 'in_progress');
+
     WITH base AS (
         SELECT
             o.id                           AS order_id,
@@ -6330,8 +6374,12 @@ BEGIN
         LEFT JOIN work_orders wo ON wo.order_id = o.id
         LEFT JOIN alteration_orders ao ON ao.order_id = o.id
         LEFT JOIN customers c ON c.id = o.customer_id
-        LEFT JOIN assigned_order_agg agg ON agg.order_id = o.id
-        WHERE o.checkout_status::text = 'confirmed'
+        -- Aggregate only the in-progress orders' garments (v_order_ids), not the
+        -- whole garments history: the per-order view is pushed down to an
+        -- index scan instead of totalling every garment ever made.
+        LEFT JOIN (SELECT * FROM assigned_order_agg a WHERE a.order_id = ANY(v_order_ids)) agg ON agg.order_id = o.id
+        WHERE o.id = ANY(v_order_ids)
+          AND o.checkout_status::text = 'confirmed'
           AND o.order_type::text IN ('WORK', 'ALTERATION')
           AND COALESCE(wo.order_phase::text, ao.order_phase::text) = 'in_progress'
     ),
@@ -6516,6 +6564,7 @@ STABLE
 AS $$
 DECLARE
     v_result JSONB;
+    v_order_ids INT[];
     v_page_size INT := GREATEST(COALESCE(p_page_size, 20), 1);
     v_offset INT := GREATEST(COALESCE(p_page, 1) - 1, 0) * v_page_size;
     v_chips TEXT[] := COALESCE(p_chips, ARRAY[]::TEXT[]);
@@ -6528,6 +6577,17 @@ DECLARE
     v_sort TEXT := CASE WHEN p_sort IN ('asc', 'desc') THEN p_sort ELSE NULL END;
     v_brands TEXT[] := CASE WHEN p_brands IS NULL OR cardinality(p_brands) = 0 THEN NULL ELSE p_brands END;
 BEGIN
+    -- Candidate orders: every order `base` can keep (a superset; `base` still
+    -- applies the exact phase rule). Driven from the phase columns so it never
+    -- walks the order history.
+    SELECT array_agg(o.id) INTO v_order_ids
+    FROM orders o
+    WHERE o.checkout_status::text = 'confirmed'
+      AND o.order_type::text IN ('WORK', 'ALTERATION')
+      AND o.id IN (SELECT order_id FROM work_orders WHERE order_phase = 'in_progress'
+                   UNION ALL
+                   SELECT order_id FROM alteration_orders WHERE order_phase = 'in_progress');
+
     WITH base AS (
         SELECT
             o.id                             AS order_id,
@@ -6573,8 +6633,12 @@ BEGIN
         LEFT JOIN work_orders wo ON wo.order_id = o.id
         LEFT JOIN alteration_orders ao ON ao.order_id = o.id
         LEFT JOIN customers c ON c.id = o.customer_id
-        LEFT JOIN assigned_order_agg agg ON agg.order_id = o.id
-        WHERE o.checkout_status::text = 'confirmed'
+        -- Aggregate only the in-progress orders' garments (v_order_ids), not the
+        -- whole garments history: the per-order view is pushed down to an
+        -- index scan instead of totalling every garment ever made.
+        LEFT JOIN (SELECT * FROM assigned_order_agg a WHERE a.order_id = ANY(v_order_ids)) agg ON agg.order_id = o.id
+        WHERE o.id = ANY(v_order_ids)
+          AND o.checkout_status::text = 'confirmed'
           AND o.order_type::text IN ('WORK', 'ALTERATION')
           AND COALESCE(wo.order_phase::text, ao.order_phase::text) = 'in_progress'
     ),
@@ -6808,6 +6872,25 @@ AS $$
         'dispatch',      COUNT(*) FILTER (WHERE location::text = 'workshop' AND piece_stage::text = 'ready_for_dispatch')
     )
     FROM scoped;
+$$;
+
+-- Scheduler calendar: garments per assigned day, over all history (the heat
+-- scale uses the busiest day ever). Returns {"YYYY-MM-DD": count}. Replaces
+-- pulling every scheduled garment row to count them in the browser, which also
+-- hit PostgREST's max_rows cap once history passed 1000 scheduled garments.
+-- SECURITY INVOKER: garment RLS applies exactly as it did to that select.
+CREATE OR REPLACE FUNCTION get_scheduled_day_counts()
+RETURNS JSONB
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(jsonb_object_agg(d, n), '{}'::jsonb)
+    FROM (
+        SELECT assigned_date::text AS d, count(*) AS n
+        FROM garments
+        WHERE assigned_date IS NOT NULL
+        GROUP BY assigned_date
+    ) t;
 $$;
 
 -- ────────────────────────────────────────────────────────────────────────────
@@ -8985,6 +9068,71 @@ RETURNS JSONB AS $$
   ) t;
 $$ LANGUAGE sql STABLE;
 
+-- ─── Shop dashboard source rows ──────────────────────────────────────────────
+-- The dashboard used to fetch every confirmed order of the brand, which grows
+-- without bound and is silently cut at PostgREST's max_rows (1000) once a brand
+-- has more orders than that. Every dashboard figure except the two all-time
+-- totals only depends on orders that are (a) placed in the last 15 days (the
+-- 14-day trend / week / today windows), (b) not yet completed (active count,
+-- upcoming/overdue deliveries), (c) carry a garment that is not terminal (any
+-- showroom label needs one), or (d) have a needs_repair/needs_redo garment at
+-- the shop (the default dashboard's needs-action list, which does not check
+-- the stage). Any other order adds 0 to every figure, so returning just this
+-- subset, plus the two totals as counts, yields identical numbers.
+-- Row shape matches the PostgREST select it replaces. SECURITY INVOKER: the
+-- orders/garments RLS still applies to the caller.
+CREATE OR REPLACE FUNCTION get_dashboard_orders(p_brand brand)
+RETURNS JSONB
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT jsonb_build_object(
+    'orders', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+               'id', o.id,
+               'checkout_status', o.checkout_status,
+               'order_type', o.order_type,
+               'order_date', o.order_date,
+               'paid', o.paid,
+               'order_total', o.order_total,
+               'discount_value', o.discount_value,
+               'workOrder', (SELECT jsonb_build_object('order_phase', wo.order_phase, 'delivery_date', wo.delivery_date)
+                             FROM work_orders wo WHERE wo.order_id = o.id),
+               'customer', (SELECT jsonb_build_object('id', c.id, 'name', c.name)
+                            FROM customers c WHERE c.id = o.customer_id),
+               'garments', COALESCE((
+                 SELECT jsonb_agg(jsonb_build_object(
+                          'piece_stage', g.piece_stage,
+                          'location', g.location,
+                          'garment_type', g.garment_type,
+                          'feedback_status', g.feedback_status,
+                          'acceptance_status', g.acceptance_status,
+                          'trip_number', g.trip_number))
+                 FROM garments g WHERE g.order_id = o.id), '[]'::jsonb)
+             ) ORDER BY o.id)
+      FROM orders o
+      WHERE o.brand = p_brand
+        AND o.checkout_status = 'confirmed'
+        AND (
+          o.order_date >= now() - interval '15 days'
+          OR EXISTS (SELECT 1 FROM work_orders wo
+                     WHERE wo.order_id = o.id AND wo.order_phase IS DISTINCT FROM 'completed')
+          OR EXISTS (SELECT 1 FROM garments g
+                     WHERE g.order_id = o.id
+                       AND (g.piece_stage IS NULL OR g.piece_stage NOT IN ('completed', 'discarded')))
+          OR EXISTS (SELECT 1 FROM garments g
+                     WHERE g.order_id = o.id AND g.location = 'shop'
+                       AND g.feedback_status IN ('needs_repair', 'needs_redo'))
+        )
+    ), '[]'::jsonb),
+    'confirmed_count', (SELECT count(*) FROM orders o
+                        WHERE o.brand = p_brand AND o.checkout_status = 'confirmed'),
+    'completed_count', (SELECT count(*) FROM orders o JOIN work_orders wo ON wo.order_id = o.id
+                        WHERE o.brand = p_brand AND o.checkout_status = 'confirmed'
+                          AND wo.order_phase = 'completed')
+  );
+$$;
+
 -- ─── Fabric/stock consumption broken down by consuming brand (SPEC §1/§4) ───
 -- The single sanctioned cross-brand view: how each brand draws down ERTH's
 -- shared shop stock. Sums `consumption` movements in [from, to) per brand using
@@ -9069,23 +9217,9 @@ END $$;
 -- The rewrite edits the live policy expressions in place (ALTER POLICY keeps
 -- name, command, roles and permissiveness), so it is idempotent and also covers
 -- policies created outside this file. Applied to production by
--- scripts/apply-0057-rls-initplan.ts, which runs exactly this block.
-
-CREATE OR REPLACE FUNCTION my_brands()
-RETURNS TEXT[] AS $$
-  SELECT brands FROM users WHERE auth_id = auth.uid() AND is_active = true;
-$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
-
--- The can_access_brand() branches that grant every brand: super_admin, or the
--- workshop department (it processes orders for every brand).
-CREATE OR REPLACE FUNCTION can_access_all_brands()
-RETURNS BOOLEAN AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM users
-    WHERE auth_id = auth.uid() AND is_active = true
-      AND (role = 'super_admin' OR department = 'workshop')
-  );
-$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, extensions, pg_catalog;
+-- scripts/apply-0057-rls-initplan.ts, which runs exactly this block. The two
+-- helpers it uses, my_brands() and can_access_all_brands(), are defined next to
+-- can_access_brand() above.
 
 DO $$
 DECLARE

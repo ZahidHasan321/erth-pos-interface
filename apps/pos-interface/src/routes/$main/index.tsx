@@ -610,9 +610,11 @@ function DefaultDashboard() {
   // All orders from getDashboardOrders are already checkout_status='confirmed'
   const stats = {
     totalCustomers: customerCount || 0,
-    confirmedOrders: orders.length,
+    // All-time totals come as counts: `orders` holds only the rows that can
+    // affect the other figures (see getDashboardOrders).
+    confirmedOrders: ordersRes?.confirmedCount ?? 0,
     activeOrders: orders.filter(o => o.order_phase === 'in_progress').length,
-    completedOrders: orders.filter(o => o.order_phase === 'completed').length,
+    completedOrders: ordersRes?.completedCount ?? 0,
     upcomingDeliveries: orders.filter(o => {
       if (!o.delivery_date || o.order_phase === 'completed') return false;
       const deliveryDate = parseUtcTimestamp(o.delivery_date);

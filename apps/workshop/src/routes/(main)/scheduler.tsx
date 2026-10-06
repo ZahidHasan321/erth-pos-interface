@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useSchedulerGarments, useBrovaPlans, useWorkshopWorkload } from "@/hooks/useWorkshopGarments";
+import { useSchedulerGarments, useBrovaPlans, useScheduledDayCounts, useScheduledGarmentsForDate } from "@/hooks/useWorkshopGarments";
 import { useScheduleGarments } from "@/hooks/useGarmentMutations";
 import { useResources } from "@/hooks/useResources";
 import { ProductionPlanDialog } from "@/components/shared/ProductionPlanDialog";
@@ -501,10 +501,8 @@ function WorkloadSummary({
 
 function SchedulerPage() {
   const { data: schedulable = [], isLoading } = useSchedulerGarments();
-  // Workload payload: only rows with assigned_date / production_plan / today's
-  // completion. Replaces the old useWorkshopGarments() pull which dragged
-  // the entire workshop list (joins, measurements, etc.) just to count plans.
-  const { data: allGarments = [] } = useWorkshopWorkload();
+  // Calendar counts per assigned day (all history), computed server-side.
+  const { data: scheduledDates = {} } = useScheduledDayCounts();
   const scheduleMut = useScheduleGarments();
 
   // ── Data slices ───────────────────────────────────────────────────────────
@@ -703,16 +701,6 @@ function SchedulerPage() {
   }, [selReturns, returnsGarments]);
 
   // ── Calendar / workload ───────────────────────────────────────────────────
-  const scheduledDates = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const g of allGarments) {
-      if (!g.assigned_date) continue;
-      const dateStr = toLocalDateStr(g.assigned_date);
-      if (dateStr) map[dateStr] = (map[dateStr] ?? 0) + 1;
-    }
-    return map;
-  }, [allGarments]);
-
   const maxPerDay = useMemo(() => {
     const vals = Object.values(scheduledDates);
     return vals.length > 0 ? Math.max(...vals) : 0;
@@ -725,6 +713,8 @@ function SchedulerPage() {
   const [showMobilePanel, setShowMobilePanel] = useState(false);
 
   const { data: resources = [] } = useResources();
+  // Planned garments assigned to the selected day (worker breakdown below).
+  const { data: dayGarments = [] } = useScheduledGarmentsForDate(selectedDate);
 
   const workload = useMemo(() => {
     const roleToStage: Record<string, string> = {
@@ -733,7 +723,7 @@ function SchedulerPage() {
     };
 
     const workerCounts: Record<string, { assigned: number; target: number | null; stage: string; unit: string }> = {};
-    for (const g of allGarments) {
+    for (const g of dayGarments) {
       if (!g.assigned_date || !g.production_plan) continue;
       const dateStr = toLocalDateStr(g.assigned_date);
       if (dateStr !== selectedDate) continue;
@@ -762,7 +752,7 @@ function SchedulerPage() {
         byStage[stage][unit].sort((a, b) => b.assigned - a.assigned);
 
     return byStage;
-  }, [allGarments, selectedDate, resources]);
+  }, [dayGarments, selectedDate, resources]);
 
   const totalForDate = scheduledDates[selectedDate] ?? 0;
 

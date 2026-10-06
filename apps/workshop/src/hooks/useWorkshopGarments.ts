@@ -13,6 +13,8 @@ import {
   getAssignedOrdersPage,
   getCompletedOrdersPage,
   getWorkshopWorkload,
+  getScheduledDayCounts,
+  getScheduledGarmentsForDate,
   getBrovaStatusForOrders,
   getBrovaPlansForOrders,
   getOrderLocationBreakdown,
@@ -222,6 +224,24 @@ export function useWorkshopWorkload() {
   return useQuery({
     queryKey: WORKLOAD_KEY,
     queryFn: getWorkshopWorkload,
+    staleTime: LIST_STALE_TIME,
+  });
+}
+
+// Scheduler calendar + selected-day breakdown. Keyed under WORKLOAD_KEY so the
+// existing workload invalidations (realtime + mutations) refresh them too.
+export function useScheduledDayCounts() {
+  return useQuery({
+    queryKey: [...WORKLOAD_KEY, 'day-counts'],
+    queryFn: getScheduledDayCounts,
+    staleTime: LIST_STALE_TIME,
+  });
+}
+
+export function useScheduledGarmentsForDate(dateStr: string) {
+  return useQuery({
+    queryKey: [...WORKLOAD_KEY, 'date', dateStr],
+    queryFn: () => getScheduledGarmentsForDate(dateStr),
     staleTime: LIST_STALE_TIME,
   });
 }

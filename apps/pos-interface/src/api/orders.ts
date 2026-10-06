@@ -671,24 +671,27 @@ export const getOrdersForDispatch = async (): Promise<ApiResponse<Order[]>> => {
  * Lightweight query for dashboard stats. Only fetches confirmed orders
  * with minimal columns needed for stat computation. No fabric joins.
  */
-export const getDashboardOrders = async (): Promise<ApiResponse<Order[]>> => {
-    const { data, error } = await db
-        .from(TABLE_NAME)
-        .select(`
-            id, checkout_status, order_type, order_date, paid, order_total, discount_value,
-            workOrder:work_orders!order_id(order_phase, delivery_date),
-            customer:customers(id, name),
-            garments:garments(piece_stage, location, garment_type, feedback_status, acceptance_status, trip_number)
-        `)
-        .eq('brand', getBrand())
-        .eq('checkout_status', 'confirmed')
-        .limit(2000);
+/**
+ * Dashboard source rows: only the confirmed orders that can affect a dashboard
+ * figure (recent, not completed, or with a garment still in play), plus the
+ * brand's all-time confirmed/completed totals. See get_dashboard_orders.
+ */
+export const getDashboardOrders = async (): Promise<
+    ApiResponse<Order[]> & { confirmedCount: number; completedCount: number }
+> => {
+    const { data, error } = await db.rpc('get_dashboard_orders', { p_brand: getBrand() });
 
     if (error) {
         console.error('Error fetching dashboard orders:', error);
-        return { status: 'error', message: error.message, data: [] };
+        return { status: 'error', message: error.message, data: [], confirmedCount: 0, completedCount: 0 };
     }
-    return { status: 'success', data: flattenOrder(data) };
+    const payload = data as { orders: unknown[]; confirmed_count: number; completed_count: number };
+    return {
+        status: 'success',
+        data: flattenOrder(payload.orders),
+        confirmedCount: payload.confirmed_count,
+        completedCount: payload.completed_count,
+    };
 };
 
 export const completeWorkOrder = async (

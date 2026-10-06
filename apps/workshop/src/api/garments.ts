@@ -479,18 +479,44 @@ export interface WorkshopWorkloadRow {
  *   - team.tsx (todayCompletions):  completion_time >= local midnight
  * Without this filter we were pulling every row in the garments table on
  * every dashboard mount, which is the dominant cause of the slow load times.
+ * The scheduler's per-day data has its own queries below
+ * (getScheduledDayCounts / getScheduledGarmentsForDate).
  */
 export const getWorkshopWorkload = async (): Promise<WorkshopWorkloadRow[]> => {
   const todayMidnight = getLocalMidnightUtc();
   const { data, error } = await db
     .from('garments')
     .select('id, production_plan, worker_history, in_production, completion_time, assigned_date')
-    .or(`and(in_production.eq.true,production_plan.not.is.null),completion_time.gte.${todayMidnight},assigned_date.not.is.null`);
+    .or(`and(in_production.eq.true,production_plan.not.is.null),completion_time.gte.${todayMidnight}`);
 
   if (error) {
     throw new Error(`getWorkshopWorkload: failed to fetch workload rows: ${error.message}`);
   }
   return (data ?? []) as WorkshopWorkloadRow[];
+};
+
+/** Scheduler calendar: garment count per assigned day ("YYYY-MM-DD"), all history. */
+export const getScheduledDayCounts = async (): Promise<Record<string, number>> => {
+  const { data, error } = await db.rpc('get_scheduled_day_counts');
+  if (error) {
+    throw new Error(`getScheduledDayCounts: failed to fetch scheduled day counts: ${error.message}`);
+  }
+  return (data ?? {}) as Record<string, number>;
+};
+
+/** Scheduler worker breakdown: the planned garments assigned to one day. */
+export const getScheduledGarmentsForDate = async (
+  dateStr: string,
+): Promise<Pick<WorkshopWorkloadRow, 'id' | 'production_plan' | 'assigned_date'>[]> => {
+  const { data, error } = await db
+    .from('garments')
+    .select('id, production_plan, assigned_date')
+    .eq('assigned_date', dateStr)
+    .not('production_plan', 'is', null);
+  if (error) {
+    throw new Error(`getScheduledGarmentsForDate: failed to fetch garments scheduled on ${dateStr}: ${error.message}`);
+  }
+  return data ?? [];
 };
 
 /** Counts returned by get_workshop_sidebar_counts — one key per badge. */
