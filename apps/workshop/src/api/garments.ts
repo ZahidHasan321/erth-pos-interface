@@ -1,4 +1,4 @@
-import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
+import { db, fetchAllPages, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import { getLocalMidnightUtc, getLocalDateStr } from '@/lib/utils';
 import type { WorkshopGarment, TripHistoryEntry, StageTimings, StageTimingEntry } from '@repo/database';
 import type { PieceStage, Location, QcDefectAttribution } from '@repo/database';
@@ -235,12 +235,14 @@ function flattenLightGarment(raw: RawGarmentRow): WorkshopGarment {
  * getWorkshopWorkload) which hit smaller server-filtered payloads.
  */
 export const getWorkshopGarments = async (): Promise<WorkshopGarment[]> => {
-  const { data, error } = await db
+  const { data, error } = await fetchAllPages((from, to) => db
     .from('garments')
     .select(WORKSHOP_QUERY)
     .in('location', ['workshop', 'transit_to_workshop', 'transit_to_shop', 'lost_in_transit'])
     .neq('piece_stage', 'discarded')
-    .eq('order.checkout_status', 'confirmed');
+    .eq('order.checkout_status', 'confirmed')
+    .order('id', { ascending: true })
+    .range(from, to));
 
   if (error) {
     throw new Error(`getWorkshopGarments: failed to fetch workshop garments: ${error.message}`);
@@ -447,10 +449,11 @@ export const getBoardGarments = async (dateStr: string | null): Promise<Workshop
 
   if (dateStr) query = query.eq('assigned_date', dateStr);
 
-  const { data, error } = await query
+  const { data, error } = await fetchAllPages((from, to) => query
     .order('start_time', { ascending: true, nullsFirst: false })
     .order('assigned_date', { ascending: true, nullsFirst: false })
-    .order('id', { ascending: true });
+    .order('id', { ascending: true })
+    .range(from, to));
 
   if (error) {
     throw new Error(`getBoardGarments: failed to fetch board (${dateStr ?? 'live'}): ${error.message}`);

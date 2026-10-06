@@ -76,6 +76,24 @@ export async function withWriteRetry<T>(
   }
 }
 
+// PostgREST returns at most max_rows (Supabase default 1000) rows per request
+// and silently drops the rest. For list reads that can outgrow that, request
+// consecutive ranges until a short page. A list under one page is still a
+// single request. `page` must apply a deterministic order (end on a unique
+// column) so ranges don't overlap.
+const PAGE_ROWS = 1000;
+export async function fetchAllPages<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const { data, error } = await page(from, from + PAGE_ROWS - 1);
+    if (error) return { data: rows, error };
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE_ROWS) return { data: rows, error: null };
+  }
+}
+
 // Holder set after createClient returns. Used by the fetch wrapper to force
 // signOut when the server rejects our JWT (deactivated/wiped user, revoked
 // session). Indirection avoids referencing `db` before it's assigned.

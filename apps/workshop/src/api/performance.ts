@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, fetchAllPages } from "@/lib/db";
 import type { GarmentPerformanceRow } from "@repo/database";
 
 // GarmentPerformanceRow + COMPLETED_PIECE_STAGES + the KPI compute now live in
@@ -17,13 +17,15 @@ export type { GarmentPerformanceRow } from "@repo/database";
 export const getPerformanceGarmentsInRange = async (
   from: string
 ): Promise<GarmentPerformanceRow[]> => {
-  const { data, error } = await db
+  const { data, error } = await fetchAllPages((first, last) => db
     .from("garments")
     .select(
       "id, production_plan, completion_time, piece_stage, trip_number, trip_history, stage_timings, delivery_date, feedback_status, express"
     )
     .gte("completion_time", from)
-    .order("completion_time", { ascending: false });
+    .order("completion_time", { ascending: false })
+    .order("id", { ascending: true })
+    .range(first, last));
   if (error) throw new Error(`getPerformanceGarmentsInRange: failed to fetch garments active since ${from}: ${error.message}`);
   return (data ?? []) as GarmentPerformanceRow[];
 };

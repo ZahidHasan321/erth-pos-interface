@@ -3909,17 +3909,72 @@ CREATE POLICY "work_orders_update" ON work_orders FOR UPDATE USING (
 -- ── Garments ────────────────────────────────────────────────────────
 ALTER TABLE garments ENABLE ROW LEVEL SECURITY;
 
+-- BEGIN garment-brand
+-- garments.brand: a copy of the parent order's brand, kept in sync by the two
+-- triggers below (the app never writes it; any write is overwritten). It lets
+-- the read policies check the garment's own brand instead of looking up its
+-- order for every row, which made every garment list cost one order lookup per
+-- garment ever made. Same access result: order_id is a NOT NULL FK, so the
+-- garment's brand is always its order's brand. Applied to production by
+-- scripts/apply-0059-garment-brand.ts, which runs exactly this block.
+ALTER TABLE garments ADD COLUMN IF NOT EXISTS brand brand;
+
+CREATE OR REPLACE FUNCTION garments_sync_brand()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.brand := (SELECT o.brand FROM orders o WHERE o.id = NEW.order_id);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
+
+DROP TRIGGER IF EXISTS garments_sync_brand_trg ON garments;
+CREATE TRIGGER garments_sync_brand_trg
+  BEFORE INSERT OR UPDATE OF order_id, brand ON garments
+  FOR EACH ROW EXECUTE FUNCTION garments_sync_brand();
+
+CREATE OR REPLACE FUNCTION orders_propagate_brand()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE garments SET brand = NEW.brand
+  WHERE order_id = NEW.id AND brand IS DISTINCT FROM NEW.brand;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
+
+DROP TRIGGER IF EXISTS orders_propagate_brand_trg ON orders;
+CREATE TRIGGER orders_propagate_brand_trg
+  AFTER UPDATE OF brand ON orders
+  FOR EACH ROW WHEN (OLD.brand IS DISTINCT FROM NEW.brand)
+  EXECUTE FUNCTION orders_propagate_brand();
+
+-- Backfill (no-op once in sync). Only touches `brand`, so no other garment
+-- trigger fires (they are all column-specific).
+UPDATE garments g SET brand = o.brand
+FROM orders o
+WHERE o.id = g.order_id AND g.brand IS DISTINCT FROM o.brand;
+
 -- Garments are scoped by department (shop + workshop both need reads) AND by
--- the brand of the parent order. Closes the prior open-to-any-authed-user gap
--- where shop users in one brand could read garments from another brand.
+-- the brand of the parent order (carried on the garment, see above). Helpers
+-- are written `(SELECT fn())` so they run once per statement.
 DROP POLICY IF EXISTS "garments_select" ON garments;
 CREATE POLICY "garments_select" ON garments FOR SELECT USING (
-  (is_manager_or_above() OR get_my_department() IN ('shop','workshop'))
+  ((SELECT is_manager_or_above()) OR (SELECT get_my_department()) IN ('shop','workshop'))
+  AND ((SELECT can_access_all_brands())
+       OR lower(garments.brand::text) = ANY ((SELECT my_brands())::text[]))
+);
+
+-- Feedback inherits garment scoping (via the garment's brand).
+DROP POLICY IF EXISTS "feedback_select" ON garment_feedback;
+CREATE POLICY "feedback_select" ON garment_feedback FOR SELECT USING (
+  ((SELECT is_manager_or_above()) OR (SELECT get_my_department()) IN ('shop','workshop'))
   AND EXISTS (
-    SELECT 1 FROM orders o
-    WHERE o.id = garments.order_id AND can_access_brand(o.brand::text)
+    SELECT 1 FROM garments g
+    WHERE g.id = garment_feedback.garment_id
+      AND ((SELECT can_access_all_brands())
+           OR lower(g.brand::text) = ANY ((SELECT my_brands())::text[]))
   )
 );
+-- END garment-brand
 
 DROP POLICY IF EXISTS "garments_insert" ON garments;
 CREATE POLICY "garments_insert" ON garments FOR INSERT WITH CHECK (
@@ -3942,16 +3997,7 @@ CREATE POLICY "garments_update" ON garments FOR UPDATE USING (
 -- ── Garment Feedback ────────────────────────────────────────────────
 ALTER TABLE garment_feedback ENABLE ROW LEVEL SECURITY;
 
--- Feedback inherits garment scoping. Join via garment → order → brand.
-DROP POLICY IF EXISTS "feedback_select" ON garment_feedback;
-CREATE POLICY "feedback_select" ON garment_feedback FOR SELECT USING (
-  (is_manager_or_above() OR get_my_department() IN ('shop','workshop'))
-  AND EXISTS (
-    SELECT 1 FROM garments g
-    JOIN orders o ON o.id = g.order_id
-    WHERE g.id = garment_feedback.garment_id AND can_access_brand(o.brand::text)
-  )
-);
+-- feedback_select is defined in the garment-brand block above.
 
 DROP POLICY IF EXISTS "feedback_insert" ON garment_feedback;
 CREATE POLICY "feedback_insert" ON garment_feedback FOR INSERT WITH CHECK (is_active_user());

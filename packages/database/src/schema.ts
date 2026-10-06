@@ -1127,6 +1127,10 @@ export const garments = pgTable("garments", {
     // vestigial (no destructive drop, matching redo_priority). Investigation/root-cause
     // handling is being redesigned elsewhere.
     needs_investigation: boolean("needs_investigation").default(false).notNull(),
+    // Copy of the parent order's brand, maintained by triggers (garment-brand
+    // block in triggers.sql) so RLS can check it without an order lookup per
+    // row. Never written by the app.
+    brand: brandEnum("brand"),
 }, (t) => ({
     orderIdx: index("garments_order_idx").on(t.order_id),
     orderGarmentIdUnique: uniqueIndex("garments_order_garment_id_unique").on(t.order_id, t.garment_id),
