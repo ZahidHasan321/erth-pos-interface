@@ -5796,6 +5796,42 @@ CREATE INDEX IF NOT EXISTS garments_assigned_date_idx
 CREATE INDEX IF NOT EXISTS notifications_expires_at_idx
     ON notifications(expires_at);
 
+-- BEGIN housekeeping
+-- Expired notifications and used-up undo tokens were never deleted (nothing
+-- schedules expire_old_notifications / purge_old_undo_tokens), so both tables
+-- only grew. Every reader already ignores them: notification readers filter
+-- expires_at > now(), and an undo token is good for about a minute. Each insert
+-- now removes rows that have been dead for over a day, through the
+-- expires_at / created_at indexes, so this is a no-op most of the time.
+CREATE OR REPLACE FUNCTION purge_expired_notifications()
+RETURNS trigger AS $$
+BEGIN
+  DELETE FROM notifications WHERE expires_at < now() - INTERVAL '1 day';
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
+
+DROP TRIGGER IF EXISTS notifications_purge_expired ON notifications;
+CREATE TRIGGER notifications_purge_expired
+  AFTER INSERT ON notifications
+  FOR EACH STATEMENT EXECUTE FUNCTION purge_expired_notifications();
+
+CREATE OR REPLACE FUNCTION purge_expired_undo_tokens()
+RETURNS trigger AS $$
+BEGIN
+  DELETE FROM undo_tokens
+  WHERE created_at < now() - INTERVAL '1 day'   -- created_at index
+    AND expires_at < now() - INTERVAL '1 day';
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions, pg_catalog;
+
+DROP TRIGGER IF EXISTS undo_tokens_purge_expired ON undo_tokens;
+CREATE TRIGGER undo_tokens_purge_expired
+  AFTER INSERT ON undo_tokens
+  FOR EACH STATEMENT EXECUTE FUNCTION purge_expired_undo_tokens();
+-- END housekeeping
+
 CREATE OR REPLACE FUNCTION get_showroom_orders_page(
     p_brand TEXT,
     p_page INT DEFAULT 1,
@@ -9081,6 +9117,12 @@ RETURNS JSONB AS $$
       max(collected_at)  AS last_delivered_at
     FROM garments
     WHERE brand = p_brand          -- only this brand's orders are joined below
+      -- Only orders in the requested phase can pass the filter below, so skip
+      -- the rest (the 'ready' tab no longer scans every delivered order).
+      AND order_id = ANY (ARRAY(
+        SELECT wo.order_id FROM work_orders wo
+        WHERE CASE WHEN p_status = 'delivered' THEN wo.order_phase = 'completed'
+                   ELSE wo.order_phase <> 'completed' END))
     GROUP BY order_id
   )
   SELECT COALESCE(
