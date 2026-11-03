@@ -3,6 +3,7 @@ import * as React from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 import { useAuth } from "@/context/auth";
+import { Turnstile } from "@repo/ui/turnstile";
 import QassLogo from "@/assets/qass-dark.svg";
 
 const STAGES = ["New Order", "Dispatch", "Brova Trial", "Alteration", "Collection"];
@@ -32,6 +33,9 @@ function QassLoginPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [ready, setReady] = React.useState(false);
   const [showPin, setShowPin] = React.useState(false);
+  const [captchaRequired, setCaptchaRequired] = React.useState(false);
+  const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
+  const [attempt, setAttempt] = React.useState(0);
 
   // Apply qass theme so CSS vars resolve correctly
   React.useEffect(() => {
@@ -55,9 +59,11 @@ function QassLoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await auth.login({ username: u, pin: p });
+      await auth.login({ username: u, pin: p, turnstileToken: captchaToken ?? undefined });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
+      setCaptchaRequired((err as { captchaRequired?: boolean }).captchaRequired === true);
+      setAttempt((n) => n + 1); // a Turnstile token is single-use: fresh widget
       setLoading(false);
     }
   };
@@ -401,6 +407,12 @@ function QassLoginPage() {
                   </button>
                 </div>
               </div>
+
+              {captchaRequired && (
+                <div style={{ marginBottom: 16 }}>
+                  <Turnstile key={attempt} onToken={setCaptchaToken} />
+                </div>
+              )}
 
               <div className="sl-item">
                 <button type="submit" className="sl-btn" disabled={loading}>

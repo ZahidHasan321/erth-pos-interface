@@ -1,0 +1,21 @@
+# Caddy + the three SPA builds (shop, workshop, admin). Build context: repo root.
+# VITE_API_URL (and optional VITE_TURNSTILE_SITE_KEY) are baked into the bundles at build time.
+FROM node:22-alpine AS build
+RUN corepack enable
+WORKDIR /repo
+COPY . .
+ARG VITE_API_URL
+RUN test -n "$VITE_API_URL" || (echo "VITE_API_URL build arg is required" && exit 1)
+ENV VITE_API_URL=$VITE_API_URL
+# Optional: Cloudflare Turnstile site key (empty = no captcha widget).
+ARG VITE_TURNSTILE_SITE_KEY=""
+ENV VITE_TURNSTILE_SITE_KEY=$VITE_TURNSTILE_SITE_KEY
+RUN pnpm install --frozen-lockfile \
+      --filter pos-interface... --filter workshop... --filter admin-dashboard... \
+ && pnpm turbo run build --filter=pos-interface --filter=workshop --filter=admin-dashboard
+
+FROM caddy:2.9-alpine
+COPY --from=build /repo/apps/pos-interface/dist   /srv/shop
+COPY --from=build /repo/apps/workshop/dist        /srv/workshop
+COPY --from=build /repo/apps/admin-dashboard/dist /srv/admin
+COPY deploy/Caddyfile /etc/caddy/Caddyfile

@@ -50,3 +50,6 @@ new-db-users-credentials.csv
 packages/database/scripts/scratch/
 packages/database/scripts/*.json
 packages/database/scripts/.workflow-state.json
+
+# Self-hosted deploy: dumps/backups never committed
+deploy/backups/

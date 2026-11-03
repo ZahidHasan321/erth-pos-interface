@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
+import { Turnstile } from "@repo/ui/turnstile";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { getTerminalPath, isTerminalUser, type AuthUser } from "@/lib/rbac";
 
@@ -43,6 +44,9 @@ function LoginPage() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPin, setShowPin] = useState(false);
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const t = setTimeout(() => setReady(true), 40);
@@ -63,9 +67,11 @@ function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await auth.login({ username, pin });
+      await auth.login({ username, pin, turnstileToken: captchaToken ?? undefined });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      setCaptchaRequired((err as { captchaRequired?: boolean }).captchaRequired === true);
+      setAttempt((n) => n + 1); // a Turnstile token is single-use: fresh widget
       setLoading(false);
     }
   };
@@ -460,6 +466,12 @@ function LoginPage() {
                   <div className="wl-alert wl-a3" role="alert">
                     <AlertCircle size={14} style={{ flexShrink: 0 }} />
                     <span>{error}</span>
+                  </div>
+                )}
+
+                {captchaRequired && (
+                  <div style={{ marginBottom: 16 }}>
+                    <Turnstile key={attempt} onToken={setCaptchaToken} />
                   </div>
                 )}
 

@@ -10,7 +10,7 @@ export interface AuthContext {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: AuthUser | null;
-  login: (credentials: { username: string; pin: string }) => Promise<void>;
+  login: (credentials: { username: string; pin: string; turnstileToken?: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -152,43 +152,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Heartbeat runs while user is logged in
   useHeartbeat(user?.id ?? null);
 
-  const login = async (credentials: { username: string; pin: string }) => {
+  const login = async (credentials: { username: string; pin: string; turnstileToken?: string }) => {
     loginInProgress.current = true;
     try {
-      // Login bridge moved out of the auth-login Edge Function — its Deno
-      // isolate dropped ~40% of requests at cold boot. login_with_pin does
-      // PIN verify + GoTrue user sync inside Postgres and returns a one-time
-      // credential; the session is minted via /auth/v1/token (healthy).
-      const { data: rpcData, error: rpcError } = await db.rpc('login_with_pin', {
-        p_username: credentials.username,
-        p_pin: credentials.pin,
-      });
-      if (rpcError) {
-        // PostgREST surfaces verify_pin's RAISE message verbatim
-        // (e.g. "Invalid PIN. 3 attempts remaining.").
-        console.error('[Auth] login_with_pin failed', rpcError);
-        throw new Error(`Login failed: ${rpcError.message || 'unknown error'}`);
-      }
-      const creds = rpcData as {
-        email: string;
-        password: string;
-        user: { id: string };
-      } | null;
-      if (!creds) throw new Error('Login failed: empty response');
-
-      const { data: signIn, error: signInError } =
-        await db.auth.signInWithPassword({
-          email: creds.email,
-          password: creds.password,
-        });
+      // PIN verify (Postgres verify_pin) + try limits run behind the api's
+      // /auth/v1/login; failures come back as one generic message, flagged
+      // captchaRequired once the next try needs a Turnstile token.
+      const { data: signIn, error: signInError } = await db.auth.signInWithPin(credentials);
       if (signInError || !signIn.session) {
-        throw new Error(`Login failed: ${signInError?.message ?? 'no session'}`);
-      }
-      try { db.realtime.setAuth(signIn.session.access_token); } catch (e) {
-        console.warn('[Auth] realtime.setAuth failed after login', e);
+        console.error('[Auth] login failed', signInError);
+        throw Object.assign(new Error(signInError?.message || 'Login failed: no session'), {
+          captchaRequired: signInError?.captcha_required === true,
+        });
       }
 
-      const fullUser = await fetchUserFromSession(creds.user.id);
+      const fullUser = await fetchUserFromSession(signIn.session.user.app_metadata.user_id);
       if (!fullUser) {
         // fetchUserFromSession returns null for deactivated accounts OR missing
         // rows. Either way we can't proceed — scrub the just-set session so the

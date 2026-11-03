@@ -4,6 +4,7 @@ import { z } from "zod";
 import { useAuth } from "@/context/auth";
 import { BRAND_NAMES } from "@/lib/constants";
 import { Input } from "@repo/ui/input";
+import { Turnstile } from "@repo/ui/turnstile";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import ErthLogoDark from "@/assets/erth-dark.svg";
 import SakkbaLogo from "@/assets/Sakkba.png";
@@ -53,6 +54,9 @@ function LoginComponent() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [showPin, setShowPin] = React.useState(false);
+  const [captchaRequired, setCaptchaRequired] = React.useState(false);
+  const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
+  const [attempt, setAttempt] = React.useState(0);
 
   const search = Route.useSearch();
 
@@ -87,9 +91,11 @@ function LoginComponent() {
     setIsSubmitting(true);
     setError(null);
     try {
-      await auth.login({ username, pin });
+      await auth.login({ username, pin, turnstileToken: captchaToken ?? undefined });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
+      setCaptchaRequired((err as { captchaRequired?: boolean }).captchaRequired === true);
+      setAttempt((n) => n + 1); // a Turnstile token is single-use: fresh widget
       setIsSubmitting(false);
     }
   };
@@ -561,6 +567,12 @@ function LoginComponent() {
                     </button>
                   </div>
                 </div>
+
+                {captchaRequired && (
+                  <div className="lg-field">
+                    <Turnstile key={attempt} onToken={setCaptchaToken} />
+                  </div>
+                )}
 
                 <button type="submit" disabled={isSubmitting} className="lg-submit">
                   {isSubmitting ? "Signing in…" : <>Sign in <span className="arrow">→</span></>}

@@ -13,8 +13,7 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.tsx", "src/**/*.test.ts"],
     env: {
-      VITE_SUPABASE_URL: "https://test.supabase.co",
-      VITE_SUPABASE_ANON_KEY: "test-anon-key",
+      VITE_API_URL: "https://api.test.invalid",
     },
   },
 });

@@ -1,22 +1,20 @@
 /**
  * Database client facade.
  *
- * Uses createClient with default localStorage storage. The @supabase/ssr
- * createBrowserClient was removed because it breaks Realtime postgres_changes
- * subscriptions. Since both apps are pure SPAs (no server), cookie-based
- * auth via document.cookie provides no XSS advantage over localStorage.
+ * Backend: self-hosted Postgres + PostgREST + the api service (auth,
+ * storage, realtime) via @repo/backend-client, which mirrors the supabase-js
+ * surface the app uses. Session lives in localStorage (pure SPA, no server).
  *
  * Kept structurally in sync with apps/pos-interface/src/lib/db.ts — the
  * transient-retry / idempotency policy must be identical in both apps.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createBackendClient } from '@repo/backend-client';
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const url = import.meta.env.VITE_API_URL;
 
-if (!url || !anonKey) {
-  throw new Error('Missing database environment variables (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)');
+if (!url) {
+  throw new Error('Missing backend environment variable VITE_API_URL');
 }
 
 // Hard cap on every PostgREST / RPC / auth fetch. Without it, a fetch issued
@@ -163,15 +161,6 @@ async function timeoutFetch(input: RequestInfo | URL, init?: RequestInit): Promi
   }
 }
 
-export const db = createClient(url, anonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-  },
-  global: {
-    fetch: timeoutFetch,
-  },
-});
+export const db = createBackendClient(url, { fetch: timeoutFetch });
 
 dbRef = db;

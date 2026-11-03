@@ -16,7 +16,7 @@ import { SIDEBAR_COUNTS_KEY } from './useSidebarCounts';
 import { NOTIFICATIONS_KEY } from './useNotifications';
 import { showNotificationToast } from '@/components/notification-toast';
 import { useAuth } from '@/context/auth';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@repo/backend-client';
 
 function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): { (...args: Parameters<T>): void; cancel: () => void } {
   let timer: ReturnType<typeof setTimeout> | undefined;

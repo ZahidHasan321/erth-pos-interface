@@ -1,0 +1,16 @@
+# Build context = repo root (deploy/Dockerfile.*). Never ship env files —
+# packages/database/.env holds the production connection string.
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/dist
+**/.turbo
+**/.tanstack
+**/test-results
+**/playwright-report
+.git
+deploy/.env
+deploy/backups
+supabase/.temp
+supabase/.branches

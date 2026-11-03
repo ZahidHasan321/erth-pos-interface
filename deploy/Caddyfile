@@ -1,0 +1,85 @@
+# Edge proxy: TLS (automatic Let's Encrypt), the three SPAs, and the API host.
+# Hostnames/ports come from deploy/.env (see .env.example).
+{
+	email {$ACME_EMAIL}
+	http_port {$HTTP_PORT:80}
+	https_port {$HTTPS_PORT:443}
+	{$CADDY_GLOBAL_EXTRA}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(self), microphone=(self), geolocation=()"
+		-Server
+	}
+}
+
+(spa) {
+	import security_headers
+	header Content-Security-Policy "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: {$API_ORIGIN}; media-src 'self' blob: {$API_ORIGIN}; connect-src 'self' {$API_ORIGIN} https://challenges.cloudflare.com https://cloudflareinsights.com; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	encode zstd gzip
+
+	@sw path /sw.js /registerSW.js /manifest.webmanifest
+	header @sw Cache-Control "public, max-age=0, must-revalidate"
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	try_files {path} /index.html
+	file_server
+}
+
+{$SHOP_DOMAIN} {
+	root * /srv/shop
+	import spa
+}
+
+{$WORKSHOP_DOMAIN} {
+	root * /srv/workshop
+	import spa
+}
+
+{$ADMIN_DOMAIN} {
+	root * /srv/admin
+	import spa
+}
+
+{$API_DOMAIN} {
+	import security_headers
+	request_body {
+		max_size 60MB
+	}
+
+	# PostgREST (does its own CORS — PGRST_SERVER_CORS_ALLOWED_ORIGINS).
+	handle_path /rest/v1/* {
+		encode zstd gzip
+		reverse_proxy rest:3000
+	}
+
+	# Public media, straight from the storage volume. Sandboxed so an uploaded
+	# SVG/HTML can never run script on this origin.
+	handle_path /storage/v1/object/public/* {
+		root * /srv/storage
+		header {
+			Cache-Control "public, max-age=3600"
+			Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+			Access-Control-Allow-Origin "*"
+		}
+		file_server
+	}
+
+	# Server-sent events: no compression, no buffering.
+	handle /realtime/* {
+		reverse_proxy api:8080 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		encode zstd gzip
+		reverse_proxy api:8080
+	}
+}

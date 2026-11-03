@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth";
+import { Turnstile } from "@repo/ui/turnstile";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { isAdmin, type AuthUser } from "@/lib/rbac";
 
@@ -28,6 +29,9 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPin, setShowPin] = useState(false);
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (auth.isAuthenticated) {
@@ -43,9 +47,11 @@ function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await auth.login({ username, pin });
+      await auth.login({ username, pin, turnstileToken: captchaToken ?? undefined });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      setCaptchaRequired((err as { captchaRequired?: boolean }).captchaRequired === true);
+      setAttempt((n) => n + 1); // a Turnstile token is single-use: fresh widget
       setLoading(false);
     }
   };
@@ -120,6 +126,8 @@ function LoginPage() {
               </button>
             </div>
           </div>
+
+          {captchaRequired && <Turnstile key={attempt} onToken={setCaptchaToken} />}
 
           <button
             type="submit"

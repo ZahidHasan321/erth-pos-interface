@@ -6,7 +6,7 @@ import { TRANSFER_BADGE_KEY } from './useTransfers';
 import { showNotificationToast } from '@/components/notification-toast';
 import { useAuth } from '@/context/auth';
 import { getBrand } from '@/api/orders';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@repo/backend-client';
 
 function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): { (...args: Parameters<T>): void; cancel: () => void } {
   let timer: ReturnType<typeof setTimeout> | undefined;
