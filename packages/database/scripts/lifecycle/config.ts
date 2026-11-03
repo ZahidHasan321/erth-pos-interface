@@ -4,7 +4,8 @@
 // on the URL without having to pass anything between them.
 
 export const CONTAINER_NAME = "erth-workflow-test-pg";
-export const HOST_PORT = 54329;
+// Override with WORKFLOW_TEST_PORT when another local stack already holds 54329.
+export const HOST_PORT = Number(process.env.WORKFLOW_TEST_PORT ?? 54329);
 export const PG_IMAGE = "postgres:16-alpine";
 export const PG_USER = "postgres";
 export const PG_PASSWORD = "postgres";

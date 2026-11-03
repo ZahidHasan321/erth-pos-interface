@@ -56,7 +56,15 @@
 	# PostgREST (does its own CORS — PGRST_SERVER_CORS_ALLOWED_ORIGINS).
 	handle_path /rest/v1/* {
 		encode zstd gzip
-		reverse_proxy rest:3000
+		reverse_proxy rest:3000 {
+			# Drop idle upstream connections before the upstream does (PostgREST
+			# and Node close idle keep-alives after ~5s). Otherwise Caddy reuses a
+			# connection that was just closed -> intermittent 502 with no CORS
+			# headers, which the browser reports as a CORS / NetworkError.
+			transport http {
+				keepalive 3s
+			}
+		}
 	}
 
 	# Public media, straight from the storage volume. Sandboxed so an uploaded
@@ -75,11 +83,18 @@
 	handle /realtime/* {
 		reverse_proxy api:8080 {
 			flush_interval -1
+			transport http {
+				keepalive 3s
+			}
 		}
 	}
 
 	handle {
 		encode zstd gzip
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			transport http {
+				keepalive 3s
+			}
+		}
 	}
 }
