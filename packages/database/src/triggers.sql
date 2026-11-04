@@ -9237,13 +9237,22 @@ $$;
 -- (a superset); the app keeps its exact select + filters on top via
 -- db.rpc(...).select(...), so the result is unchanged. SECURITY INVOKER: RLS
 -- applies to every row they read and return.
+--
+-- orders_with_garments_at is plpgsql ON PURPOSE: PostgREST calls it LATERAL to
+-- its JSON body, so an inlinable LANGUAGE sql version turned the ARRAY(...)
+-- garment lookup into a correlated subplan re-run per orders row (one garments
+-- scan per order: ~7.5s on prod, statement timeouts on Receiving). plpgsql is
+-- never inlined, so the lookup runs once per call.
 CREATE OR REPLACE FUNCTION orders_with_garments_at(p_locations TEXT[])
 RETURNS SETOF orders
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 AS $$
+BEGIN
+  RETURN QUERY
   SELECT o.* FROM orders o
   WHERE o.id = ANY (ARRAY(SELECT g.order_id FROM garments g WHERE g.location::text = ANY (p_locations)));
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION orders_with_undispatched_garments()

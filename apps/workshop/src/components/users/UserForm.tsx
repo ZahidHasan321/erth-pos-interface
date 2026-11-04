@@ -133,9 +133,9 @@ function Section({
   );
 }
 
-function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+function FieldLabel({ children, required, htmlFor }: { children: React.ReactNode; required?: boolean; htmlFor?: string }) {
   return (
-    <Label className="text-xs font-medium text-muted-foreground">
+    <Label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground">
       {children}
       {required && <span className="text-[var(--status-bad)] ml-0.5">*</span>}
     </Label>
@@ -163,37 +163,74 @@ const DEPARTMENT_OPTIONS = [
   },
 ] as const;
 
-function describeAccess(role: Role, department: Department, jobFunctions: JobFunction[]): { label: string; detail: string } {
-  if (role === "super_admin") return { label: "Full access: all apps", detail: "Full access to all pages across all apps. Can manage everything." };
-  if (role === "admin") return { label: "Full access", detail: "Full access to all pages. Can manage users, schedules, pricing, and operations." };
-  if (role === "manager" && department === "workshop") return { label: "Workshop manager", detail: "Full workshop operations: scheduling, receiving, dispatch, team, performance." };
-  if (role === "supervisor") return { label: "Workshop supervisor", detail: "Works like a manager (scheduling, receiving, dispatch, monitoring the terminals) but cannot operate a terminal: no Start / Done / Cancel and no QC verdict." };
-  if (role === "manager" && department === "shop") return { label: "Shop manager: workshop view-only", detail: "View-only access to workshop data. Dashboard, tracker, performance." };
-  if (role === "staff" && department === "shop") return { label: "Shop staff", detail: "Shop-only access. No workshop pages." };
-  if (role === "measurement_taker") return { label: "Measurement taker", detail: "Order-taking only: orders, customers, appointments, deliveries. No stock management, cashier, or end-of-day report." };
+// Roles offered per department (§5): cashier + measurement taker are shop-only;
+// staff (terminal/office workers) + supervisor are workshop-only.
+const ROLES_BY_DEPARTMENT: Record<Department, Role[]> = {
+  shop: ["super_admin", "admin", "manager", "cashier", "measurement_taker"],
+  workshop: ["super_admin", "admin", "manager", "supervisor", "staff"],
+};
+const DEFAULT_ROLE_BY_DEPARTMENT: Record<Department, Role> = { shop: "cashier", workshop: "staff" };
+
+const ORDER_TAKING = "Order-taking: new work / sales / alteration orders, customers, appointments, deliveries, dispatch, linking, receiving";
+const SHOP_STOCK = "Stock: inventory (fabrics + shelf), waste, stocktake, transfer request / receive, reports (view)";
+
+function describeAccess(role: Role, department: Department, jobFunctions: JobFunction[]): { label: string; can: string[]; cannot?: string[] } {
+  if (role === "super_admin") return { label: "Full access: all apps", can: ["Every page in every app", "Manage everything, including admins"] };
+  if (role === "admin") return { label: "Full access", can: ["Every page", "Manage users, schedules, pricing and operations"] };
+  if (role === "manager" && department === "workshop") return { label: "Workshop manager", can: ["Scheduling, receiving, dispatch", "Team, performance, QC analytics", "Operate terminals and QC"] };
+  if (role === "supervisor") return { label: "Workshop supervisor", can: ["Scheduling, receiving, dispatch", "Monitor the terminals"], cannot: ["Start / Done / Cancel on a terminal", "QC verdicts"] };
+  if (role === "manager" && department === "shop") return {
+    label: "Shop manager",
+    can: [ORDER_TAKING, "Cashier, Order History, End of Day", SHOP_STOCK, "Restock, adjust, delete stock, suppliers, send / cancel transfers", "Workshop data (view-only)"],
+  };
+  if (role === "cashier" || (role === "staff" && department === "shop")) return {
+    label: role === "cashier" ? "Cashier" : "Shop staff (legacy: reassign to Cashier)",
+    can: [ORDER_TAKING, "Cashier: payments, handover, refunds, purchases", "Order History, End of Day", SHOP_STOCK],
+    cannot: ["Restock, adjust or delete stock", "Suppliers, send / cancel transfers", "Workshop pages"],
+  };
+  if (role === "measurement_taker") return {
+    label: "Measurement taker",
+    can: [ORDER_TAKING],
+    cannot: ["Cashier, End of Day", "Stock management", "Workshop pages"],
+  };
   // staff + workshop
-  if (jobFunctions.length === 0) return { label: "Office staff", detail: "Dashboard / tracker / performance access. No terminals." };
+  if (jobFunctions.length === 0) return { label: "Office staff", can: ["Dashboard, tracker, performance (view)"], cannot: ["Terminals"] };
   if (jobFunctions.length === 1) {
     const station = JOB_FUNCTION_LABELS[jobFunctions[0]];
-    return { label: `Terminal: ${station}`, detail: `Sees only the ${station} terminal. No sidebar.` };
+    return { label: `Terminal: ${station}`, can: [`Only the ${station} terminal`], cannot: ["Sidebar pages"] };
   }
   const stations = jobFunctions.map((j) => JOB_FUNCTION_LABELS[j]).join(" / ");
-  return { label: `Cross-trained: ${stations}`, detail: `Switches between ${stations} via a tab bar. No sidebar.` };
+  return { label: `Cross-trained: ${stations}`, can: [`Switch between ${stations} via a tab bar`], cannot: ["Sidebar pages"] };
+}
+
+function RoleInfo({ role, department, jobFunctions }: { role: Role; department: Department; jobFunctions: JobFunction[] }) {
+  const { label, can, cannot } = describeAccess(role, department, jobFunctions);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground" aria-label={`What a ${label} can do`}>
+          <Info className="w-3.5 h-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-sm space-y-1.5 text-left">
+        <p className="font-medium">{label}</p>
+        <ul className="list-disc pl-4 space-y-0.5">{can.map((c) => <li key={c}>{c}</li>)}</ul>
+        {cannot && (
+          <>
+            <p className="font-medium">Cannot</p>
+            <ul className="list-disc pl-4 space-y-0.5">{cannot.map((c) => <li key={c}>{c}</li>)}</ul>
+          </>
+        )}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 function AccessSummary({ role, department, jobFunctions }: { role: Role; department: Department; jobFunctions: JobFunction[] }) {
-  const { label, detail } = describeAccess(role, department, jobFunctions);
+  const { label } = describeAccess(role, department, jobFunctions);
   return (
-    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span>Result: <span className="text-foreground font-medium">{label}</span></span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground" aria-label="Access detail">
-            <Info className="w-3 h-3" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs">{detail}</TooltipContent>
-      </Tooltip>
+    <div className="text-xs text-muted-foreground">
+      Result: <span className="text-foreground font-medium">{label}</span>
     </div>
   );
 }
@@ -207,6 +244,10 @@ export function UserForm({
   form: UserFormState;
   setForm: React.Dispatch<React.SetStateAction<UserFormState>>;
 }) {
+  // A role that isn't offered for the department (e.g. a legacy shop "staff"
+  // user on edit) must still be listed, or Radix renders the trigger blank.
+  const roleIsValid = ROLES_BY_DEPARTMENT[form.department].includes(form.role);
+  const roleOptions = roleIsValid ? ROLES_BY_DEPARTMENT[form.department] : [...ROLES_BY_DEPARTMENT[form.department], form.role];
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {/* LEFT COLUMN ─────────────────────────── */}
@@ -214,16 +255,21 @@ export function UserForm({
         <Section icon={UserCog} title="Identity">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <FieldLabel required>Username</FieldLabel>
+              <FieldLabel htmlFor="user-username" required>Username</FieldLabel>
               <Input
+                id="user-username"
+                autoComplete="off"
+                spellCheck={false}
                 placeholder="ahmed"
                 value={form.username}
                 onChange={(e) => setForm((p) => ({ ...p, username: e.target.value.toLowerCase().replace(/\s/g, "") }))}
               />
             </div>
             <div className="space-y-1.5">
-              <FieldLabel required>Full Name</FieldLabel>
+              <FieldLabel htmlFor="user-name" required>Full Name</FieldLabel>
               <Input
+                id="user-name"
+                autoComplete="off"
                 placeholder="Ahmed Al-Rashidi"
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
@@ -231,10 +277,13 @@ export function UserForm({
             </div>
           </div>
           <div className="space-y-1.5">
-            <FieldLabel>Email</FieldLabel>
+            <FieldLabel htmlFor="user-email">Email</FieldLabel>
             <div className="relative">
               <Mail className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
               <Input
+                id="user-email"
+                type="email"
+                autoComplete="off"
                 className="pl-8"
                 placeholder="email@example.com"
                 value={form.email}
@@ -245,7 +294,7 @@ export function UserForm({
           <div className="space-y-1.5">
             <FieldLabel>Phone</FieldLabel>
             <div className="flex gap-1.5">
-              <div className="w-[120px] shrink-0">
+              <div className="w-[132px] shrink-0">
                 <Combobox
                   options={PHONE_CODE_OPTIONS}
                   value={form.country_code}
@@ -257,6 +306,10 @@ export function UserForm({
               <div className="relative flex-1">
                 <Phone className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
                 <Input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="off"
+                  aria-label="Phone number"
                   className="pl-8"
                   placeholder="Phone number"
                   value={form.phone}
@@ -270,8 +323,9 @@ export function UserForm({
         <Section icon={Briefcase} title="Employee record" hint="Optional HR details for reporting.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <FieldLabel>Employee ID</FieldLabel>
+              <FieldLabel htmlFor="user-employee-id">Employee ID</FieldLabel>
               <Input
+                id="user-employee-id"
                 className="font-mono"
                 placeholder="EMP-001"
                 value={form.employee_id}
@@ -299,8 +353,9 @@ export function UserForm({
             />
           </div>
           <div className="space-y-1.5">
-            <FieldLabel>Notes</FieldLabel>
+            <FieldLabel htmlFor="user-notes">Notes</FieldLabel>
             <textarea
+              id="user-notes"
               placeholder="Anything else worth recording..."
               value={form.notes}
               onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
@@ -320,18 +375,25 @@ export function UserForm({
               <SlidingPillSwitcher
                 value={form.department}
                 options={DEPARTMENT_OPTIONS}
-                onChange={(v) => setForm((p) => ({ ...p, department: v }))}
+                onChange={(v) => setForm((p) => ({
+                  ...p,
+                  department: v,
+                  role: ROLES_BY_DEPARTMENT[v].includes(p.role) ? p.role : DEFAULT_ROLE_BY_DEPARTMENT[v],
+                }))}
                 size="sm"
                 className="border-border"
               />
             </div>
           </div>
           <div className="space-y-1.5">
-            <FieldLabel required>Role</FieldLabel>
+            <div className="flex items-center gap-1.5">
+              <FieldLabel required htmlFor="user-role">Role</FieldLabel>
+              <RoleInfo role={form.role} department={form.department} jobFunctions={form.job_functions} />
+            </div>
             <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v as Role }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="user-role" className="w-full" aria-invalid={!roleIsValid || undefined}><SelectValue placeholder="Choose a role" /></SelectTrigger>
               <SelectContent>
-                {(["super_admin", "admin", "manager", "supervisor", "staff"] as Role[]).map((r) => (
+                {roleOptions.map((r) => (
                   <SelectItem key={r} value={r}>
                     <span className="flex items-center gap-2">
                       <Shield className={cn(
@@ -342,11 +404,15 @@ export function UserForm({
                         : "text-muted-foreground/50",
                       )} />
                       {ROLE_LABELS[r]}
+                      {!ROLES_BY_DEPARTMENT[form.department].includes(r) && " (legacy)"}
                     </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {!roleIsValid && (
+              <p className="text-xs text-[var(--status-bad)]">Not a {DEPARTMENT_LABELS[form.department].toLowerCase()} role. Pick another to save.</p>
+            )}
           </div>
 
           <AccessSummary role={form.role} department={form.department} jobFunctions={form.job_functions} />
@@ -418,12 +484,15 @@ export function UserForm({
 
           <div className="flex items-end gap-4 pt-3 border-t border-border flex-wrap">
             <div className="space-y-1.5 w-[180px]">
-              <FieldLabel required={mode === "add"}>PIN</FieldLabel>
+              <FieldLabel required={mode === "add"} htmlFor="user-pin">PIN</FieldLabel>
               <div className="relative">
                 <Hash className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
                 <Input
-                  className="pl-8 font-mono tracking-[0.3em]"
-                  placeholder={mode === "add" ? "6-10 digits" : "••••••"}
+                  id="user-pin"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  className="pl-8 font-mono tracking-[0.3em] placeholder:font-sans placeholder:tracking-normal"
+                  placeholder={mode === "add" ? "6-10 digits" : "Unchanged"}
                   maxLength={10}
                   value={form.pin}
                   onChange={(e) => {
@@ -488,6 +557,7 @@ export function UserForm({
 export function isUserFormValid(form: UserFormState, mode: "add" | "edit"): boolean {
   if (!form.username || !form.name) return false;
   if (!form.role || !form.department) return false;
+  if (!ROLES_BY_DEPARTMENT[form.department].includes(form.role)) return false;
   if (form.department === "shop" && form.brands.length === 0) return false;
   if (mode === "add" && (!form.pin || form.pin.length < 6)) return false;
   // Every operational station the worker runs needs an explicit team (Q4 / §6).
@@ -537,7 +607,7 @@ function UnitPicker({
             value={value ?? ""}
             onValueChange={(v) => onChange(v || null)}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full" aria-label={label}>
               <SelectValue placeholder={stageUnits.length === 0 ? "No teams, create one" : "Select team"} />
             </SelectTrigger>
             <SelectContent>

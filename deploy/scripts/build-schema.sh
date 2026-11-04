@@ -15,8 +15,16 @@ set -a; . ./.env; set +a
 DB_URL="postgresql://postgres:${POSTGRES_PASSWORD}@127.0.0.1:${DB_PORT:-5432}/postgres"
 psql_db() { docker compose exec -T -e PGOPTIONS='-c client_min_messages=warning' db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q "$@"; }
 
-echo "==> drizzle-kit push (127.0.0.1:${DB_PORT:-5432})"
-( cd "$ROOT/packages/database" && DATABASE_URL="$DB_URL" "$ROOT/packages/database/node_modules/.bin/drizzle-kit" push:pg )
+# On the VPS this compose DB IS production. Refuse unless it is still empty, then
+# pass drizzle.config.ts's override (its guard only trusts the e2e port 54322).
+if [ -n "$(psql_db -tAc "select to_regclass('public.orders')")" ]; then
+  echo "Refusing: the compose DB already has an app schema (public.orders exists)." >&2
+  echo "build-schema.sh is for an EMPTY stack only. Production changes go through apply-*.ts." >&2
+  exit 1
+fi
+
+echo "==> drizzle-kit push (127.0.0.1:${DB_PORT:-5432}, verified empty)"
+( cd "$ROOT/packages/database" && DATABASE_URL="$DB_URL" ALLOW_REMOTE_DB=I_KNOW_THIS_IS_PRODUCTION "$ROOT/packages/database/node_modules/.bin/drizzle-kit" push:pg )
 
 echo "==> accessory_category placeholder"
 psql_db -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname='accessory_category') THEN CREATE TYPE accessory_category AS ENUM ('placeholder'); END IF; END \$\$;"

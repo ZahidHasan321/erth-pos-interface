@@ -11,7 +11,7 @@ General conduct — think before coding, simplicity, surgical changes, goal-driv
 1. **Descriptive errors.** No bare "Error"/"Failed"/"Something went wrong". Name the operation and surface the cause (e.g. `updateGarment: failed to update garment <id>: <db error>`).
 2. **Reach for shared primitives / helpers first.** Duplicating a pattern 2+ times means extract a primitive.
 3. **Idempotency is mandatory on retryable mutations.** Order confirm, payment, refund, sales-order create, register close — each takes an idempotency key; a lost-response replay produces exactly one effect. (Production runs on a tier with a real lost-response tail; not optional.)
-4. **DB migration discipline.** Don't guess remote DB state — inspect it first. Write migrations idempotent (`IF NOT EXISTS`). The schema is built via `db:push`; apply new migrations directly — the `db:migrate` runner is not usable.
+4. **DB migration discipline.** Don't guess remote DB state — inspect it first. Write migrations idempotent (`IF NOT EXISTS`). The schema is built via `db:push`; apply new migrations directly — the `db:migrate` runner is not usable. **Every new `public` table needs explicit grants** in the same migration: nothing auto-grants PostgREST access to new tables on our self-hosted stack, so without them the client gets `permission denied`. Grant `authenticated` only the verbs the client actually uses directly (RPC-only tables need none), `GRANT ALL … TO service_role`, nothing to `anon`, plus `ENABLE ROW LEVEL SECURITY` and policies; add `GRANT USAGE, SELECT ON SEQUENCE` if the client inserts into a `SERIAL` table directly.
 5. **Invariants never to break silently:**
    - `users.brands` is stored **lowercase**; the brand-access check lowercases only the probe, so an uppercase entry silently denies access.
    - Garment lifecycle transitions only through the §2.5 branches — no ad-hoc `piece_stage` writes.
@@ -50,8 +50,9 @@ pnpm --filter @repo/database test:workflow  # Docker-backed spec-as-oracle lifec
 
 ## 9. Environment variables
 
-- Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (in `apps/pos-interface/.env`).
-- Database: `DATABASE_URL`; optional `TRANSACTION_URL` (pooler, port 6543).
+- Frontend (each app): `VITE_API_URL` (the self-hosted API origin; PostgREST is served under it at `/rest/v1`); optional `VITE_TURNSTILE_SITE_KEY` (captcha after repeated failed logins; baked in at build).
+- Database: `DATABASE_URL`. Local = `127.0.0.1:54322`; prod is the VPS Postgres via SSH tunnel on `127.0.0.1:5432` (see `CLAUDE.md` §0a).
+- Server stack (`deploy/.env`, see `deploy/.env.example`): DB/role passwords, JWT secret, `TURNSTILE_SECRET`, hostnames.
 
 ---
 
@@ -59,7 +60,7 @@ pnpm --filter @repo/database test:workflow  # Docker-backed spec-as-oracle lifec
 
 > Behavioral rules for this app are in `SPEC.md` §5.
 
-**Tech conventions** (match; don't re-architect): TanStack Router (file-based, generated route tree), TanStack Query + Supabase SDK for server state (no direct DB access), Zustand for local state, React Hook Form + Zod for forms, Shadcn/Radix + Tailwind, `@/*` path alias.
+**Tech conventions** (match; don't re-architect): TanStack Router (file-based, generated route tree), TanStack Query + `@repo/backend-client` (supabase-js-compatible `db.from` / `db.rpc` / `db.auth` / `db.storage` / `db.channel` over the self-hosted PostgREST + api) for server state (no direct DB access), Zustand for local state, React Hook Form + Zod for forms, Shadcn/Radix + Tailwind, `@/*` path alias.
 
 **UI direction — shop-first professional** (boutique retired):
 

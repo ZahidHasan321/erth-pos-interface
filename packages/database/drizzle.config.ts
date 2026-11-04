@@ -19,29 +19,40 @@ if (!process.env.DATABASE_URL) {
  *   - production changes go through the idempotent apply-*.ts scripts, never push
  *     (the db:migrate runner is unusable — see the notes in scripts/)
  *
- * So a non-local host here is always a mistake, and we fail closed. The escape
+ * So anything but the local e2e stack is a mistake, and we fail closed. The escape
  * hatch is deliberately long and unguessable: you cannot reach prod by reflex.
+ *
+ * Host alone is NOT enough: production is a self-hosted VPS Postgres reached over
+ * an SSH tunnel on 127.0.0.1:5432, which looks local. Only the local e2e stack's
+ * port (54322) counts as local. deploy/scripts/build-schema.sh (empty compose DB)
+ * checks emptiness itself and then passes the override.
  */
 const OVERRIDE = "I_KNOW_THIS_IS_PRODUCTION";
-const host = (() => {
+const LOCAL_PORT = "54322";
+const { host, port } = (() => {
   try {
-    return new URL(process.env.DATABASE_URL).hostname;
+    const u = new URL(process.env.DATABASE_URL);
+    return { host: u.hostname, port: u.port || "5432" };
   } catch {
-    return "";
+    return { host: "", port: "" };
   }
 })();
-const isLocal = host === "127.0.0.1" || host === "localhost" || host === "::1";
+const isLocal =
+  (host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]") &&
+  port === LOCAL_PORT;
 
 if (!isLocal && process.env.ALLOW_REMOTE_DB !== OVERRIDE) {
   throw new Error(
     [
       "",
-      "  drizzle-kit is pointed at a NON-LOCAL database and has been blocked.",
+      "  drizzle-kit is pointed at a database other than the local e2e stack",
+      `  (127.0.0.1:${LOCAL_PORT}) and has been blocked.`,
       "",
-      `    host: ${host || "<unparseable DATABASE_URL>"}`,
+      `    host: ${host || "<unparseable DATABASE_URL>"}:${port}`,
+      "  (127.0.0.1:5432 is the PRODUCTION VPS tunnel, not a local DB.)",
       "",
       "  This is almost certainly an accident: with no DATABASE_URL set, this",
-      "  config falls back to packages/database/.env, which is PRODUCTION.",
+      "  config falls back to packages/database/.env, which may be PRODUCTION.",
       "  `drizzle-kit push` against prod will offer to DROP TABLES.",
       "",
       "  To rebuild the LOCAL stack instead:",

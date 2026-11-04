@@ -10,7 +10,7 @@ The app is internal-only but reachable from the public internet (domain on a VPS
 3. **No HTTP listener for the API at all** — TLS-only on the public surface.
 4. **(Stretch, biggest single win) Private tunnel** (Tailscale / WireGuard / Cloudflare Access). Reduces every public brute-force/enumeration concern to "internal LAN" — the original threat model the app is designed for.
 5. **Per-IP / global lockout** isn't doable in plpgsql (PostgREST doesn't expose the client IP). Do it at the proxy (fail2ban-style: lock an IP after N 4xx on the login endpoint in a window). Per-user lockout is already in `verify_pin`.
-6. **TLS termination + upstream.** If TLS terminates at the proxy and re-proxies to Supabase, confirm the upstream leg is also TLS.
-7. **CSP / framing.** `Content-Security-Policy` (script-src 'self' + Supabase host), `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`.
+6. **TLS termination + upstream.** Caddy terminates TLS and proxies to PostgREST / api over the internal Docker network; keep those upstreams unpublished (never bound to a public interface).
+7. **CSP / framing.** `Content-Security-Policy` (script-src 'self' + the Turnstile / Cloudflare analytics hosts; connect-src the API host), `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`.
 8. **Service-role key blast radius.** Server-side only (Edge Functions, admin scripts); never in a `VITE_*` env var. CI guard: grep-fail commits introducing `VITE_*SERVICE*` or `SERVICE_ROLE` in `apps/`.
 9. **Backup & rotation.** Schedule DB backups; have a service-role-key rotation/revocation plan (the key is not in this repo — keep it that way).

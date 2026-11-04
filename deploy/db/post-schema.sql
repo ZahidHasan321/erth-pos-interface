@@ -29,8 +29,12 @@ RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
   END
 $$;
 
+-- SECURITY DEFINER: the trigger fires as the writing role (authenticated), which
+-- has no EXECUTE on realtime_slim (revoked below so it isn't an RPC). Without
+-- this, every direct client write to a watched table failed with "permission
+-- denied for function realtime_slim" and rolled back.
 CREATE OR REPLACE FUNCTION public.realtime_notify()
-RETURNS trigger LANGUAGE plpgsql AS $$
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog AS $$
 BEGIN
   PERFORM pg_notify('realtime', jsonb_build_object(
     'table', TG_TABLE_NAME,
