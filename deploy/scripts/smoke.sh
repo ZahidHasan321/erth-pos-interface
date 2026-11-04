@@ -54,7 +54,7 @@ check "deleted file gone" 404 "$(code "$A/storage/v1/object/public/media/$OBJ")"
 OUT=$(mktemp)
 "${CURL[@]}" -N --max-time 4 "$A/realtime/v1/stream" "${AUTH[@]}" > "$OUT" &
 sleep 1.5
-docker compose exec -T db psql -U postgres -qc "UPDATE fabrics SET updated_at = updated_at WHERE id = (SELECT min(id) FROM fabrics); INSERT INTO notifications (department, scope, title, type) SELECT 'shop','department','smoke','info' WHERE false;" >/dev/null 2>&1
+docker compose exec -T db psql -U postgres -qc "UPDATE fabrics SET name = name WHERE id = (SELECT min(id) FROM fabrics); INSERT INTO notifications (department, scope, title, type) SELECT 'shop','department','smoke','info' WHERE false;" >/dev/null 2>&1
 docker compose exec -T db psql -U postgres -qc "NOTIFY realtime, '{\"table\":\"fabrics\",\"type\":\"UPDATE\",\"new\":{\"id\":0},\"old\":null}'" >/dev/null
 wait
 check "realtime ready event" yes "$(grep -q '^event: ready' "$OUT" && echo yes || echo no)"
