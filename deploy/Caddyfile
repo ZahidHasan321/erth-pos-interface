@@ -20,7 +20,7 @@
 
 (spa) {
 	import security_headers
-	header Content-Security-Policy "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: {$API_ORIGIN}; media-src 'self' blob: {$API_ORIGIN}; connect-src 'self' {$API_ORIGIN} https://challenges.cloudflare.com https://cloudflareinsights.com; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: {$API_ORIGIN}; media-src 'self' blob: {$API_ORIGIN}; connect-src 'self' data: {$API_ORIGIN} https://challenges.cloudflare.com https://cloudflareinsights.com; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 	encode zstd gzip
 
 	@sw path /sw.js /registerSW.js /manifest.webmanifest
@@ -67,12 +67,12 @@
 	handle_path /rest/v1/* {
 		encode zstd gzip
 		reverse_proxy rest:3000 {
-			# Drop idle upstream connections before the upstream does (PostgREST
-			# and Node close idle keep-alives after ~5s). Otherwise Caddy reuses a
-			# connection that was just closed -> intermittent 502 with no CORS
-			# headers, which the browser reports as a CORS / NetworkError.
+			# No upstream keep-alive: a 3s idle timeout still raced PostgREST
+			# closing pooled connections ("server closed idle connection" 502, no
+			# CORS headers -> browser NetworkError), and HTTP/3 requests can't be
+			# replayed by Go's transport. Same-host dial is sub-millisecond.
 			transport http {
-				keepalive 3s
+				keepalive off
 			}
 		}
 	}

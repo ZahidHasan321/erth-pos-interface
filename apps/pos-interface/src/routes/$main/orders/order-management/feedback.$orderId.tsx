@@ -1823,6 +1823,87 @@ function UnifiedFeedbackInterface() {
     try {
         const state = currentState;
 
+        // Uploads run FIRST, before any garment/measurement write: a failed upload
+        // then aborts with nothing changed, instead of leaving the brova marked
+        // trialed with no feedback record (the Nov 2026 CSP incident).
+        // Upload pending per-style photos/voice notes now. Files captured earlier
+        // sit in pendingUploads as blob: previews — they only become real URLs at
+        // submit time so abandoned drafts don't leave orphans. Each attachment is
+        // filed under its style option (collar, cuff, …).
+        const resolvedPhotos: Record<string, Array<{ type: "photo" | "video"; url: string }>> = {};
+        const resolvedVoiceNotes: Record<string, string[]> = {};
+        for (const opt of optionRows) {
+          const photos: Array<{ type: "photo" | "video"; url: string }> = [];
+          for (const entry of state.optionPhotos[opt.id] ?? []) {
+            if (!entry.url.startsWith("blob:")) { photos.push(entry); continue; }
+            const pending = state.pendingUploads[entry.url];
+            if (!pending || pending.kind !== "photo") continue;
+            try {
+              const { url } = await uploadFeedbackPhoto(
+                pending.blob, activeOrder.id, activeGarment.id, activeGarment.trip_number || 1,
+              );
+              photos.push({ type: entry.type, url });
+              URL.revokeObjectURL(entry.url);
+            } catch (err) {
+              toast.error(`Failed to upload photo: ${err instanceof Error ? err.message : String(err)}`);
+              return;
+            }
+          }
+          if (photos.length) resolvedPhotos[opt.id] = photos;
+
+          const voices: string[] = [];
+          for (const u of state.optionVoiceNotes[opt.id] ?? []) {
+            if (!u.startsWith("blob:")) { voices.push(u); continue; }
+            const pending = state.pendingUploads[u];
+            if (!pending || pending.kind !== "voice") continue;
+            try {
+              const { url } = await uploadFeedbackVoiceNote(
+                pending.blob, activeOrder.id, activeGarment.id, activeGarment.trip_number || 1,
+              );
+              voices.push(url);
+              URL.revokeObjectURL(u);
+            } catch (err) {
+              toast.error(`Failed to upload voice note: ${err instanceof Error ? err.message : String(err)}`);
+              return;
+            }
+          }
+          if (voices.length) resolvedVoiceNotes[opt.id] = voices;
+        }
+
+        // Reflect resolved URLs back into per-style state, drop consumed blobs.
+        setGarmentStates(prev => {
+          const st = prev[selectedGarmentId!];
+          if (!st) return prev;
+          return {
+            ...prev,
+            [selectedGarmentId!]: {
+              ...st,
+              optionPhotos: { ...st.optionPhotos, ...resolvedPhotos },
+              optionVoiceNotes: { ...st.optionVoiceNotes, ...resolvedVoiceNotes },
+              pendingUploads: {},
+            },
+          };
+        });
+
+        // Upload signature to Supabase Storage if it's a fresh data URL (not an existing public URL)
+        let signatureUrl: string | null = state.customerSignature || null;
+        if (signatureUrl && signatureUrl.startsWith("data:")) {
+          try {
+            const { url } = await uploadFeedbackSignature(
+              signatureUrl,
+              activeOrder.id,
+              activeGarment.id,
+              activeGarment.trip_number || 1,
+            );
+            signatureUrl = url;
+            updateGarmentState(selectedGarmentId, { customerSignature: url });
+          } catch (err) {
+            toast.error(`Failed to upload signature: ${err instanceof Error ? err.message : String(err)}`);
+            return;
+          }
+        }
+
+
         if (activeGarment.garment_type === "brova") {
             const allBrovas = activeOrder.garments?.filter(g => g.garment_type === "brova") || [];
             const result = evaluateBrovaFeedback(
@@ -2171,65 +2252,6 @@ function UnifiedFeedbackInterface() {
           queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
         }
 
-        // Upload pending per-style photos/voice notes now. Files captured earlier
-        // sit in pendingUploads as blob: previews — they only become real URLs at
-        // submit time so abandoned drafts don't leave orphans. Each attachment is
-        // filed under its style option (collar, cuff, …).
-        const resolvedPhotos: Record<string, Array<{ type: "photo" | "video"; url: string }>> = {};
-        const resolvedVoiceNotes: Record<string, string[]> = {};
-        for (const opt of optionRows) {
-          const photos: Array<{ type: "photo" | "video"; url: string }> = [];
-          for (const entry of state.optionPhotos[opt.id] ?? []) {
-            if (!entry.url.startsWith("blob:")) { photos.push(entry); continue; }
-            const pending = state.pendingUploads[entry.url];
-            if (!pending || pending.kind !== "photo") continue;
-            try {
-              const { url } = await uploadFeedbackPhoto(
-                pending.blob, activeOrder.id, activeGarment.id, activeGarment.trip_number || 1,
-              );
-              photos.push({ type: entry.type, url });
-              URL.revokeObjectURL(entry.url);
-            } catch (err) {
-              toast.error(`Failed to upload photo: ${err instanceof Error ? err.message : String(err)}`);
-              return;
-            }
-          }
-          if (photos.length) resolvedPhotos[opt.id] = photos;
-
-          const voices: string[] = [];
-          for (const u of state.optionVoiceNotes[opt.id] ?? []) {
-            if (!u.startsWith("blob:")) { voices.push(u); continue; }
-            const pending = state.pendingUploads[u];
-            if (!pending || pending.kind !== "voice") continue;
-            try {
-              const { url } = await uploadFeedbackVoiceNote(
-                pending.blob, activeOrder.id, activeGarment.id, activeGarment.trip_number || 1,
-              );
-              voices.push(url);
-              URL.revokeObjectURL(u);
-            } catch (err) {
-              toast.error(`Failed to upload voice note: ${err instanceof Error ? err.message : String(err)}`);
-              return;
-            }
-          }
-          if (voices.length) resolvedVoiceNotes[opt.id] = voices;
-        }
-
-        // Reflect resolved URLs back into per-style state, drop consumed blobs.
-        setGarmentStates(prev => {
-          const st = prev[selectedGarmentId!];
-          if (!st) return prev;
-          return {
-            ...prev,
-            [selectedGarmentId!]: {
-              ...st,
-              optionPhotos: { ...st.optionPhotos, ...resolvedPhotos },
-              optionVoiceNotes: { ...st.optionVoiceNotes, ...resolvedVoiceNotes },
-              pendingUploads: {},
-            },
-          };
-        });
-
         // Build options checklist JSON (verdict + replacement values + per-style attachments)
         const optionsChecklist = optionRows.map(opt => ({
           option_name: opt.id,
@@ -2256,24 +2278,6 @@ function UnifiedFeedbackInterface() {
 
         // Determine feedback type
         const feedbackType = activeGarment.garment_type === "brova" ? "brova_trial" : "final_collection";
-
-        // Upload signature to Supabase Storage if it's a fresh data URL (not an existing public URL)
-        let signatureUrl: string | null = state.customerSignature || null;
-        if (signatureUrl && signatureUrl.startsWith("data:")) {
-          try {
-            const { url } = await uploadFeedbackSignature(
-              signatureUrl,
-              activeOrder.id,
-              activeGarment.id,
-              activeGarment.trip_number || 1,
-            );
-            signatureUrl = url;
-            updateGarmentState(selectedGarmentId, { customerSignature: url });
-          } catch (err) {
-            toast.error(`Failed to upload signature: ${err instanceof Error ? err.message : String(err)}`);
-            return;
-          }
-        }
 
         const feedbackPayload = {
           garment_id: activeGarment.id,
@@ -2314,13 +2318,17 @@ function UnifiedFeedbackInterface() {
         };
 
         // Upsert: update existing feedback or create new one
+        // A failed write must surface (the catch below toasts it) — never fall
+        // through to "submitted" with no feedback record saved.
         if (state.existingFeedbackId) {
-          await updateFeedback(state.existingFeedbackId, feedbackPayload);
+          const upd = await updateFeedback(state.existingFeedbackId, feedbackPayload);
+          if (upd.status === 'error') throw new Error(`Feedback record not saved: ${upd.message}`);
         } else {
           const fbResult = await createFeedback(feedbackPayload);
-          if (fbResult.status === 'success' && fbResult.data) {
-            updateGarmentState(selectedGarmentId, { existingFeedbackId: fbResult.data.id });
+          if (fbResult.status !== 'success' || !fbResult.data) {
+            throw new Error(`Feedback record not saved: ${fbResult.status === 'error' ? fbResult.message : 'unknown error'}`);
           }
+          updateGarmentState(selectedGarmentId, { existingFeedbackId: fbResult.data.id });
         }
 
         // Mark garment as submitted in local state
