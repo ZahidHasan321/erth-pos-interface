@@ -128,10 +128,10 @@ export const createAlterationOrder = async (
             break;
         }
 
-        // 23505 = a prior attempt's response was lost but the order (and its
-        // alteration_orders / garments children, inserted by that committed
-        // attempt) DID commit. Recover the order and early-return it WITHOUT
-        // re-inserting the child rows.
+        // 23505 = a prior attempt's response was lost but its order row DID
+        // commit. Its children were NOT inserted (that attempt never got past
+        // the order insert), so recover the order and continue: the child
+        // inserts below skip whatever already exists.
         if (res.error?.code === '23505') {
             const recovered = await db
                 .from("orders")
@@ -139,7 +139,8 @@ export const createAlterationOrder = async (
                 .eq('idempotency_key', idempotencyKey)
                 .single();
             if (!recovered.error && recovered.data) {
-                return getAlterationOrderById(recovered.data.id);
+                orderRow = recovered.data;
+                break;
             }
         }
 
@@ -158,7 +159,25 @@ export const createAlterationOrder = async (
         return { status: "error", message: "Could not create alteration order row: no data returned" };
     }
 
-    const { error: altErr } = await db.from("alteration_orders").insert({
+    // Roll back a partially-created order. If even the delete fails, say so —
+    // a confirmed order with no extension/garments must not go unnoticed.
+    const orderId = orderRow.id;
+    const rollback = async (reason: string): Promise<ApiResponse<Order>> => {
+        // RLS lets only super-admins delete orders, and a denied delete is NOT an
+        // error (it just matches 0 rows) — so check what was actually removed.
+        const { data: removed, error: delErr } = await db.from("orders").delete().eq("id", orderId).select("id");
+        return {
+            status: "error",
+            message: delErr || !removed?.length
+                ? `${reason}. The incomplete alteration order #${orderId} could not be removed — report it to an admin before retrying.`
+                : reason,
+        };
+    };
+
+    // Skip children that already exist (an idempotent-retry recovery above).
+    const { data: existingAlt } = await db
+        .from("alteration_orders").select("order_id").eq("order_id", orderRow.id).maybeSingle();
+    const { error: altErr } = existingAlt ? { error: null } : await db.from("alteration_orders").insert({
         order_id: orderRow.id,
         invoice_number: invoiceNumber,
         received_date: input.received_date,
@@ -168,11 +187,7 @@ export const createAlterationOrder = async (
     });
 
     if (altErr) {
-        await db.from("orders").delete().eq("id", orderRow.id);
-        return {
-            status: "error",
-            message: `Could not create alteration_orders extension: ${altErr.message}`,
-        };
+        return rollback(`Could not create alteration_orders extension: ${altErr.message}`);
     }
 
     const garmentRows = input.garments.map((g, idx) => ({
@@ -195,13 +210,13 @@ export const createAlterationOrder = async (
         in_production: false,
     }));
 
-    const { error: garmentErr } = await db.from("garments").insert(garmentRows);
+    const { count: existingGarments } = await db
+        .from("garments").select("id", { count: "exact", head: true }).eq("order_id", orderRow.id);
+    const { error: garmentErr } = existingGarments
+        ? { error: null }
+        : await db.from("garments").insert(garmentRows);
     if (garmentErr) {
-        await db.from("orders").delete().eq("id", orderRow.id);
-        return {
-            status: "error",
-            message: `Could not create alteration garments: ${garmentErr.message}`,
-        };
+        return rollback(`Could not create alteration garments: ${garmentErr.message}`);
     }
 
     if (input.master_measurement_id && input.master_measurement_updates &&

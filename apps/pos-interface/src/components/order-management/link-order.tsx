@@ -251,7 +251,9 @@ export default function LinkOrder({
     setIsSubmitting(true);
     try {
       const now = new Date();
-      await Promise.all(
+      // updateOrder returns {status:'error'} instead of throwing — check every
+      // result, or a partly-linked group looks like a success.
+      const results = await Promise.all(
         selectedOrders.map((order) => {
           const isPrimary = order.id === primaryOrderId;
           const updateData: Partial<Order> = { delivery_date: pickedDayKuwaitMidnight(reviseDate) };
@@ -263,9 +265,16 @@ export default function LinkOrder({
             updateData.linked_date = now;
             updateData.unlinked_date = null;
           }
-          return updateOrder(updateData, order.id);
+          return updateOrder(updateData, order.id).then((r) => ({ id: order.id, r }));
         }),
       );
+      const failed = results.filter(({ r }) => r.status !== "success");
+      if (failed.length) {
+        queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "active" });
+        throw new Error(
+          `order(s) ${failed.map((f) => `#${f.id}`).join(", ")} not saved (${failed[0]!.r.message ?? "unknown error"}). Press Link again to retry.`,
+        );
+      }
 
       handleClear();
       queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "active" });

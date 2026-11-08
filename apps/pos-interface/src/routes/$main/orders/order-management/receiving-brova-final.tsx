@@ -105,7 +105,13 @@ function ReceivingInterface() {
             if (context?.prev) {
                 queryClient.setQueryData(["dispatched-orders"], context.prev);
             }
-            toast.error("Could not mark garments as received", { description: err.message });
+            // Garments are received one by one, so some may have gone through —
+            // reload the real state instead of showing the stale list.
+            queryClient.invalidateQueries({ queryKey: ["dispatched-orders"] });
+            queryClient.invalidateQueries({ queryKey: ["orders"] });
+            toast.error("Not all garments were received", {
+                description: `${err.message}. The list is refreshed. Receive the remaining ones again.`,
+            });
         },
     });
 

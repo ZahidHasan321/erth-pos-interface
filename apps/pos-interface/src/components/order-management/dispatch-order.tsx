@@ -1226,8 +1226,16 @@ export default function DispatchOrderPage() {
     const orderIds = orders.map(o => o.id);
 
     try {
-      await Promise.all(orderIds.map(id => dispatchOrder(id)));
+      // dispatchOrder returns {status:'error'} instead of throwing — check each.
+      const results = await Promise.all(orderIds.map(id => dispatchOrder(id).then(r => ({ id, r }))));
       await queryClient.invalidateQueries({ queryKey: ["dispatchOrders"] });
+      await queryClient.invalidateQueries({ queryKey: ["inTransitToWorkshop"] });
+      const failed = results.filter(({ r }) => r.status === "error");
+      if (failed.length) {
+        throw new Error(
+          `${failed.length} of ${orderIds.length} not dispatched (${failed.map(f => `#${f.id}`).join(", ")}): ${failed[0]!.r.message ?? "unknown error"}`,
+        );
+      }
     } catch (err) {
       toast.error(`Bulk dispatch failed for some orders: ${err instanceof Error ? err.message : String(err)}`);
     } finally {

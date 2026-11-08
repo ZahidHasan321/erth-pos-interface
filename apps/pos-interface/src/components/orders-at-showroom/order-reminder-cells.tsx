@@ -57,10 +57,14 @@ function useOrderUpdate() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
        // id is string but API expects number
        const numericId = parseInt(id);
-       return updateOrder(updates as Partial<Order>, numericId);
+       const res = await updateOrder(updates as Partial<Order>, numericId);
+       // updateOrder returns {status:'error'} instead of throwing — surface it
+       // so onError toasts and the popover stays open with the user's input.
+       if (res.status === 'error') throw new Error(res.message ?? 'unknown error');
+       return res;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['showroom-orders'] });

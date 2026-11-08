@@ -1028,16 +1028,10 @@ export const receiveAndStartGarments = async (ids: string[]): Promise<void> => {
 };
 
 export const sendToScheduler = async (ids: string[]): Promise<void> => {
-  // Mark all as in_production
-  const { error: err1 } = await withWriteRetry(
-    () => db
-      .from('garments')
-      .update({ in_production: true })
-      .in('id', ids),
-    (r) => isTransientNetworkError(r.error),
-  );
-  if (err1) throw new Error(`sendToScheduler: failed to mark garments as in_production: ${err1.message}`);
-
+  // Release first, mark in_production last: if the second write failed after
+  // in_production=true, parked finals would vanish from Parking (in_production)
+  // AND from Scheduler (still carrying a plan). This order keeps them in
+  // Parking, so the user can simply retry.
   // Release any finals still at waiting_for_acceptance (customer approved → straight to scheduler).
   // Clear the inherited brova plan so Scheduler picks them up — its filter requires production_plan IS NULL.
   const { error: err2 } = await withWriteRetry(
@@ -1049,6 +1043,16 @@ export const sendToScheduler = async (ids: string[]): Promise<void> => {
     (r) => isTransientNetworkError(r.error),
   );
   if (err2) throw new Error(`sendToScheduler: failed to release waiting_for_acceptance finals: ${err2.message}`);
+
+  // Mark all as in_production
+  const { error: err1 } = await withWriteRetry(
+    () => db
+      .from('garments')
+      .update({ in_production: true })
+      .in('id', ids),
+    (r) => isTransientNetworkError(r.error),
+  );
+  if (err1) throw new Error(`sendToScheduler: failed to mark garments as in_production: ${err1.message}`);
 };
 
 export const sendReturnToProduction = async (id: string, _reentryStage: PieceStage): Promise<void> => {
@@ -1093,14 +1097,22 @@ export const scheduleGarments = async (
   );
   if (error) throw new Error(`scheduleGarments: failed to schedule garments: ${error.message}`);
 
+  // The follow-up writes below used to be fire-and-forget: a failure left the
+  // garments scheduled but the parked finals without the plan and no error.
+  // Any failure now throws (the stage write above is already committed, so say
+  // that explicitly instead of a generic "failed to schedule").
+  const partial = (what: string, msg: string) =>
+    new Error(`Garments were scheduled, but ${what} failed: ${msg}. Please report this to an admin.`);
+
   // Append trip_history entry for each garment
-  const { data: garments } = await db
+  const { data: garments, error: readErr } = await db
     .from('garments')
-    .select('id, trip_number, trip_history')
+    .select('id, trip_number, trip_history, order_id')
     .in('id', ids);
+  if (readErr) throw partial('recording trip history', readErr.message);
 
   if (garments?.length) {
-    await Promise.all(garments.map((g: { id: string; trip_number: number | null; trip_history: unknown }) => {
+    const results = await Promise.all(garments.map((g: { id: string; trip_number: number | null; trip_history: unknown }) => {
       const history = parseTripHistory(g.trip_history);
       history.push(buildScheduleTripHistoryEntry({
         tripNumber: g.trip_number ?? 1,
@@ -1108,27 +1120,27 @@ export const scheduleGarments = async (
         assignedDate,
         reentryStage,
       }));
-      return db.from('garments').update({ trip_history: history }).eq('id', g.id);
+      return withWriteRetry(
+        () => db.from('garments').update({ trip_history: history }).eq('id', g.id),
+        (r) => isTransientNetworkError(r.error),
+      );
     }));
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw partial('recording trip history', failed.error.message);
   }
 
   // Also save production_plan to waiting_for_acceptance finals in the same orders
-  if (!reentryStage) {
-    const { data: scheduled } = await db
-      .from('garments')
-      .select('order_id')
-      .in('id', ids);
-    if (scheduled?.length) {
-      const orderIds = [...new Set(scheduled.map((g: { order_id: number }) => g.order_id))];
-      await withWriteRetry(
-        () => db
-          .from('garments')
-          .update({ production_plan: plan })
-          .in('order_id', orderIds)
-          .eq('piece_stage', 'waiting_for_acceptance'),
-        (r) => isTransientNetworkError(r.error),
-      );
-    }
+  if (!reentryStage && garments?.length) {
+    const orderIds = [...new Set(garments.map((g: { order_id: number }) => g.order_id))];
+    const { error: finalsErr } = await withWriteRetry(
+      () => db
+        .from('garments')
+        .update({ production_plan: plan })
+        .in('order_id', orderIds)
+        .eq('piece_stage', 'waiting_for_acceptance'),
+      (r) => isTransientNetworkError(r.error),
+    );
+    if (finalsErr) throw partial("copying the plan to the order's parked finals", finalsErr.message);
   }
 };
 
@@ -1667,15 +1679,9 @@ export const updateOrderDeliveryDate = async (orderId: number, date: string): Pr
 
   const oldDate = wo.delivery_date as string | null;
 
-  const { error: orderErr } = await withWriteRetry(
-    () => db
-      .from('work_orders')
-      .update({ delivery_date: date })
-      .eq('order_id', orderId),
-    (r) => isTransientNetworkError(r.error),
-  );
-  if (orderErr) throw new Error(`updateOrderDeliveryDate: failed to update order delivery date: ${orderErr.message}`);
-
+  // Garments FIRST, order LAST: the cascade matches on the order's old date, so
+  // if the order were updated first and the cascade failed, a retry would read
+  // the new date as "old" and never fix the garments.
   // Cascade to garments that currently share the old order date.
   if (oldDate) {
     const { error: gErr } = await withWriteRetry(
@@ -1688,6 +1694,15 @@ export const updateOrderDeliveryDate = async (orderId: number, date: string): Pr
     );
     if (gErr) throw new Error(`updateOrderDeliveryDate: failed to cascade to garments: ${gErr.message}`);
   }
+
+  const { error: orderErr } = await withWriteRetry(
+    () => db
+      .from('work_orders')
+      .update({ delivery_date: date })
+      .eq('order_id', orderId),
+    (r) => isTransientNetworkError(r.error),
+  );
+  if (orderErr) throw new Error(`updateOrderDeliveryDate: failed to update order delivery date: ${orderErr.message}`);
 };
 
 /** Fetch brova production plans for given order IDs (to pre-populate finals scheduling).
@@ -1887,6 +1902,13 @@ async function nextGarmentIdForOrder(orderId: number): Promise<string> {
   return `${orderId}-${next}`;
 }
 
+/** Deterministic UUID-shaped id from a seed (SHA-256). */
+async function uuidFromSeed(seed: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed));
+  const h = [...new Uint8Array(buf)].slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
+
 export const createGarmentForOrder = async (
   input: CreateGarmentInput,
   replacesGarmentId?: string,
@@ -1902,6 +1924,12 @@ export const createGarmentForOrder = async (
     if (fetchErr) throw new Error(`createGarmentForOrder: failed to fetch original garment ${replacesGarmentId}: ${fetchErr.message}`);
     if (!original) throw new Error(`createGarmentForOrder: original garment ${replacesGarmentId} not found`);
     if (original.replaced_by_garment_id) {
+      // An earlier attempt fully succeeded (its response was lost): return it.
+      if (original.replaced_by_garment_id === await uuidFromSeed(`workshop-replacement:${replacesGarmentId}`)) {
+        const { data: done } = await db
+          .from('garments').select('id, garment_id').eq('id', original.replaced_by_garment_id).single();
+        if (done) return done as { id: string; garment_id: string };
+      }
       throw new Error('createGarmentForOrder: original garment already has a replacement');
     }
     if (original.order_id !== input.order_id) {
@@ -1953,25 +1981,53 @@ export const createGarmentForOrder = async (
     assigned_person: input.assigned_person ?? null,
   };
 
-  const { data: inserted, error: insertErr } = await db
+  // A replacement gets an id derived from the original, so a retry after a
+  // failed link re-uses the row it already inserted instead of creating a
+  // second producible replacement (staff cannot delete garments to clean up).
+  const replacementId = replacesGarmentId
+    ? await uuidFromSeed(`workshop-replacement:${replacesGarmentId}`)
+    : undefined;
+
+  let inserted: { id: string; garment_id: string } | null = null;
+  const { data: ins, error: insertErr } = await db
     .from('garments')
-    .insert(row)
+    .insert(replacementId ? { ...row, id: replacementId } : row)
     .select('id, garment_id')
     .single();
-  if (insertErr) throw new Error(`createGarmentForOrder: failed to insert garment: ${insertErr.message}`);
+  if (insertErr && replacementId && insertErr.code === '23505') {
+    // Inserted by an earlier attempt whose link step failed — re-use it.
+    const { data: existing, error: exErr } = await db
+      .from('garments').select('id, garment_id').eq('id', replacementId).single();
+    if (exErr || !existing) throw new Error(`createGarmentForOrder: failed to insert garment: ${insertErr.message}`);
+    inserted = existing;
+  } else {
+    if (insertErr) throw new Error(`createGarmentForOrder: failed to insert garment: ${insertErr.message}`);
+    inserted = ins;
+  }
   if (!inserted) throw new Error('createGarmentForOrder: insert returned no row');
 
   if (replacesGarmentId) {
-    const { error: linkErr } = await withWriteRetry(
+    const { data: linked, error: linkErr } = await withWriteRetry(
       () => db
         .from('garments')
         .update({ replaced_by_garment_id: inserted.id })
         .eq('id', replacesGarmentId)
-        .is('replaced_by_garment_id', null),
+        .is('replaced_by_garment_id', null)
+        .select('id'),
       (r) => isTransientNetworkError(r.error),
     );
     if (linkErr) {
-      throw new Error(`createGarmentForOrder: failed to link replacement on original: ${linkErr.message}`);
+      throw new Error(
+        `Replacement ${inserted.garment_id} was created but not linked to the original (${linkErr.message}). Please submit again to finish.`,
+      );
+    }
+    if (!linked?.length) {
+      // 0 rows: already linked — fine if it's linked to this replacement.
+      const { data: orig } = await db
+        .from('garments').select('replaced_by_garment_id').eq('id', replacesGarmentId).single();
+      if (orig?.replaced_by_garment_id !== inserted.id) {
+        throw new Error('createGarmentForOrder: original garment already has a different replacement');
+      }
     }
   }
 

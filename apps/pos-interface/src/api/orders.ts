@@ -510,7 +510,14 @@ export const updateOrder = async (
 
         if (error) {
             console.error('Error updating work order extension:', error);
-            return { status: 'error', message: error.message };
+            // Core fields above may already be saved; both writes set absolute
+            // values, so retrying the same update completes it.
+            return {
+                status: 'error',
+                message: Object.keys(coreUpdates).length > 0
+                    ? `Only partly saved (${error.message}). Please try again.`
+                    : error.message,
+            };
         }
     }
 

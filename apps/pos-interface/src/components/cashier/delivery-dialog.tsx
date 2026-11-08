@@ -109,7 +109,9 @@ export function DeliveryDialog({ open, onOpenChange, order, isOrderCompleted }: 
             const results = await Promise.all(ops);
             const failed = results.find((r) => r?.status === "error");
             if (failed) {
-                toast.error(`Could not save changes: ${failed.message || "unknown error"}`);
+                // The other changes may already be saved; every op sets absolute
+                // values, so pressing Save again completes the rest.
+                toast.error(`Not all changes were saved: ${failed.message || "unknown error"}. Press Save again.`);
                 return;
             }
             await queryClient.invalidateQueries({ queryKey: ["cashier-order"] });

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   getAppointmentsByDateRange,
   getAllBrandsAppointmentsByDateRange,
@@ -97,10 +98,16 @@ export function useUpdateAppointmentStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: Appointment["status"] }) =>
-      updateAppointmentStatus(id, status),
+    mutationFn: async ({ id, status }: { id: string; status: Appointment["status"] }) => {
+      const res = await updateAppointmentStatus(id, status);
+      if (res.status === "error") throw new Error(res.message ?? "unknown error");
+      return res;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
+    },
+    onError: (err) => {
+      toast.error(`Could not update appointment status: ${err instanceof Error ? err.message : String(err)}`);
     },
   });
 }

@@ -1822,6 +1822,7 @@ function UnifiedFeedbackInterface() {
 
     try {
         const state = currentState;
+        let stageMessage: string | null = null;
 
         // Uploads run FIRST, before any garment/measurement write: a failed upload
         // then aborts with nothing changed, instead of leaving the brova marked
@@ -1943,9 +1944,9 @@ function UnifiedFeedbackInterface() {
                 });
             }
 
-            if (result.message) {
-                toast.info(result.message);
-            }
+            // Shown only after the feedback record is saved (below) — never
+            // announce "Brova accepted." while later writes can still fail.
+            stageMessage = result.message || null;
         } else {
             // Finals only — alteration-out orders never reach this page (redirected
             // to the read-only alteration view on load).
@@ -2330,6 +2331,7 @@ function UnifiedFeedbackInterface() {
           }
           updateGarmentState(selectedGarmentId, { existingFeedbackId: fbResult.data.id });
         }
+        if (stageMessage) toast.info(stageMessage);
 
         // Mark garment as submitted in local state
         updateGarmentState(selectedGarmentId, { submitted: true, isEditing: true });

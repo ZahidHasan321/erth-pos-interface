@@ -112,7 +112,7 @@ export default function UnlinkOrder() {
         if (!orderToUnlink || !reviseDate) return;
         setIsSubmitting(true);
         try {
-            await updateOrder(
+            const res = await updateOrder(
                 {
                     linked_order_id: null,
                     unlinked_date: new Date(),
@@ -120,6 +120,7 @@ export default function UnlinkOrder() {
                 } as Partial<Order>,
                 orderToUnlink.id,
             );
+            if (res.status !== "success") throw new Error(res.message ?? "unknown error");
             queryClient.invalidateQueries({ queryKey: ["linked-orders"] });
             setShowSuccess(true);
         } catch (err) {

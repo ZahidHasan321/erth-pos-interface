@@ -392,7 +392,11 @@ function NewWorkOrder() {
 
             // Link appointment to this order if started from an appointment
             if (id && linkedAppointment) {
-                updateAppointment(linkedAppointment.id, { order_id: id });
+                updateAppointment(linkedAppointment.id, { order_id: id }).then((r) => {
+                    if (r.status === "error") {
+                        toast.warning(`Order created, but it could not be linked to the appointment: ${r.message ?? "unknown error"}`);
+                    }
+                });
             }
 
             // Move to next step (Measurements)

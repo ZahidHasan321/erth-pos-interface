@@ -380,7 +380,8 @@ export function FabricSelectionForm({
             if (orderId && signature && signature.startsWith("data:image/")) {
                 try {
                     const { url } = await uploadOrderSignature(signature, orderId);
-                    await updateOrder({ customer_signature_url: url }, orderId);
+                    const sigRes = await updateOrder({ customer_signature_url: url }, orderId);
+                    if (sigRes.status === "error") throw new Error(sigRes.message ?? "unknown error");
                 } catch (error) {
                     toast.error(
                         `Saved the order, but could not store the customer signature: ${error instanceof Error ? error.message : String(error)}`,
