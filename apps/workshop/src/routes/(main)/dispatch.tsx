@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkshopGarments, useOrderLocationBreakdown } from "@/hooks/useWorkshopGarments";
@@ -512,14 +513,19 @@ function DispatchHistoryTab() {
         </div>
       </div>
 
-      {/* Printed manifest: order-level, hidden on screen. */}
-      <div className="dispatch-print-only hidden" aria-hidden="true">
-        <DispatchHistoryPrint
-          groups={printGroups}
-          periodLabel={periodLabel}
-          garmentCount={rows.length}
-        />
-      </div>
+      {/* Printed manifest: order-level, hidden on screen. Portaled to <body> so
+          it is not inside the app shell's h-screen scroll box, which clipped
+          the print to one page. */}
+      {createPortal(
+        <div className="dispatch-print-only hidden" aria-hidden="true">
+          <DispatchHistoryPrint
+            groups={printGroups}
+            periodLabel={periodLabel}
+            garmentCount={rows.length}
+          />
+        </div>,
+        document.body,
+      )}
 
       {/* Body */}
       {isLoading ? (

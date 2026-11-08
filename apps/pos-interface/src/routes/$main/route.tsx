@@ -218,10 +218,12 @@ function RouteComponent() {
 
   const mainLayout = (
     <SidebarProvider defaultOpen>
-      <div className="flex h-screen w-screen">
-        {sidebar}
+      {/* print:* lets a printed page (e.g. dispatch history) flow past one
+          screen; the h-screen scroll box otherwise clips it to one page. */}
+      <div className="flex h-screen w-screen print:block print:h-auto print:w-auto">
+        <div className="contents print:hidden">{sidebar}</div>
         <SidebarInset className="flex-1 flex flex-col min-w-0">
-          <header className="flex items-center justify-between px-4 h-12 border-b bg-card shrink-0">
+          <header className="flex items-center justify-between px-4 h-12 border-b bg-card shrink-0 print:hidden">
             <div className="flex items-center gap-3">
               <SidebarTrigger className="size-8" />
               {canSwitchBrand ? (
@@ -334,7 +336,7 @@ function RouteComponent() {
           </header>
           <main
             data-scroll-restoration-id="pos-main-scroll"
-            className="flex-1 overflow-y-auto overflow-x-hidden relative"
+            className="flex-1 overflow-y-auto overflow-x-hidden relative print:overflow-visible"
           >
             <Outlet />
           </main>
