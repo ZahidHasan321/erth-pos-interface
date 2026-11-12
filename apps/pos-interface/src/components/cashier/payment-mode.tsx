@@ -42,7 +42,7 @@ const DISCOUNT_TYPE_LABELS: Record<string, string> = {
     flat: "Flat",
     referral: "Referral",
     loyalty: "Loyalty",
-    by_value: "By Value",
+    by_value: "Cash",
 };
 
 const MAX_DECIMALS = 3;

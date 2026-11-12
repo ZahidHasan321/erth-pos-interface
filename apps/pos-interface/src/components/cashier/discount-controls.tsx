@@ -7,10 +7,10 @@ import { Loader2 } from "lucide-react";
 import { useUpdateDiscountMutation } from "@/hooks/useCashier";
 
 const discountOptions = [
-    { value: "flat", label: "Flat %" },
+    { value: "flat", label: "Flat" },
+    { value: "by_value", label: "Cash" },
     { value: "referral", label: "Referral" },
     { value: "loyalty", label: "Loyalty" },
-    { value: "by_value", label: "By Value" },
 ] as const;
 
 interface DiscountControlsProps {
