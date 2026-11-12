@@ -95,14 +95,22 @@ export class AuthClient {
         }),
       });
     } catch (err) {
-      return { data: { session: null, profile: null }, error: { message: `Login failed: ${String(err)}` } };
+      console.error("[auth] login request failed", err);
+      return {
+        data: { session: null, profile: null },
+        error: { message: "Can't reach the server. Check the internet connection and try again." },
+      };
     }
     const body = await res.json().catch(() => null);
     if (!res.ok || !body?.access_token) {
       return {
         data: { session: null, profile: null },
         error: {
-          message: body?.error ?? `Login failed (HTTP ${res.status})`,
+          // The api's own messages are user-facing; anything else (a proxy
+          // 502 page, an empty body) is a server problem, not a wrong PIN.
+          message: typeof body?.error === "string" && res.status < 500
+            ? body.error
+            : `Server problem, please try again in a minute. (HTTP ${res.status})`,
           status: res.status,
           captcha_required: body?.captcha_required === true,
         },

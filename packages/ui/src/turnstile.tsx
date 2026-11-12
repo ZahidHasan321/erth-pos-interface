@@ -49,6 +49,7 @@ function loadTurnstile(): Promise<TurnstileApi> {
 
 export function Turnstile({ onToken }: { onToken: (token: string | null) => void }) {
   const ref = React.useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = React.useState(false);
   const onTokenRef = React.useRef(onToken);
   onTokenRef.current = onToken;
 
@@ -65,10 +66,16 @@ export function Turnstile({ onToken }: { onToken: (token: string | null) => void
           sitekey: SITE_KEY,
           callback: (token) => onTokenRef.current(token),
           "expired-callback": () => onTokenRef.current(null),
-          "error-callback": () => onTokenRef.current(null),
+          "error-callback": () => {
+            onTokenRef.current(null);
+            setFailed(true);
+          },
         });
       })
-      .catch((err) => console.error("[turnstile]", err));
+      .catch((err) => {
+        console.error("[turnstile]", err);
+        if (!cancelled) setFailed(true);
+      });
     return () => {
       cancelled = true;
       onTokenRef.current(null);
@@ -77,5 +84,14 @@ export function Turnstile({ onToken }: { onToken: (token: string | null) => void
   }, []);
 
   if (!SITE_KEY) return null;
-  return <div ref={ref} />;
+  return (
+    <>
+      <div ref={ref} />
+      {failed && (
+        <p role="alert" style={{ color: "#b91c1c", fontSize: 13, marginTop: 6 }}>
+          The security check couldn't load. Refresh the page or check the internet connection.
+        </p>
+      )}
+    </>
+  );
 }

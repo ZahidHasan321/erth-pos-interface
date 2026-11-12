@@ -1,6 +1,13 @@
 import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 import type { Shelf } from '@repo/database';
 
+// The name is unique across archived rows too, so a clash may be with an item
+// hidden from the default list.
+const friendlyDuplicate = (error: { code?: string }, value?: string | null) =>
+  error.code === "23505"
+    ? new Error(`A shelf item named "${value ?? ""}" already exists. It may be archived: turn on "Show archived" to find and restore it.`)
+    : error;
+
 export const getShelf = async (includeArchived = false): Promise<Shelf[]> => {
   let query = db.from('shelf').select('*');
   if (!includeArchived) query = query.eq('is_archived', false);
@@ -13,7 +20,7 @@ export const createShelfItem = async (
   item: Pick<Shelf, "type"> & Partial<Pick<Shelf, "brand" | "price" | "shop_stock">>,
 ): Promise<Shelf> => {
   const { data, error } = await db.from('shelf').insert(item).select().single();
-  if (error) throw error;
+  if (error) throw friendlyDuplicate(error, item.type);
   return data as Shelf;
 };
 
@@ -34,7 +41,7 @@ export const updateShelf = async (
     (r) => isTransientNetworkError(r.error),
   );
 
-  if (error) throw error;
+  if (error) throw friendlyDuplicate(error, shelf.type);
   return data as Shelf;
 };
 

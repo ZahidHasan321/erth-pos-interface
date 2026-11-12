@@ -1,6 +1,13 @@
 import type { Fabric } from "@repo/database";
 import { db, isTransientNetworkError, withWriteRetry } from "@/lib/db";
 
+// The name is unique across archived rows too, so a clash may be with an item
+// hidden from the default list.
+const friendlyDuplicate = (error: { code?: string }, value?: string | null) =>
+  error.code === "23505"
+    ? new Error(`A fabric named "${value ?? ""}" already exists. It may be archived: turn on "Show archived" to find and restore it.`)
+    : error;
+
 export const getFabrics = async (includeArchived = false): Promise<Fabric[]> => {
   let query = db.from('fabrics').select('*');
   if (!includeArchived) query = query.eq('is_archived', false);
@@ -13,7 +20,7 @@ export const createFabric = async (
   fabric: Pick<Fabric, "name"> & Partial<Pick<Fabric, "color" | "color_hex" | "price_per_meter" | "shop_stock" | "season">>,
 ): Promise<Fabric> => {
   const { data, error } = await db.from('fabrics').insert(fabric).select().single();
-  if (error) throw error;
+  if (error) throw friendlyDuplicate(error, fabric.name);
   return data as Fabric;
 };
 
@@ -34,7 +41,7 @@ export const updateFabric = async (
     (r) => isTransientNetworkError(r.error),
   );
 
-  if (error) throw error;
+  if (error) throw friendlyDuplicate(error, fabric.name);
   return data as Fabric;
 };
 

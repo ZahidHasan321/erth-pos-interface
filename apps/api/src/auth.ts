@@ -138,9 +138,13 @@ authRoutes.post("/login", async (c) => {
   };
 
   const before = await readAttempts(key);
-  if (before.retry_after > 0) return lockedOut(before.retry_after);
+  if (before.retry_after > 0) {
+    console.warn(`[auth] login refused: locked out user=${key} ip=${ip}`);
+    return lockedOut(before.retry_after);
+  }
   if (turnstileEnabled() && before.failures >= CAPTCHA_AFTER) {
     if (!captchaToken || !(await verifyTurnstile(captchaToken, ip))) {
+      console.warn(`[auth] login refused: captcha ${captchaToken ? "invalid" : "missing"} user=${key} ip=${ip}`);
       return c.json({ error: CAPTCHA_NEEDED, captcha_required: true }, 400);
     }
   }
@@ -165,6 +169,7 @@ authRoutes.post("/login", async (c) => {
     // its own lock — all collapse to one message so none leaks which it was.
     if (err instanceof postgres.PostgresError && err.code === "P0001") {
       const after = await recordFailure(key);
+      console.warn(`[auth] login failed: ${err.message} user=${key} ip=${ip} failures=${after.failures}`);
       const pad = FAIL_MIN_MS - (Date.now() - started);
       if (pad > 0) await new Promise((r) => setTimeout(r, pad));
       if (after.retry_after > 0) return lockedOut(after.retry_after);
